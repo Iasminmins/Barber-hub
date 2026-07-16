@@ -8,12 +8,17 @@ import { Button } from '@/components/ui/button'
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = React.useState(false)
+  const [collapsed, setCollapsed] = React.useState(false)
 
   return (
     <div className="flex min-h-screen bg-background">
       {/* Sidebar desktop */}
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 border-r border-sidebar-border lg:block">
-        <SidebarContent />
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 hidden border-r border-sidebar-border transition-[width] duration-200 lg:block ${
+          collapsed ? 'w-20' : 'w-64'
+        }`}
+      >
+        <SidebarContent collapsed={collapsed} onToggle={() => setCollapsed((value) => !value)} />
       </aside>
 
       {/* Sidebar mobile (drawer) */}
@@ -39,7 +44,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      <div className="flex min-w-0 flex-1 flex-col lg:pl-64">
+      <div
+        className={`flex min-w-0 flex-1 flex-col transition-[padding] duration-200 ${
+          collapsed ? 'lg:pl-20' : 'lg:pl-64'
+        }`}
+      >
         <Topbar onMenu={() => setMobileOpen(true)} />
         <main className="flex-1 p-4 lg:p-6">{children}</main>
       </div>
