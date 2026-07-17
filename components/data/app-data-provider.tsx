@@ -1,6 +1,5 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
 import * as React from 'react'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import type { Appointment, Barbershop, CatalogItem, Client, Commission, Employee, FinancialEntry, ImportRecord, Order, Plan, Subscription } from '@/lib/types'
@@ -24,31 +23,33 @@ const AppDataContext = React.createContext<(AppData & { refresh: () => Promise<v
 const num = (value: unknown) => Number(value ?? 0)
 
 export function AppDataProvider({ children }: { children: React.ReactNode }) {
-  const router = useRouter()
   const [value, setValue] = React.useState<AppData | null>(null)
   const [error, setError] = React.useState('')
+  const [loadingMessage, setLoadingMessage] = React.useState('Carregando dados da sua barbearia...')
 
   const load = React.useCallback(async () => {
     setError('')
     const supabase = createBrowserSupabaseClient()
-    const { data: auth, error: authError } = await supabase.auth.getUser()
-    if (authError || !auth.user) {
-      router.replace('/login')
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+    const user = sessionData.session?.user
+    if (sessionError || !user) {
+      setLoadingMessage('Redirecionando para o login...')
+      window.location.replace('/login')
       return
     }
 
     const { data: memberships, error: memberError } = await supabase
       .from('members')
-      .select('barbershop_id, barbershops(*)')
-      .eq('user_id', auth.user.id)
+      .select('barbershop_id')
+      .eq('user_id', user.id)
       .eq('active', true)
       .limit(1)
     if (memberError) { setError(memberError.message); return }
 
-    const relation = memberships?.[0]?.barbershops
-    const shop = (Array.isArray(relation) ? relation[0] : relation) as Record<string, any> | undefined
-    if (!shop) { setError('Esta conta não possui uma barbearia vinculada.'); return }
-    const shopId = String(shop.id)
+    const shopId = memberships?.[0]?.barbershop_id
+    if (!shopId) { setError('Esta conta não possui uma barbearia vinculada.'); return }
+    const { data: shop, error: shopError } = await supabase.from('barbershops').select('*').eq('id', shopId).single()
+    if (shopError || !shop) { setError(shopError?.message ?? 'Barbearia não encontrada.'); return }
 
     const results = await Promise.all([
       supabase.from('employees').select('*').eq('barbershop_id', shopId).order('name'),
@@ -80,11 +81,15 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       financialEntries: financial.map((r:any)=>({ id:r.id, barbershopId:r.barbershop_id, type:r.type, category:r.category, description:r.description, amount:num(r.amount), method:r.method??undefined, date:r.date })),
       imports: imports.map((r:any)=>({ id:r.id, barbershopId:r.barbershop_id, entity:r.entity, fileName:r.file_name, totalRows:num(r.total_rows), importedRows:num(r.imported_rows), errorRows:num(r.error_rows), status:r.status, createdAt:r.created_at, createdBy:r.created_by })),
     })
-  }, [router])
+  }, [])
 
-  React.useEffect(() => { void load() }, [load])
+  React.useEffect(() => {
+    void load().catch((loadError) => {
+      setError(loadError instanceof Error ? loadError.message : 'Erro inesperado ao carregar os dados.')
+    })
+  }, [load])
   if (error) return <main className="grid min-h-screen place-items-center p-6 text-center"><div><h1 className="text-xl font-bold">Não foi possível carregar os dados</h1><p className="mt-2 text-sm text-muted-foreground">{error}</p></div></main>
-  if (!value) return <main className="grid min-h-screen place-items-center text-sm text-muted-foreground">Carregando dados da sua barbearia...</main>
+  if (!value) return <main className="grid min-h-screen place-items-center text-sm text-muted-foreground">{loadingMessage}</main>
   return <AppDataContext.Provider value={{ ...value, refresh: load }}>{children}</AppDataContext.Provider>
 }
 
