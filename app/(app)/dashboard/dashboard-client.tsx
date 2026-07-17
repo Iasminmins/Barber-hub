@@ -48,8 +48,15 @@ const METHOD_LABEL: Record<string, string> = {
   outro: 'Outro',
 }
 
+function toDateKey(value: string | null | undefined) {
+  if (!value) return ''
+  const key = value.slice(0, 10)
+  return /^\d{4}-\d{2}-\d{2}$/.test(key) ? key : ''
+}
+
 function isInsideRange(date: string, range: DateRange) {
-  return date >= range.start && date <= range.end
+  const key = toDateKey(date)
+  return Boolean(key && key >= range.start && key <= range.end)
 }
 
 function getRangeDays(range: DateRange) {
@@ -73,7 +80,8 @@ function buildRevenueSeries(orders: Order[], range: DateRange, period: Period) {
     })
 
     for (const order of paid) {
-      const monthIndex = Number(order.createdAt.slice(5, 7)) - 1
+      const monthIndex = Number(toDateKey(order.createdAt).slice(5, 7)) - 1
+      if (!Number.isInteger(monthIndex) || monthIndex < 0 || monthIndex >= months.length) continue
       months[monthIndex].receita += order.total
       months[monthIndex].comandas += 1
     }
@@ -96,9 +104,11 @@ function buildRevenueSeries(orders: Order[], range: DateRange, period: Period) {
   })
 
   for (const order of paid) {
+    const orderDate = toDateKey(order.createdAt)
+    if (!orderDate) continue
     const index = Math.min(
       maxPoints - 1,
-      Math.floor(((new Date(`${order.createdAt}T00:00:00`).getTime() - new Date(`${range.start}T00:00:00`).getTime()) / 86400000 / days) * maxPoints),
+      Math.max(0, Math.floor(((new Date(`${orderDate}T00:00:00`).getTime() - new Date(`${range.start}T00:00:00`).getTime()) / 86400000 / days) * maxPoints)),
     )
     points[index].receita += order.total
     points[index].comandas += 1
