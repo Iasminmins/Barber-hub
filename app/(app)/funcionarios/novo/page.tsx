@@ -26,7 +26,7 @@ export default function NovoFuncionarioPage() {
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="name">Nome completo</Label>
-              <Input id="name" placeholder="Ex.: Rafael Moura" />
+              <Input id="name" placeholder="Ex.: Nome do funcionário" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="role">Função</Label>

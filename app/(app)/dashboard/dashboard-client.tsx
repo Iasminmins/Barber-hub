@@ -27,6 +27,8 @@ import {
 import { RevenueChart } from '@/components/dashboard/revenue-chart'
 import { MethodChart } from '@/components/dashboard/method-chart'
 import { daysUntil, formatCurrency, formatDateShort } from '@/lib/format'
+import { getAllAppointments } from '@/lib/appointments-storage'
+import { getAllOrders } from '@/lib/orders-storage'
 import type {
   Appointment,
   CatalogItem,
@@ -157,6 +159,13 @@ export function DashboardClient({
 }) {
   const [period, setPeriod] = React.useState<Period>('semana')
   const [range, setRange] = React.useState<DateRange>(() => getDefaultRange('semana'))
+  const [dashboardOrders, setDashboardOrders] = React.useState(orders)
+  const [dashboardAppointments, setDashboardAppointments] = React.useState(appointments)
+
+  React.useEffect(() => {
+    setDashboardOrders(getAllOrders(orders))
+    setDashboardAppointments(getAllAppointments(appointments))
+  }, [appointments, orders])
 
   function handlePeriodChange(nextPeriod: Period) {
     setPeriod(nextPeriod)
@@ -165,9 +174,9 @@ export function DashboardClient({
     }
   }
 
-  const filteredOrders = orders.filter((order) => isInsideRange(order.createdAt, range))
+  const filteredOrders = dashboardOrders.filter((order) => isInsideRange(order.createdAt, range))
   const paidOrders = filteredOrders.filter((order) => order.status === 'paga')
-  const filteredAppointments = appointments.filter((appointment) => isInsideRange(appointment.date, range))
+  const filteredAppointments = dashboardAppointments.filter((appointment) => isInsideRange(appointment.date, range))
   const revenue = paidOrders.reduce((sum, order) => sum + order.total, 0)
   const avgTicket = paidOrders.length > 0 ? revenue / paidOrders.length : 0
   const openOrders = filteredOrders.filter((order) => order.status === 'aberta').length
@@ -186,9 +195,9 @@ export function DashboardClient({
     .filter((commission) => commission.status === 'pendente' && isInsideRange(commission.date, range))
     .reduce((sum, commission) => sum + commission.amount, 0)
 
-  const revenueSeries = buildRevenueSeries(orders, range, period)
-  const revenueByMethod = buildRevenueByMethod(orders, range)
-  const ranking = buildRanking(orders, employees, range)
+  const revenueSeries = buildRevenueSeries(dashboardOrders, range, period)
+  const revenueByMethod = buildRevenueByMethod(dashboardOrders, range)
+  const ranking = buildRanking(dashboardOrders, employees, range)
   const maxRevenue = Math.max(1, ...ranking.map((item) => item.revenue))
   const upcoming = filteredAppointments
     .filter((appointment) => ['agendado', 'confirmado', 'chegou'].includes(appointment.status))
@@ -199,7 +208,7 @@ export function DashboardClient({
     <div>
       <PageHeader
         title="Dashboard"
-        description="Visão geral da operação da Barbearia Navalha de Ouro."
+        description="Visão geral da operação da sua barbearia."
       />
 
       <DashboardPeriodControls

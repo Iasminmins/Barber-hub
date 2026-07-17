@@ -114,7 +114,7 @@ export function AssinaturasClient({
       )
     } else {
       const next: Plan = {
-        id: `pln_mock_${Date.now()}`,
+        id: `pln_local_${Date.now()}`,
         barbershopId: 'bsp_1',
         name: draft.name.trim(),
         price,

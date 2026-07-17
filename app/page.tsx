@@ -58,9 +58,9 @@ const features = [
 ]
 
 const proof = [
-  { value: '34', label: 'comandas pagas no período' },
-  { value: 'R$ 24.780', label: 'receita semanal simulada' },
-  { value: '23', label: 'alertas prontos para ação' },
+  { value: 'PDV', label: 'comandas e pagamentos no balcão' },
+  { value: 'CRM', label: 'histórico e retorno de clientes' },
+  { value: 'BI', label: 'indicadores prontos para ação' },
 ]
 
 const painPoints = [
@@ -103,8 +103,8 @@ const results = [
 const testimonials = [
   {
     quote: 'Antes eu só sabia o movimento pelo caixa do fim do dia. Agora vejo agenda, comandas e planos no mesmo lugar.',
-    name: 'Rafael Moura',
-    role: 'Proprietário, Navalha de Ouro',
+    name: 'Gestor de barbearia',
+    role: 'Operação e financeiro',
   },
   {
     quote: 'O melhor é conseguir acompanhar comissão e estoque sem ficar perguntando para todo mundo.',
@@ -113,8 +113,8 @@ const testimonials = [
   },
   {
     quote: 'A parte de planos ajuda a não deixar cliente recorrente sumir. O alerta de vencimento é simples e resolve.',
-    name: 'Diego Santos',
-    role: 'Barbeiro líder',
+    name: 'Líder de atendimento',
+    role: 'Agenda e relacionamento',
   },
 ]
 
@@ -125,7 +125,7 @@ const faqs = [
   },
   {
     question: 'Consigo testar antes de contratar?',
-    answer: 'Sim. A demonstração está disponível com dados mockados para navegar pelo dashboard, clientes, comandas, planos e financeiro.',
+    answer: 'Sim. Você pode criar sua conta, cadastrar sua barbearia e testar o fluxo com seus próprios dados.',
   },
   {
     question: 'Dá para importar clientes e produtos?',
@@ -150,7 +150,7 @@ export default function Home() {
                 </span>
                 <div>
                   <p className="font-bold">BarberHub</p>
-                  <p className="text-xs text-primary-foreground/60">Painel da Barbearia Navalha de Ouro</p>
+                  <p className="text-xs text-primary-foreground/60">Painel da sua barbearia</p>
                 </div>
               </div>
               <div className="hidden items-center gap-2 text-xs text-primary-foreground/65 sm:flex">
@@ -540,7 +540,7 @@ export default function Home() {
           <div className="max-w-2xl">
             <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-primary-foreground/75">
               <ShieldCheck className="size-4 text-gold" />
-              Pronto para testar com dados mockados
+              Pronto para testar com seus dados
             </div>
             <h2 className="text-3xl font-bold tracking-tight">Veja o BarberHub funcionando agora.</h2>
             <p className="mt-3 text-primary-foreground/72">

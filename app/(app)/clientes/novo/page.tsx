@@ -50,9 +50,6 @@ export default function NovoClientePage() {
                 <option value="" disabled>
                   Selecionar barbeiro
                 </option>
-                <option>Rafael Moura</option>
-                <option>Diego Santos</option>
-                <option>Bruno Lima</option>
               </Select>
             </div>
             <div className="space-y-2 sm:col-span-2">

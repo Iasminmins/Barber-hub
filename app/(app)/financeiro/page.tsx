@@ -1,4 +1,7 @@
+'use client'
+
 import { ArrowDownCircle, ArrowUpCircle, Download, Wallet } from 'lucide-react'
+import * as React from 'react'
 import { PageHeader } from '@/components/page-header'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -11,8 +14,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { getFinancialEntries, getRevenueByMethod } from '@/lib/data'
+import { getFinancialEntries } from '@/lib/data'
 import { formatCurrency, formatDate } from '@/lib/format'
+import { getStoredOrders } from '@/lib/orders-storage'
+import type { FinancialEntry } from '@/lib/types'
 
 const METHOD_LABEL: Record<string, string> = {
   dinheiro: 'Dinheiro',
@@ -23,11 +28,33 @@ const METHOD_LABEL: Record<string, string> = {
 }
 
 export default function FinanceiroPage() {
-  const entries = getFinancialEntries().sort((a, b) => b.date.localeCompare(a.date))
-  const byMethod = getRevenueByMethod()
+  const [localEntries, setLocalEntries] = React.useState<FinancialEntry[]>([])
+  const entries = [...localEntries, ...getFinancialEntries()].sort((a, b) => b.date.localeCompare(a.date))
+  const byMethod = Object.entries(METHOD_LABEL).map(([method, label]) => ({
+    method: label,
+    value: entries
+      .filter((entry) => entry.type === 'entrada' && entry.method === method)
+      .reduce((sum, entry) => sum + entry.amount, 0),
+  }))
   const income = entries.filter((e) => e.type === 'entrada').reduce((sum, entry) => sum + entry.amount, 0)
   const outcome = entries.filter((e) => e.type === 'saida').reduce((sum, entry) => sum + entry.amount, 0)
   const balance = income - outcome
+
+  React.useEffect(() => {
+    const entriesFromOrders = getStoredOrders()
+      .filter((order) => order.status === 'paga')
+      .map<FinancialEntry>((order) => ({
+        id: `fin_${order.id}`,
+        barbershopId: order.barbershopId,
+        type: 'entrada',
+        category: 'Comandas',
+        description: `Comanda #${order.number}`,
+        amount: order.total,
+        method: order.method,
+        date: order.createdAt,
+      }))
+    setLocalEntries(entriesFromOrders)
+  }, [])
 
   return (
     <div>

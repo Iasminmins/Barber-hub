@@ -11,6 +11,7 @@ import { Tabs } from '@/components/ui/tabs'
 import { Avatar } from '@/components/ui/avatar'
 import { cn } from '@/lib/utils'
 import { formatCurrency } from '@/lib/format'
+import { getAllAppointments } from '@/lib/appointments-storage'
 import type { Appointment, Employee } from '@/lib/types'
 
 const HOURS = Array.from({ length: 12 }, (_, i) => 8 + i) // 08:00 - 19:00
@@ -38,11 +39,16 @@ export function AgendaClient({
 }) {
   const [view, setView] = React.useState('dia')
   const [barberFilter, setBarberFilter] = React.useState<string>('todos')
+  const [agendaAppointments, setAgendaAppointments] = React.useState(appointments)
+
+  React.useEffect(() => {
+    setAgendaAppointments(getAllAppointments(appointments))
+  }, [appointments])
 
   const barbers = employees.filter((e) => e.active && e.role.toLowerCase().includes('barbeiro'))
   const columns = barberFilter === 'todos' ? barbers : barbers.filter((b) => b.id === barberFilter)
 
-  const todayAppts = appointments.filter((a) => a.date === new Date().toISOString().slice(0, 10))
+  const todayAppts = agendaAppointments.filter((a) => a.date === new Date().toISOString().slice(0, 10))
 
   const stats = {
     total: todayAppts.length,
@@ -183,7 +189,7 @@ export function AgendaClient({
             </p>
           </div>
           <div className="divide-y divide-border">
-            {appointments
+            {agendaAppointments
               .sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start))
               .map((a) => (
                 <div key={a.id} className="flex items-center gap-3 p-3 hover:bg-muted/50">

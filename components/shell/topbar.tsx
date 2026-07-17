@@ -304,9 +304,9 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
         </div>
 
         <div className="flex items-center gap-2 rounded-lg border border-border bg-background py-1 pl-1 pr-2.5">
-          <Avatar name="Rafael Moura" className="size-7" />
+          <Avatar name="Conta" className="size-7" />
           <span className="hidden leading-tight sm:block">
-            <span className="block text-xs font-semibold text-foreground">Rafael Moura</span>
+            <span className="block text-xs font-semibold text-foreground">Minha conta</span>
             <span className="block text-[11px] text-muted-foreground">Proprietário</span>
           </span>
         </div>

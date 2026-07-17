@@ -1,189 +1,128 @@
-/**
- * Camada de acesso a dados do BarberHub.
- *
- * PONTO ÚNICO DE TROCA POR SUPABASE:
- * Hoje estas funções leem das fixtures em lib/mock-data.ts. Para ir a produção,
- * reescreva cada função aqui usando o cliente Supabase, respeitando o
- * barbershop_id da sessão e as políticas de RLS.
- */
+import type {
+  Appointment,
+  Barbershop,
+  CatalogItem,
+  Client,
+  Commission,
+  Employee,
+  FinancialEntry,
+  ImportRecord,
+  Order,
+  Plan,
+  Subscription,
+} from './types'
 
-import {
-  appointments as _appointments,
-  barbershops as _barbershops,
-  catalog as _catalog,
-  clients as _clients,
-  commissions as _commissions,
-  employees as _employees,
-  financialEntries as _financial,
-  imports as _imports,
-  orders as _orders,
-  plans as _plans,
-  revenueByMethod as _revenueByMethod,
-  revenueSeries as _revenueSeries,
-  subscriptions as _subscriptions,
-} from './mock-data'
-import { daysUntil } from './format'
-
-export function getBarbershops() {
-  return _barbershops
+const emptyBarbershop: Barbershop = {
+  id: 'unconfigured',
+  name: 'Sua barbearia',
+  slug: 'sua-barbearia',
+  color: '#1E3A32',
+  city: 'Configure sua conta',
+  plan: 'starter',
 }
 
-export function getActiveBarbershop() {
-  return _barbershops[0]
+export function getBarbershops(): Barbershop[] {
+  return [emptyBarbershop]
 }
 
-export function getEmployees() {
-  return _employees
+export function getActiveBarbershop(): Barbershop {
+  return emptyBarbershop
 }
 
-export function getClients() {
-  return _clients
+export function getEmployees(): Employee[] {
+  return []
 }
 
-export function getCatalog() {
-  return _catalog
+export function getClients(): Client[] {
+  return []
 }
 
-export function getServices() {
-  return _catalog.filter((c) => c.type === 'servico')
+export function getCatalog(): CatalogItem[] {
+  return []
 }
 
-export function getProducts() {
-  return _catalog.filter((c) => c.type === 'produto')
+export function getServices(): CatalogItem[] {
+  return []
 }
 
-export function getAppointments() {
-  return _appointments
+export function getProducts(): CatalogItem[] {
+  return []
 }
 
-export function getOrders() {
-  return _orders
+export function getAppointments(): Appointment[] {
+  return []
 }
 
-export function getPlans() {
-  return _plans
+export function getOrders(): Order[] {
+  return []
 }
 
-export function getSubscriptions() {
-  return _subscriptions
+export function getPlans(): Plan[] {
+  return []
 }
 
-export function getCommissions() {
-  return _commissions
+export function getSubscriptions(): Subscription[] {
+  return []
 }
 
-export function getFinancialEntries() {
-  return _financial
+export function getCommissions(): Commission[] {
+  return []
 }
 
-export function getImports() {
-  return _imports
+export function getFinancialEntries(): FinancialEntry[] {
+  return []
+}
+
+export function getImports(): ImportRecord[] {
+  return []
 }
 
 export function getRevenueSeries() {
-  return _revenueSeries
+  return []
 }
 
-export function getRevenueByMethod() {
-  return _revenueByMethod
-}
-
-function todayISO() {
-  return new Date().toISOString().slice(0, 10)
+export function getRevenueByMethod(): Array<{ method: string; value: number }> {
+  return [
+    { method: 'Pix', value: 0 },
+    { method: 'Crédito', value: 0 },
+    { method: 'Débito', value: 0 },
+    { method: 'Dinheiro', value: 0 },
+    { method: 'Outro', value: 0 },
+  ]
 }
 
 export function getDashboardMetrics() {
-  const orders = _orders
-  const today = todayISO()
-  const paidToday = orders.filter((o) => o.status === 'paga' && o.createdAt === today)
-  const revenueToday = paidToday.reduce((s, o) => s + o.total, 0)
-  const openOrders = orders.filter((o) => o.status === 'aberta').length
-  const pendingOrders = orders.filter((o) => o.status === 'pendente').length
-  const canceledOrders = orders.filter((o) => o.status === 'cancelada').length
-  const paidCount = paidToday.length
-  const avgTicket = paidCount > 0 ? revenueToday / paidCount : 0
-
-  const newClients = _clients.filter((c) => daysUntil(c.createdAt) >= -7).length
-  const recurringClients = _clients.filter((c) => c.tags.includes('recorrente')).length
-  const atRiskClients = _clients.filter((c) => c.tags.includes('inativo')).length
-
-  const activeSubs = _subscriptions.filter((s) => s.status === 'ativo').length
-  const expiringSubs = _subscriptions.filter((s) => s.status === 'vencendo').length
-
-  const lowStock = _catalog.filter(
-    (c) => c.type === 'produto' && (c.stock ?? 0) <= (c.minStock ?? 0),
-  ).length
-
-  const pendingCommissions = _commissions
-    .filter((c) => c.status === 'pendente')
-    .reduce((s, c) => s + c.amount, 0)
-
-  const weekRevenue = _revenueSeries.reduce((s, d) => s + d.receita, 0)
-  const monthRevenue = weekRevenue * 4.1
-
   return {
-    revenueToday,
-    weekRevenue,
-    monthRevenue,
-    openOrders,
-    paidCount,
-    pendingOrders,
-    canceledOrders,
-    avgTicket,
-    newClients,
-    recurringClients,
-    atRiskClients,
-    activeSubs,
-    expiringSubs,
-    lowStock,
-    pendingCommissions,
+    revenueToday: 0,
+    weekRevenue: 0,
+    monthRevenue: 0,
+    openOrders: 0,
+    paidCount: 0,
+    pendingOrders: 0,
+    canceledOrders: 0,
+    avgTicket: 0,
+    newClients: 0,
+    recurringClients: 0,
+    atRiskClients: 0,
+    activeSubs: 0,
+    expiringSubs: 0,
+    lowStock: 0,
+    pendingCommissions: 0,
   }
 }
 
-export function getBarberRanking() {
-  const map = new Map<string, { name: string; revenue: number; services: number }>()
-  for (const o of _orders.filter((o) => o.status === 'paga')) {
-    const cur = map.get(o.employeeId) ?? { name: o.employeeName, revenue: 0, services: 0 }
-    cur.revenue += o.total
-    cur.services += o.items.filter((i) => i.type === 'servico').length
-    map.set(o.employeeId, cur)
-  }
-
-  const seed: Record<string, { revenue: number; services: number }> = {
-    emp_1: { revenue: 4820, services: 62 },
-    emp_2: { revenue: 3210, services: 48 },
-    emp_3: { revenue: 3980, services: 54 },
-    emp_6: { revenue: 4540, services: 49 },
-    emp_7: { revenue: 1880, services: 29 },
-  }
-
-  for (const [id, s] of Object.entries(seed)) {
-    const emp = _employees.find((e) => e.id === id)
-    const cur = map.get(id) ?? { name: emp?.name ?? '', revenue: 0, services: 0 }
-    cur.revenue += s.revenue
-    cur.services += s.services
-    map.set(id, cur)
-  }
-
-  return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue)
+export function getBarberRanking(): Array<{ name: string; services: number; revenue: number }> {
+  return []
 }
 
-export function getUpcomingAppointments(limit = 6) {
-  const today = todayISO()
-  return _appointments
-    .filter((a) => a.date >= today && ['agendado', 'confirmado', 'chegou'].includes(a.status))
-    .sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start))
-    .slice(0, limit)
+export function getUpcomingAppointments(): Appointment[] {
+  return []
 }
 
-export function getExpiringSubscriptions() {
-  return _subscriptions
-    .filter((s) => s.status === 'vencendo' || s.status === 'vencido')
-    .sort((a, b) => daysUntil(a.dueDate) - daysUntil(b.dueDate))
+export function getExpiringSubscriptions(): Subscription[] {
+  return []
 }
 
-export function getLowStockProducts() {
-  return _catalog.filter(
-    (c) => c.type === 'produto' && (c.stock ?? 0) <= (c.minStock ?? 0),
-  )
+export function getLowStockProducts(): CatalogItem[] {
+  return []
 }

@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/table'
 import { getOrders } from '@/lib/data'
 import { formatCurrency, formatDate } from '@/lib/format'
+import { getAllOrders, removeStoredOrder } from '@/lib/orders-storage'
 
 const METHOD_LABEL: Record<string, string> = {
   dinheiro: 'Dinheiro',
@@ -28,7 +29,9 @@ const METHOD_LABEL: Record<string, string> = {
 }
 
 export default function ComandasPage() {
-  const [orders, setOrders] = useState(() => getOrders().sort((a, b) => b.number - a.number))
+  const [orders, setOrders] = useState(() =>
+    getAllOrders(getOrders()).sort((a, b) => b.number - a.number),
+  )
   const [saved, setSaved] = useState(false)
 
   const metrics = useMemo(() => {
@@ -41,6 +44,7 @@ export default function ComandasPage() {
 
   function deleteOrder(id: string) {
     setOrders((current) => current.filter((order) => order.id !== id))
+    removeStoredOrder(id)
     setSaved(false)
   }
 
