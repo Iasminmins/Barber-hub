@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { getFinancialEntries } from '@/lib/data'
+import { useAppData } from '@/components/data/app-data-provider'
 import { formatCurrency, formatDate } from '@/lib/format'
 import { getStoredOrders } from '@/lib/orders-storage'
 import type { FinancialEntry } from '@/lib/types'
@@ -28,8 +28,9 @@ const METHOD_LABEL: Record<string, string> = {
 }
 
 export default function FinanceiroPage() {
+  const { financialEntries } = useAppData()
   const [localEntries, setLocalEntries] = React.useState<FinancialEntry[]>([])
-  const entries = [...localEntries, ...getFinancialEntries()].sort((a, b) => b.date.localeCompare(a.date))
+  const entries = [...localEntries, ...financialEntries].sort((a, b) => b.date.localeCompare(a.date))
   const byMethod = Object.entries(METHOD_LABEL).map(([method, label]) => ({
     method: label,
     value: entries

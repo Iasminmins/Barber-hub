@@ -1,12 +1,13 @@
+'use client'
+
 import { NovaComandaClient } from './nova-comanda-client'
-import { getActiveBarbershop, getCatalog, getClients, getEmployees, getOrders } from '@/lib/data'
+import { useAppData } from '@/components/data/app-data-provider'
 
 export default function NovaComandaPage() {
-  const barbershop = getActiveBarbershop()
-  const clients = getClients()
-  const employees = getEmployees().filter((employee) => employee.active)
-  const items = getCatalog().filter((item) => item.active)
-  const orderNumbers = getOrders().map((order) => order.number)
+  const { barbershop, catalog, clients, employees: databaseEmployees, orders } = useAppData()
+  const employees = databaseEmployees.filter((employee) => employee.active)
+  const items = catalog.filter((item) => item.active)
+  const orderNumbers = orders.map((order) => order.number)
   const nextOrderNumber = orderNumbers.length > 0 ? Math.max(...orderNumbers) + 1 : 1
 
   return (

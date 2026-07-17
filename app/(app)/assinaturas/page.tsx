@@ -1,6 +1,9 @@
+'use client'
+
 import { AssinaturasClient } from './assinaturas-client'
-import { getPlans, getSubscriptions } from '@/lib/data'
+import { useAppData } from '@/components/data/app-data-provider'
 
 export default function AssinaturasPage() {
-  return <AssinaturasClient plans={getPlans()} subscriptions={getSubscriptions()} />
+  const { plans, subscriptions } = useAppData()
+  return <AssinaturasClient plans={plans} subscriptions={subscriptions} />
 }

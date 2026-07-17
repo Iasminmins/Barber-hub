@@ -10,12 +10,12 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
-import { getActiveBarbershop } from '@/lib/data'
+import { useAppData } from '@/components/data/app-data-provider'
 import { getSaasPlan, saasPlans } from '@/lib/saas-plans'
 
 export default function ConfiguracoesPage() {
   const [saved, setSaved] = useState(false)
-  const barbershop = getActiveBarbershop()
+  const { barbershop } = useAppData()
   const currentPlan = getSaasPlan(barbershop.plan)
 
   return (

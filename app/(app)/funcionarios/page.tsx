@@ -16,14 +16,19 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { getBarberRanking, getCommissions, getEmployees } from '@/lib/data'
+import { useAppData } from '@/components/data/app-data-provider'
 import { formatCurrency, formatPercent } from '@/lib/format'
 
 export default function FuncionariosPage() {
-  const [employees, setEmployees] = useState(() => getEmployees())
+  const appData = useAppData()
+  const [employees, setEmployees] = useState(() => appData.employees)
   const [saved, setSaved] = useState(false)
-  const ranking = getBarberRanking()
-  const commissions = getCommissions()
+  const commissions = appData.commissions
+  const ranking = employees.map((employee) => ({
+    name: employee.name,
+    services: commissions.filter((item) => item.employeeId === employee.id && item.origin === 'servico').length,
+    revenue: commissions.filter((item) => item.employeeId === employee.id).reduce((sum, item) => sum + item.base, 0),
+  })).sort((a, b) => b.revenue - a.revenue)
   const pending = commissions
     .filter((c) => c.status === 'pendente')
     .reduce((sum, commission) => sum + commission.amount, 0)

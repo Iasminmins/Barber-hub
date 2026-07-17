@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { PanelLeftClose, Scissors, Sparkles } from 'lucide-react'
-import { getActiveBarbershop } from '@/lib/data'
+import { useAppData } from '@/components/data/app-data-provider'
 import { navGroups } from '@/lib/nav'
 import { getSaasPlan } from '@/lib/saas-plans'
 import { cn } from '@/lib/utils'
@@ -18,7 +18,7 @@ export function SidebarContent({
   onToggle?: () => void
 }) {
   const pathname = usePathname()
-  const currentPlan = getSaasPlan(getActiveBarbershop().plan)
+  const currentPlan = getSaasPlan(useAppData().barbershop.plan)
 
   return (
     <div className="flex h-full flex-col bg-sidebar">

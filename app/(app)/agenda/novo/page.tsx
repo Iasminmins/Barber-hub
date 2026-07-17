@@ -1,13 +1,15 @@
+'use client'
+
 import { NovoAgendamentoClient } from './novo-agendamento-client'
-import { getAppointments, getClients, getEmployees, getServices } from '@/lib/data'
+import { useAppData } from '@/components/data/app-data-provider'
 
 export default function NovoAgendamentoPage() {
-  const clients = getClients()
-  const barbers = getEmployees().filter(
+  const { appointments, catalog, clients, employees } = useAppData()
+  const barbers = employees.filter(
     (employee) => employee.active && employee.role.toLowerCase().includes('barbeiro'),
   )
-  const services = getServices().filter((service) => service.active)
-  const existingAppointments = getAppointments()
+  const services = catalog.filter((service) => service.type === 'servico' && service.active)
+  const existingAppointments = appointments
 
   return (
     <NovoAgendamentoClient

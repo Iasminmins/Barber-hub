@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { getOrders } from '@/lib/data'
+import { useAppData } from '@/components/data/app-data-provider'
 import { formatCurrency, formatDate } from '@/lib/format'
 import { getAllOrders, removeStoredOrder } from '@/lib/orders-storage'
 
@@ -29,8 +29,9 @@ const METHOD_LABEL: Record<string, string> = {
 }
 
 export default function ComandasPage() {
+  const { orders: databaseOrders } = useAppData()
   const [orders, setOrders] = useState(() =>
-    getAllOrders(getOrders()).sort((a, b) => b.number - a.number),
+    getAllOrders(databaseOrders).sort((a, b) => b.number - a.number),
   )
   const [saved, setSaved] = useState(false)
 

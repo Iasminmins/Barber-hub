@@ -21,13 +21,7 @@ import {
 } from 'lucide-react'
 import { Avatar } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
-import {
-  getBarbershops,
-  getClients,
-  getExpiringSubscriptions,
-  getLowStockProducts,
-  getOrders,
-} from '@/lib/data'
+import { useAppData } from '@/components/data/app-data-provider'
 import { daysUntil, formatCurrency } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
@@ -57,11 +51,9 @@ const toneClass = {
   gold: 'bg-gold/20 text-gold-foreground',
 }
 
-function buildNotifications(): Record<NotificationTab, NotificationItem[]> {
-  const clients = getClients()
-  const lowStock = getLowStockProducts()
-  const orders = getOrders()
-  const expiringSubscriptions = getExpiringSubscriptions()
+function buildNotifications(clients: ReturnType<typeof useAppData>['clients'], catalog: ReturnType<typeof useAppData>['catalog'], orders: ReturnType<typeof useAppData>['orders'], subscriptions: ReturnType<typeof useAppData>['subscriptions']): Record<NotificationTab, NotificationItem[]> {
+  const lowStock = catalog.filter((item) => item.type === 'produto' && (item.stock ?? 0) <= (item.minStock ?? 0))
+  const expiringSubscriptions = subscriptions.filter((item) => daysUntil(item.dueDate) <= 7)
 
   return {
     aniversarios: clients
@@ -104,9 +96,10 @@ function buildNotifications(): Record<NotificationTab, NotificationItem[]> {
 }
 
 export function Topbar({ onMenu }: { onMenu: () => void }) {
-  const barbershops = getBarbershops()
-  const notifications = React.useMemo(() => buildNotifications(), [])
-  const [active, setActive] = React.useState(barbershops[0])
+  const { barbershop, catalog, clients, orders, subscriptions } = useAppData()
+  const barbershops = [barbershop]
+  const notifications = React.useMemo(() => buildNotifications(clients, catalog, orders, subscriptions), [catalog, clients, orders, subscriptions])
+  const [active, setActive] = React.useState(barbershop)
   const [open, setOpen] = React.useState(false)
   const [notificationsOpen, setNotificationsOpen] = React.useState(false)
   const [activeTab, setActiveTab] = React.useState<NotificationTab>('planos')

@@ -1,3 +1,5 @@
+'use client'
+
 import { Download, FileSpreadsheet, Lock, RotateCcw, Upload } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { StatusBadge } from '@/components/status-badge'
@@ -11,15 +13,15 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { getActiveBarbershop, getImports } from '@/lib/data'
+import { useAppData } from '@/components/data/app-data-provider'
 import { formatDate, formatNumber } from '@/lib/format'
 import { canUsePlanFeature, getSaasPlan } from '@/lib/saas-plans'
 
 export default function ImportacaoPage() {
-  const barbershop = getActiveBarbershop()
+  const { barbershop, imports: databaseImports } = useAppData()
   const currentPlan = getSaasPlan(barbershop.plan)
   const canImport = canUsePlanFeature(barbershop.plan, 'importExport')
-  const imports = getImports().sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  const imports = [...databaseImports].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
   const totalRows = imports.reduce((sum, item) => sum + item.totalRows, 0)
   const importedRows = imports.reduce((sum, item) => sum + item.importedRows, 0)
   const errorRows = imports.reduce((sum, item) => sum + item.errorRows, 0)

@@ -1,26 +1,20 @@
+'use client'
+
 import { DashboardClient } from './dashboard-client'
-import {
-  getAppointments,
-  getCatalog,
-  getClients,
-  getCommissions,
-  getEmployees,
-  getFinancialEntries,
-  getOrders,
-  getSubscriptions,
-} from '@/lib/data'
+import { useAppData } from '@/components/data/app-data-provider'
 
 export default function DashboardPage() {
+  const { appointments, catalog, clients, commissions, employees, financialEntries, orders, subscriptions } = useAppData()
   return (
     <DashboardClient
-      appointments={getAppointments()}
-      catalog={getCatalog()}
-      clients={getClients()}
-      commissions={getCommissions()}
-      employees={getEmployees()}
-      financialEntries={getFinancialEntries()}
-      orders={getOrders()}
-      subscriptions={getSubscriptions()}
+      appointments={appointments}
+      catalog={catalog}
+      clients={clients}
+      commissions={commissions}
+      employees={employees}
+      financialEntries={financialEntries}
+      orders={orders}
+      subscriptions={subscriptions}
     />
   )
 }

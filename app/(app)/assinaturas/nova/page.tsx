@@ -1,3 +1,5 @@
+'use client'
+
 import Link from 'next/link'
 import { ArrowLeft, CreditCard, Edit3, Save } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
@@ -6,11 +8,11 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
-import { getClients, getPlans } from '@/lib/data'
+import { useAppData } from '@/components/data/app-data-provider'
 
 export default function NovaAssinaturaPage() {
-  const clients = getClients()
-  const plans = getPlans().filter((plan) => plan.active)
+  const { clients, plans: databasePlans } = useAppData()
+  const plans = databasePlans.filter((plan) => plan.active)
 
   return (
     <div>
