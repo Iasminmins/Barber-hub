@@ -1,8 +1,9 @@
 "use client"
 
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useMemo, useState } from "react"
-import { Cake, Mail, Phone, Plus, Scissors, Search, Star, Trash2, X } from "lucide-react"
+import { Cake, CalendarDays, Mail, Phone, Plus, Scissors, Search, Star, Trash2, X } from "lucide-react"
 import type { Client, ClientTag } from "@/lib/types"
 import { formatCurrency, formatDate } from "@/lib/format"
 import { Input } from "@/components/ui/input"
@@ -10,7 +11,9 @@ import { Button, buttonVariants } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Avatar } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
+import { Dialog, DialogHeader } from "@/components/ui/dialog"
 import { PageHeader } from "@/components/page-header"
+import { StatusBadge } from "@/components/status-badge"
 import {
   Table,
   TableBody,
@@ -32,11 +35,13 @@ const TAG_LABEL: Record<ClientTag, string> = {
 }
 
 export function ClientesClient({ clients }: { clients: Client[] }) {
-  const { deleteRecord } = useAppData()
+  const router = useRouter()
+  const { appointments, deleteRecord } = useAppData()
   const [records, setRecords] = useState(clients)
   const [query, setQuery] = useState("")
   const [filter, setFilter] = useState<Filter>("todos")
   const [selectedId, setSelectedId] = useState<string | null>(clients[0]?.id ?? null)
+  const [historyOpen, setHistoryOpen] = useState(false)
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -52,6 +57,12 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
   }, [records, query, filter])
 
   const selected = records.find((c) => c.id === selectedId) ?? null
+  const selectedHistory = useMemo(
+    () => appointments
+      .filter((appointment) => appointment.clientId === selectedId)
+      .sort((a, b) => `${b.date} ${b.start}`.localeCompare(`${a.date} ${a.start}`)),
+    [appointments, selectedId],
+  )
 
   async function deleteClient(id: string) {
     if (!window.confirm('Excluir este cliente?')) return
@@ -190,8 +201,8 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
               <p className="mb-4 text-sm text-muted-foreground">{selected.notes || "Sem observações registradas."}</p>
 
               <div className="flex gap-2">
-                <Button variant="outline" className="flex-1">Histórico</Button>
-                <Button variant="gold" className="flex-1">Agendar</Button>
+                <Button variant="outline" className="flex-1" onClick={() => setHistoryOpen(true)}>Histórico</Button>
+                <Button variant="gold" className="flex-1" onClick={() => router.push(`/agenda/novo?cliente=${encodeURIComponent(selected.id)}`)}>Agendar</Button>
                 <Button variant="destructive" size="icon" aria-label="Excluir cliente" onClick={() => deleteClient(selected.id)}>
                   <Trash2 className="size-4" />
                 </Button>
@@ -204,6 +215,43 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
           )}
         </div>
       </div>
+
+      <Dialog open={historyOpen} onClose={() => setHistoryOpen(false)} className="sm:max-w-2xl">
+        <DialogHeader
+          title={`Histórico de ${selected?.name ?? "cliente"}`}
+          description="Agendamentos e atendimentos registrados para este cliente."
+        />
+        {selectedHistory.length > 0 ? (
+          <div className="max-h-[60vh] space-y-2 overflow-y-auto pr-1">
+            {selectedHistory.map((appointment) => (
+              <div key={appointment.id} className="flex flex-col gap-3 rounded-lg border border-border p-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3">
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <CalendarDays className="size-4" />
+                  </span>
+                  <div>
+                    <p className="font-medium text-foreground">{appointment.serviceName}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {formatDate(appointment.date)} às {appointment.start} · {appointment.employeeName}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-3 sm:justify-end">
+                  <span className="font-medium tabular-nums text-foreground">{formatCurrency(appointment.price)}</span>
+                  <StatusBadge status={appointment.status} />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-lg border border-dashed border-border py-10 text-center text-sm text-muted-foreground">
+            Este cliente ainda não possui agendamentos registrados.
+          </div>
+        )}
+        <div className="mt-5 flex justify-end">
+          <Button variant="outline" onClick={() => setHistoryOpen(false)}>Fechar</Button>
+        </div>
+      </Dialog>
     </div>
   )
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useState } from 'react'
 import { ArrowLeft, CalendarPlus, Save } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
@@ -32,8 +32,9 @@ export function NovoAgendamentoClient({
   existingAppointments,
 }: NovoAgendamentoClientProps) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { barbershop, appointments: liveAppointments, insertRecord } = useAppData()
-  const [clientId, setClientId] = useState('')
+  const [clientId, setClientId] = useState(() => searchParams.get('cliente') ?? '')
   const [barberId, setBarberId] = useState('')
   const [serviceId, setServiceId] = useState('')
   const [status, setStatus] = useState<AppointmentStatus | ''>('')
