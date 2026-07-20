@@ -4,7 +4,7 @@ O BarberHub concede 30 dias grátis por barbearia. Ao cadastrar o pagamento, o s
 
 ## Variáveis no Vercel
 
-- `SUPABASE_SERVICE_ROLE_KEY`: chave secreta do projeto Supabase, usada somente no servidor.
+- `SUPABASE_SERVICE_ROLE_KEY`: chave secreta do projeto Supabase, usada somente no servidor. Se voce cadastrou com o nome novo do painel, `SUPABASE_SECRET_KEY` tambem funciona.
 - `ASAAS_API_URL`: `https://api-sandbox.asaas.com/v3` nos testes e `https://api.asaas.com/v3` em produção.
 - `ASAAS_API_KEY`: chave de API da conta Asaas.
 - `ASAAS_WEBHOOK_TOKEN`: token forte criado por você para autenticar os webhooks.
