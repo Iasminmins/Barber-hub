@@ -18,6 +18,7 @@ const emptyBarbershop: Barbershop = {
   slug: 'sua-barbearia',
   color: '#1E3A32',
   city: 'Configure sua conta',
+  billingDocument: '',
   plan: 'starter',
   billingStatus: 'trialing',
   trialEndsAt: '',

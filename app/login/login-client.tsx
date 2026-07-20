@@ -62,6 +62,8 @@ export function LoginClient() {
         barbershop_name: metadata.barbershop_name || 'Minha barbearia',
         barbershop_city: metadata.barbershop_city || null,
         owner_name: metadata.owner_name || null,
+        selected_plan: metadata.plan || 'starter',
+        billing_document: metadata.barbershop_document || null,
       })
       if (onboardingError) { setStatus(onboardingError.message); return }
     }

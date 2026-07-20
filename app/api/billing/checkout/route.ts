@@ -3,6 +3,7 @@ import { asaasRequest, type AsaasPayment, type AsaasSubscription } from '@/lib/a
 import { getBillingContext } from '@/lib/billing-auth'
 import { getSaasPlan, type SaasPlanId } from '@/lib/saas-plans'
 import { createAdminSupabaseClient } from '@/lib/supabase/server'
+import { onlyDigits } from '@/lib/billing-document'
 
 type PaymentList = { data?: AsaasPayment[] }
 
@@ -19,11 +20,17 @@ export async function POST(request: Request) {
 
     let customerId = barbershop.asaas_customer_id as string | null
     if (!customerId) {
+      const cpfCnpj = onlyDigits(String(barbershop.billing_document ?? ''))
+      if (cpfCnpj.length !== 11 && cpfCnpj.length !== 14) {
+        throw new Error('Para criar esta cobranca e necessario preencher o CPF ou CNPJ da empresa em Configuracoes.')
+      }
+
       const customer = await asaasRequest<{ id: string }>('/customers', {
         method: 'POST',
         body: JSON.stringify({
           name: barbershop.name,
           email: member.email,
+          cpfCnpj,
           externalReference: barbershop.id,
           notificationDisabled: false,
         }),

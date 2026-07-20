@@ -20,7 +20,7 @@ export async function getBillingContext(request: Request) {
 
   const { data: barbershop, error: shopError } = await supabase
     .from('barbershops')
-    .select('id, name, plan, billing_status, trial_ends_at, next_billing_date, asaas_customer_id, asaas_subscription_id')
+    .select('id, name, plan, billing_status, trial_ends_at, next_billing_date, billing_document, asaas_customer_id, asaas_subscription_id')
     .eq('id', member.barbershop_id)
     .single()
   if (shopError || !barbershop) throw new Error('Dados de cobrança não encontrados. Aplique a migração do banco.')

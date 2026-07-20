@@ -19,7 +19,7 @@ type AppData = {
   imports: ImportRecord[]
 }
 
-const fallbackShop: Barbershop = { id: '', name: '', slug: '', color: '#1E3A32', city: '', plan: 'starter', billingStatus: 'trialing', trialEndsAt: '' }
+const fallbackShop: Barbershop = { id: '', name: '', slug: '', color: '#1E3A32', city: '', billingDocument: '', plan: 'starter', billingStatus: 'trialing', trialEndsAt: '' }
 type MutationResult = { error?: string; data?: any }
 type AppDataContextValue = AppData & {
   refresh: () => Promise<void>
@@ -84,6 +84,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         slug: shop.slug,
         color: shop.color,
         city: shop.city ?? '',
+        billingDocument: shop.billing_document ?? '',
         plan: shop.plan,
         billingStatus: shop.billing_status ?? 'trialing',
         trialEndsAt: shop.trial_ends_at ?? shop.created_at,

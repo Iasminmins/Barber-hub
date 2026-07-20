@@ -13,15 +13,22 @@ import { useAppData } from '@/components/data/app-data-provider'
 import { getSaasPlan, saasPlans } from '@/lib/saas-plans'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import { BillingCard } from '@/components/billing/billing-card'
+import { formatBillingDocument, onlyDigits } from '@/lib/billing-document'
 
 export default function ConfiguracoesPage() {
   const [saved, setSaved] = useState(false)
   const { barbershop, updateRecord } = useAppData()
-  const [shop, setShop] = useState({ name: barbershop.name, slug: barbershop.slug, city: barbershop.city, color: barbershop.color })
+  const [shop, setShop] = useState({ name: barbershop.name, slug: barbershop.slug, city: barbershop.city, color: barbershop.color, billingDocument: formatBillingDocument(barbershop.billingDocument) })
   const currentPlan = getSaasPlan(barbershop.plan)
   async function saveSettings() {
     setSaved(false)
-    const result = await updateRecord('barbershops', barbershop.id, shop)
+    const result = await updateRecord('barbershops', barbershop.id, {
+      name: shop.name,
+      slug: shop.slug,
+      city: shop.city,
+      color: shop.color,
+      billing_document: onlyDigits(shop.billingDocument) || null,
+    })
     if (result.error) { window.alert(result.error); return }
     setSaved(true)
   }
@@ -60,6 +67,16 @@ export default function ConfiguracoesPage() {
               <div className="space-y-2">
                 <Label htmlFor="city">Cidade</Label>
                 <Input id="city" value={shop.city} onChange={(e)=>setShop(c=>({...c,city:e.target.value}))} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="billingDocument">CPF/CNPJ da cobranca</Label>
+                <Input
+                  id="billingDocument"
+                  inputMode="numeric"
+                  value={shop.billingDocument}
+                  onChange={(e)=>setShop(c=>({...c,billingDocument:formatBillingDocument(e.target.value)}))}
+                  placeholder="CPF ou CNPJ"
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="plan">Plano da conta</Label>

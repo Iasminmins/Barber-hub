@@ -16,6 +16,7 @@ export interface Barbershop {
   slug: string
   color: string
   city: string
+  billingDocument: string
   plan: 'starter' | 'pro' | 'premium'
   billingStatus: 'trialing' | 'active' | 'past_due' | 'canceled'
   trialEndsAt: string

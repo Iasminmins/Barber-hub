@@ -8,6 +8,7 @@ import {
   ArrowRight,
   Building2,
   CheckCircle2,
+  IdCard,
   Mail,
   Scissors,
   Store,
@@ -27,6 +28,7 @@ import {
 } from '@/lib/saas-plans'
 import { createBrowserSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
+import { formatBillingDocument, isValidBillingDocument, onlyDigits } from '@/lib/billing-document'
 
 export function CadastroClient({ selectedPlanId }: { selectedPlanId: SaasPlanId }) {
   const router = useRouter()
@@ -35,6 +37,7 @@ export function CadastroClient({ selectedPlanId }: { selectedPlanId: SaasPlanId 
   const [email, setEmail] = useState('')
   const [shop, setShop] = useState('')
   const [city, setCity] = useState('')
+  const [billingDocument, setBillingDocument] = useState('')
   const [plan, setPlan] = useState<SaasPlanId>(selectedPlanId)
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -49,8 +52,13 @@ export function CadastroClient({ selectedPlanId }: { selectedPlanId: SaasPlanId 
       return
     }
 
-    if (!owner.trim() || !email.trim() || !shop.trim() || !password) {
-      setStatus('Preencha nome, e-mail, barbearia e senha.')
+    if (!owner.trim() || !email.trim() || !shop.trim() || !billingDocument.trim() || !password) {
+      setStatus('Preencha nome, e-mail, barbearia, CPF/CNPJ e senha.')
+      return
+    }
+
+    if (!isValidBillingDocument(billingDocument)) {
+      setStatus('Informe um CPF ou CNPJ valido.')
       return
     }
 
@@ -73,6 +81,7 @@ export function CadastroClient({ selectedPlanId }: { selectedPlanId: SaasPlanId 
           owner_name: owner.trim(),
           barbershop_name: shop.trim(),
           barbershop_city: city.trim(),
+          barbershop_document: onlyDigits(billingDocument),
           plan,
         },
       },
@@ -90,6 +99,7 @@ export function CadastroClient({ selectedPlanId }: { selectedPlanId: SaasPlanId 
         barbershop_city: city.trim() || null,
         owner_name: owner.trim(),
         selected_plan: plan,
+        billing_document: onlyDigits(billingDocument),
       })
 
       if (onboardingError) {
@@ -153,6 +163,20 @@ export function CadastroClient({ selectedPlanId }: { selectedPlanId: SaasPlanId 
               <div className="relative">
                 <Building2 className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input id="city" value={city} onChange={(event) => setCity(event.target.value)} placeholder="Cidade, UF" className="pl-9" />
+              </div>
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="billingDocument">CPF ou CNPJ</Label>
+              <div className="relative">
+                <IdCard className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="billingDocument"
+                  inputMode="numeric"
+                  value={billingDocument}
+                  onChange={(event) => setBillingDocument(formatBillingDocument(event.target.value))}
+                  placeholder="CPF ou CNPJ do responsavel"
+                  className="pl-9"
+                />
               </div>
             </div>
             <div className="space-y-2 sm:col-span-2">
