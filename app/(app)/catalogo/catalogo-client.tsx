@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useMemo, useState } from "react"
-import { AlertTriangle, Clock, Package, Plus, Scissors, Search, Trash2 } from "lucide-react"
+import { AlertTriangle, Clock, Package, Pencil, Plus, Save, Scissors, Search, Trash2 } from "lucide-react"
 import type { CatalogItem, CatalogType } from "@/lib/types"
 import { useAppData } from '@/components/data/app-data-provider'
 import { formatCurrency, formatPercent } from "@/lib/format"
@@ -10,6 +10,9 @@ import { Input } from "@/components/ui/input"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Dialog, DialogHeader } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Select } from "@/components/ui/select"
 import { PageHeader } from "@/components/page-header"
 import { Tabs } from "@/components/ui/tabs"
 import {
@@ -26,11 +29,52 @@ function margin(item: CatalogItem) {
   return ((item.price - item.cost) / item.price) * 100
 }
 
+type CatalogDraft = {
+  id: string
+  type: CatalogType
+  name: string
+  category: string
+  price: string
+  cost: string
+  durationMin: string
+  stock: string
+  minStock: string
+  commission: string
+  active: boolean
+}
+
+function createDraft(item: CatalogItem): CatalogDraft {
+  return {
+    id: item.id,
+    type: item.type,
+    name: item.name,
+    category: item.category,
+    price: String(item.price),
+    cost: String(item.cost),
+    durationMin: String(item.durationMin ?? ""),
+    stock: String(item.stock ?? ""),
+    minStock: String(item.minStock ?? ""),
+    commission: String(item.commission),
+    active: item.active,
+  }
+}
+
+function parseDecimal(value: string) {
+  const cleaned = value.trim().replace(/\s/g, "")
+  const normalized = cleaned.includes(",")
+    ? cleaned.replace(/\./g, "").replace(",", ".")
+    : cleaned
+  return Number(normalized)
+}
+
 export function CatalogoClient({ items }: { items: CatalogItem[] }) {
-  const { deleteRecord } = useAppData()
+  const { deleteRecord, updateRecord } = useAppData()
   const [records, setRecords] = useState(items)
   const [tab, setTab] = useState<CatalogType>("servico")
   const [query, setQuery] = useState("")
+  const [editing, setEditing] = useState<CatalogDraft | null>(null)
+  const [editStatus, setEditStatus] = useState("")
+  const [saving, setSaving] = useState(false)
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -49,6 +93,61 @@ export function CatalogoClient({ items }: { items: CatalogItem[] }) {
     const result = await deleteRecord('catalog_items', id)
     if (result.error) { window.alert(result.error); return }
     setRecords((current) => current.filter((item) => item.id !== id))
+  }
+
+  function setDraft<K extends keyof CatalogDraft>(key: K, value: CatalogDraft[K]) {
+    setEditing((current) => current ? { ...current, [key]: value } : current)
+  }
+
+  async function saveEdit() {
+    if (!editing) return
+
+    const price = parseDecimal(editing.price)
+    const cost = parseDecimal(editing.cost)
+    const commission = parseDecimal(editing.commission)
+    const durationMin = parseDecimal(editing.durationMin)
+    const stock = parseDecimal(editing.stock)
+    const minStock = parseDecimal(editing.minStock)
+
+    if (!editing.name.trim()) { setEditStatus("Informe o nome do item."); return }
+    if (!Number.isFinite(price) || price < 0) { setEditStatus("Informe um preço válido."); return }
+    if (!Number.isFinite(cost) || cost < 0) { setEditStatus("Informe um custo válido."); return }
+    if (!Number.isFinite(commission) || commission < 0 || commission > 100) { setEditStatus("A comissão deve estar entre 0% e 100%."); return }
+    if (editing.type === "servico" && (!Number.isFinite(durationMin) || durationMin <= 0)) { setEditStatus("Informe uma duração maior que zero."); return }
+    if (editing.type === "produto" && (!Number.isFinite(stock) || stock < 0 || !Number.isFinite(minStock) || minStock < 0)) { setEditStatus("Informe valores de estoque válidos."); return }
+
+    setSaving(true)
+    setEditStatus("")
+    const values = {
+      type: editing.type,
+      name: editing.name.trim(),
+      category: editing.category.trim() || null,
+      price,
+      cost,
+      commission,
+      duration_min: editing.type === "servico" ? durationMin : null,
+      stock: editing.type === "produto" ? stock : null,
+      min_stock: editing.type === "produto" ? minStock : null,
+      active: editing.active,
+    }
+    const result = await updateRecord("catalog_items", editing.id, values)
+    setSaving(false)
+    if (result.error) { setEditStatus(result.error); return }
+
+    setRecords((current) => current.map((item) => item.id === editing.id ? {
+      ...item,
+      type: editing.type,
+      name: editing.name.trim(),
+      category: editing.category.trim(),
+      price,
+      cost,
+      commission,
+      durationMin: editing.type === "servico" ? durationMin : undefined,
+      stock: editing.type === "produto" ? stock : undefined,
+      minStock: editing.type === "produto" ? minStock : undefined,
+      active: editing.active,
+    } : item))
+    setEditing(null)
   }
 
   return (
@@ -142,9 +241,14 @@ export function CatalogoClient({ items }: { items: CatalogItem[] }) {
                   <TableCell className="text-right tabular-nums text-muted-foreground">{formatPercent(i.commission)}</TableCell>
                   <TableCell>{i.active ? <Badge variant="success">Ativo</Badge> : <Badge variant="secondary">Inativo</Badge>}</TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="icon-sm" aria-label="Excluir item" onClick={() => deleteItem(i.id)}>
-                      <Trash2 className="size-4" />
-                    </Button>
+                    <div className="inline-flex items-center gap-1">
+                      <Button variant="ghost" size="icon-sm" aria-label={`Editar ${i.name}`} onClick={() => { setEditStatus(""); setEditing(createDraft(i)) }}>
+                        <Pencil className="size-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon-sm" aria-label={`Excluir ${i.name}`} onClick={() => deleteItem(i.id)}>
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               )
@@ -157,6 +261,53 @@ export function CatalogoClient({ items }: { items: CatalogItem[] }) {
           </TableBody>
         </Table>
       </Card>
+
+      <Dialog open={Boolean(editing)} onClose={() => { if (!saving) setEditing(null) }} className="sm:max-w-2xl">
+        {editing ? (
+          <>
+            <DialogHeader title="Editar item" description="Corrija as informações e salve para atualizar o catálogo." />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Tipo">
+                <Select value={editing.type} onChange={(event) => setDraft("type", event.target.value as CatalogType)} disabled={saving}>
+                  <option value="servico">Serviço</option>
+                  <option value="produto">Produto</option>
+                </Select>
+              </Field>
+              <Field label="Categoria"><Input value={editing.category} onChange={(event) => setDraft("category", event.target.value)} disabled={saving} /></Field>
+              <Field label="Nome"><Input value={editing.name} onChange={(event) => setDraft("name", event.target.value)} disabled={saving} autoFocus /></Field>
+              <Field label="Preço"><Input inputMode="decimal" value={editing.price} onChange={(event) => setDraft("price", event.target.value)} disabled={saving} /></Field>
+              <Field label="Custo"><Input inputMode="decimal" value={editing.cost} onChange={(event) => setDraft("cost", event.target.value)} disabled={saving} /></Field>
+              <Field label="Comissão (%)"><Input type="number" min="0" max="100" value={editing.commission} onChange={(event) => setDraft("commission", event.target.value)} disabled={saving} /></Field>
+              {editing.type === "servico" ? (
+                <Field label="Duração (minutos)"><Input type="number" min="1" value={editing.durationMin} onChange={(event) => setDraft("durationMin", event.target.value)} disabled={saving} /></Field>
+              ) : (
+                <>
+                  <Field label="Estoque"><Input type="number" min="0" value={editing.stock} onChange={(event) => setDraft("stock", event.target.value)} disabled={saving} /></Field>
+                  <Field label="Estoque mínimo"><Input type="number" min="0" value={editing.minStock} onChange={(event) => setDraft("minStock", event.target.value)} disabled={saving} /></Field>
+                </>
+              )}
+              <Field label="Status">
+                <Select value={editing.active ? "ativo" : "inativo"} onChange={(event) => setDraft("active", event.target.value === "ativo")} disabled={saving}>
+                  <option value="ativo">Ativo</option>
+                  <option value="inativo">Inativo</option>
+                </Select>
+              </Field>
+            </div>
+            {editStatus ? <p role="alert" className="mt-4 text-sm text-destructive">{editStatus}</p> : null}
+            <div className="mt-6 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setEditing(null)} disabled={saving}>Cancelar</Button>
+              <Button variant="gold" onClick={saveEdit} disabled={saving}>
+                <Save className="size-4" />
+                {saving ? "Salvando..." : "Salvar alterações"}
+              </Button>
+            </div>
+          </>
+        ) : null}
+      </Dialog>
     </div>
   )
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return <div className="space-y-2"><Label>{label}</Label>{children}</div>
 }
