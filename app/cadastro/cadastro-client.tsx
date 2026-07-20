@@ -89,6 +89,7 @@ export function CadastroClient({ selectedPlanId }: { selectedPlanId: SaasPlanId 
         barbershop_name: shop.trim(),
         barbershop_city: city.trim() || null,
         owner_name: owner.trim(),
+        selected_plan: plan,
       })
 
       if (onboardingError) {

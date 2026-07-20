@@ -19,6 +19,8 @@ const emptyBarbershop: Barbershop = {
   color: '#1E3A32',
   city: 'Configure sua conta',
   plan: 'starter',
+  billingStatus: 'trialing',
+  trialEndsAt: '',
 }
 
 export function getBarbershops(): Barbershop[] {

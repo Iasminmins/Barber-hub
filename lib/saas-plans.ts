@@ -14,6 +14,7 @@ export interface SaasPlan {
   id: SaasPlanId
   name: string
   price: string
+  monthlyPrice: number
   shortDescription: string
   description: string
   users: string
@@ -34,6 +35,7 @@ export const saasPlans: SaasPlan[] = [
     id: 'starter',
     name: 'Starter',
     price: 'R$ 80',
+    monthlyPrice: 80,
     shortDescription: 'Sistema completo para começar com controle de verdade.',
     description: 'Sistema completo para uma barbearia pequena começar com controle de verdade.',
     users: 'Até 3 usuários',
@@ -56,6 +58,7 @@ export const saasPlans: SaasPlan[] = [
     id: 'pro',
     name: 'Pro',
     price: 'R$ 149',
+    monthlyPrice: 149,
     shortDescription: 'Mais acessos, importação e relatórios para a equipe.',
     description: 'Para equipes que precisam de mais acessos, comissões e operação mais acompanhada.',
     users: 'Até 8 usuários',
@@ -79,6 +82,7 @@ export const saasPlans: SaasPlan[] = [
     id: 'premium',
     name: 'Premium',
     price: 'R$ 249',
+    monthlyPrice: 249,
     shortDescription: 'Escala para redes, multiunidade e implantação assistida.',
     description: 'Para barbearias maiores, redes ou operações que precisam escalar com suporte.',
     users: 'Ilimitado',

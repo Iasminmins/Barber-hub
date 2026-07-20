@@ -12,6 +12,7 @@ import { Select } from '@/components/ui/select'
 import { useAppData } from '@/components/data/app-data-provider'
 import { getSaasPlan, saasPlans } from '@/lib/saas-plans'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
+import { BillingCard } from '@/components/billing/billing-card'
 
 export default function ConfiguracoesPage() {
   const [saved, setSaved] = useState(false)
@@ -41,6 +42,7 @@ export default function ConfiguracoesPage() {
 
       <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
         <div className="space-y-4">
+          <BillingCard planId={barbershop.plan} />
           <Card className="p-5">
             <h3 className="mb-4 flex items-center gap-2 font-semibold text-foreground">
               <Building2 className="size-4 text-muted-foreground" />

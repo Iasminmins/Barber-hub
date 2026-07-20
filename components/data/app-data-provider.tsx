@@ -19,7 +19,7 @@ type AppData = {
   imports: ImportRecord[]
 }
 
-const fallbackShop: Barbershop = { id: '', name: '', slug: '', color: '#1E3A32', city: '', plan: 'starter' }
+const fallbackShop: Barbershop = { id: '', name: '', slug: '', color: '#1E3A32', city: '', plan: 'starter', billingStatus: 'trialing', trialEndsAt: '' }
 type MutationResult = { error?: string; data?: any }
 type AppDataContextValue = AppData & {
   refresh: () => Promise<void>
@@ -78,7 +78,17 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     const [employees, clients, catalog, appointments, orders, orderItems, plans, subscriptions, commissions, financial, imports] = results.map((result) => result.data ?? [])
 
     setValue({
-      barbershop: { id: shopId, name: shop.name, slug: shop.slug, color: shop.color, city: shop.city ?? '', plan: shop.plan },
+      barbershop: {
+        id: shopId,
+        name: shop.name,
+        slug: shop.slug,
+        color: shop.color,
+        city: shop.city ?? '',
+        plan: shop.plan,
+        billingStatus: shop.billing_status ?? 'trialing',
+        trialEndsAt: shop.trial_ends_at ?? shop.created_at,
+        nextBillingDate: shop.next_billing_date ?? undefined,
+      },
       member: { id: memberships[0].id, barbershopId: shopId, name: memberships[0].name, email: memberships[0].email, role: memberships[0].role, active: memberships[0].active },
       employees: employees.map((r: any) => ({ id:r.id, barbershopId:r.barbershop_id, name:r.name, role:r.role, phone:r.phone??'', email:r.email??'', active:r.active, serviceCommission:num(r.service_commission), productCommission:num(r.product_commission), subscriptionCommission:num(r.subscription_commission), avatarColor:r.avatar_color??undefined })),
       clients: clients.map((r: any) => ({ id:r.id, barbershopId:r.barbershop_id, name:r.name, phone:r.phone??'', email:r.email??'', birthDate:r.birth_date??'', address:r.address??'', notes:r.notes??'', tags:r.tags??[], totalSpent:num(r.total_spent), visits:num(r.visits), lastVisit:r.last_visit??'', favoriteService:r.favorite_service??'', preferredBarber:r.preferred_barber??'', createdAt:r.created_at })),
