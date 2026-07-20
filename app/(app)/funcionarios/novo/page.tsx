@@ -1,5 +1,9 @@
+'use client'
 import Link from 'next/link'
-import { ArrowLeft, Save, UserCog } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { useState } from 'react'
+import { ArrowLeft, Save } from 'lucide-react'
+import { useAppData } from '@/components/data/app-data-provider'
 import { PageHeader } from '@/components/page-header'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -7,81 +11,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 
-export default function NovoFuncionarioPage() {
-  return (
-    <div>
-      <PageHeader title="Novo funcionário" description="Cadastre equipe, função, contato e regras de comissão.">
-        <Link href="/funcionarios" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
-          <ArrowLeft className="size-4" />
-          Voltar
-        </Link>
-      </PageHeader>
-
-      <form className="grid gap-4 lg:grid-cols-[1fr_320px]">
-        <Card className="p-5">
-          <h2 className="mb-4 flex items-center gap-2 font-semibold text-foreground">
-            <UserCog className="size-4 text-muted-foreground" />
-            Dados do funcionário
-          </h2>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="name">Nome completo</Label>
-              <Input id="name" placeholder="Ex.: Nome do funcionário" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="role">Função</Label>
-              <Select id="role" defaultValue="barber">
-                <option value="barber">Barbeiro</option>
-                <option value="manager">Gerente</option>
-                <option value="reception">Recepção</option>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="email">E-mail</Label>
-              <Input id="email" type="email" placeholder="funcionario@barberhub.com" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="phone">Telefone</Label>
-              <Input id="phone" placeholder="(11) 99999-0000" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="active">Status</Label>
-              <Select id="active" defaultValue="active">
-                <option value="active">Ativo</option>
-                <option value="inactive">Inativo</option>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="serviceCommission">Comissão em serviços (%)</Label>
-              <Input id="serviceCommission" type="number" placeholder="45" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="productCommission">Comissão em produtos (%)</Label>
-              <Input id="productCommission" type="number" placeholder="10" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="subscriptionCommission">Comissão em assinaturas (%)</Label>
-              <Input id="subscriptionCommission" type="number" placeholder="15" />
-            </div>
-          </div>
-        </Card>
-
-        <Card className="h-fit p-5">
-          <h3 className="mb-2 font-semibold text-foreground">Permissões iniciais</h3>
-          <div className="mb-4 space-y-3">
-            {['Agenda', 'Comandas', 'Clientes', 'Financeiro'].map((permission, index) => (
-              <label key={permission} className="flex items-center justify-between gap-3 text-sm">
-                <span className="text-muted-foreground">{permission}</span>
-                <input type="checkbox" defaultChecked={index < 3} className="size-4 accent-[var(--primary)]" />
-              </label>
-            ))}
-          </div>
-          <Button type="button" variant="gold" className="w-full">
-            <Save className="size-4" />
-            Salvar funcionário
-          </Button>
-        </Card>
-      </form>
-    </div>
-  )
-}
+export default function NovoFuncionarioPage(){const router=useRouter();const {barbershop,member,insertRecord}=useAppData();const [form,setForm]=useState({name:'',role:'barber',email:'',phone:'',active:'true',service:'',product:'',subscription:''});const [status,setStatus]=useState('');const set=(k:keyof typeof form,v:string)=>setForm(c=>({...c,[k]:v}));async function save(){if(member.role!=='owner'&&member.role!=='manager'){setStatus('Somente proprietário ou gerente pode cadastrar funcionários.');return}if(!form.name.trim()){setStatus('Informe o nome.');return}const r=await insertRecord('employees',{barbershop_id:barbershop.id,name:form.name.trim(),role:form.role,email:form.email.trim()||null,phone:form.phone.trim()||null,active:form.active==='true',service_commission:Number(form.service)||0,product_commission:Number(form.product)||0,subscription_commission:Number(form.subscription)||0});if(r.error){setStatus(r.error);return}router.push('/funcionarios')}
+return <div><PageHeader title="Novo funcionário" description="Cadastre equipe, função, contato e comissões."><Link href="/funcionarios" className={buttonVariants({variant:'outline',size:'sm'})}><ArrowLeft className="size-4"/>Voltar</Link></PageHeader><Card className="mx-auto max-w-3xl p-5"><div className="grid gap-4 sm:grid-cols-2"><Field label="Nome"><Input value={form.name} onChange={e=>set('name',e.target.value)}/></Field><Field label="Função"><Select value={form.role} onChange={e=>set('role',e.target.value)}><option value="barber">Barbeiro</option><option value="manager">Gerente</option><option value="reception">Recepção</option></Select></Field><Field label="E-mail"><Input type="email" value={form.email} onChange={e=>set('email',e.target.value)}/></Field><Field label="Telefone"><Input value={form.phone} onChange={e=>set('phone',e.target.value)}/></Field><Field label="Status"><Select value={form.active} onChange={e=>set('active',e.target.value)}><option value="true">Ativo</option><option value="false">Inativo</option></Select></Field><Field label="Comissão em serviços (%)"><Input type="number" value={form.service} onChange={e=>set('service',e.target.value)}/></Field><Field label="Comissão em produtos (%)"><Input type="number" value={form.product} onChange={e=>set('product',e.target.value)}/></Field><Field label="Comissão em assinaturas (%)"><Input type="number" value={form.subscription} onChange={e=>set('subscription',e.target.value)}/></Field></div>{status?<p className="mt-4 text-sm">{status}</p>:null}<Button variant="gold" className="mt-5 w-full" onClick={save}><Save className="size-4"/>Salvar funcionário</Button></Card></div>}
+function Field({label,children}:{label:string;children:React.ReactNode}){return <div className="space-y-2"><Label>{label}</Label>{children}</div>}

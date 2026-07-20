@@ -2,8 +2,9 @@
 
 import Link from "next/link"
 import { useMemo, useState } from "react"
-import { AlertTriangle, Clock, Package, Plus, Save, Scissors, Search, Trash2 } from "lucide-react"
+import { AlertTriangle, Clock, Package, Plus, Scissors, Search, Trash2 } from "lucide-react"
 import type { CatalogItem, CatalogType } from "@/lib/types"
+import { useAppData } from '@/components/data/app-data-provider'
 import { formatCurrency, formatPercent } from "@/lib/format"
 import { Input } from "@/components/ui/input"
 import { Button, buttonVariants } from "@/components/ui/button"
@@ -26,10 +27,10 @@ function margin(item: CatalogItem) {
 }
 
 export function CatalogoClient({ items }: { items: CatalogItem[] }) {
+  const { deleteRecord } = useAppData()
   const [records, setRecords] = useState(items)
   const [tab, setTab] = useState<CatalogType>("servico")
   const [query, setQuery] = useState("")
-  const [saved, setSaved] = useState(false)
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -43,19 +44,16 @@ export function CatalogoClient({ items }: { items: CatalogItem[] }) {
   const lowStock = products.filter((p) => (p.stock ?? 0) <= (p.minStock ?? 0)).length
   const inventoryValue = products.reduce((s, p) => s + (p.stock ?? 0) * p.cost, 0)
 
-  function deleteItem(id: string) {
+  async function deleteItem(id: string) {
+    if (!window.confirm('Excluir este item?')) return
+    const result = await deleteRecord('catalog_items', id)
+    if (result.error) { window.alert(result.error); return }
     setRecords((current) => current.filter((item) => item.id !== id))
-    setSaved(false)
   }
 
   return (
     <div>
       <PageHeader title="Produtos & Serviços" description="Catálogo, preços, comissões e controle de estoque.">
-        {saved ? <span className="text-sm font-medium text-success">Alterações salvas</span> : null}
-        <Button variant="outline" onClick={() => setSaved(true)}>
-          <Save className="size-4" />
-          Salvar
-        </Button>
         <Link href="/catalogo/novo" className={buttonVariants({ variant: "gold" })}>
           <Plus className="size-4" />
           {tab === "servico" ? "Novo serviço" : "Novo produto"}

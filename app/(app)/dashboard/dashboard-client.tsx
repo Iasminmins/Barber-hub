@@ -27,8 +27,6 @@ import {
 import { RevenueChart } from '@/components/dashboard/revenue-chart'
 import { MethodChart } from '@/components/dashboard/method-chart'
 import { daysUntil, formatCurrency, formatDateShort } from '@/lib/format'
-import { getAllAppointments } from '@/lib/appointments-storage'
-import { getAllOrders } from '@/lib/orders-storage'
 import type {
   Appointment,
   CatalogItem,
@@ -169,13 +167,8 @@ export function DashboardClient({
 }) {
   const [period, setPeriod] = React.useState<Period>('semana')
   const [range, setRange] = React.useState<DateRange>(() => getDefaultRange('semana'))
-  const [dashboardOrders, setDashboardOrders] = React.useState(orders)
-  const [dashboardAppointments, setDashboardAppointments] = React.useState(appointments)
-
-  React.useEffect(() => {
-    setDashboardOrders(getAllOrders(orders))
-    setDashboardAppointments(getAllAppointments(appointments))
-  }, [appointments, orders])
+  const dashboardOrders = orders
+  const dashboardAppointments = appointments
 
   function handlePeriodChange(nextPeriod: Period) {
     setPeriod(nextPeriod)

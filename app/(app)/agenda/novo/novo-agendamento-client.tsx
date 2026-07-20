@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { getAllAppointments, saveStoredAppointment } from '@/lib/appointments-storage'
+import { useAppData } from '@/components/data/app-data-provider'
 import type { Appointment, AppointmentStatus, CatalogItem, Client, Employee } from '@/lib/types'
 
 interface NovoAgendamentoClientProps {
@@ -32,6 +32,7 @@ export function NovoAgendamentoClient({
   existingAppointments,
 }: NovoAgendamentoClientProps) {
   const router = useRouter()
+  const { barbershop, appointments: liveAppointments, insertRecord } = useAppData()
   const [clientId, setClientId] = useState('')
   const [barberId, setBarberId] = useState('')
   const [serviceId, setServiceId] = useState('')
@@ -41,7 +42,7 @@ export function NovoAgendamentoClient({
   const [notes, setNotes] = useState('')
   const [saveError, setSaveError] = useState('')
 
-  function saveAppointment() {
+  async function saveAppointment() {
     setSaveError('')
 
     const client = clients.find((item) => item.id === clientId)
@@ -72,7 +73,7 @@ export function NovoAgendamentoClient({
       return
     }
 
-    const hasConflict = getAllAppointments(existingAppointments).some(
+    const hasConflict = [...existingAppointments, ...liveAppointments].some(
       (appointment) =>
         appointment.employeeId === barber.id &&
         appointment.date === date &&
@@ -84,24 +85,8 @@ export function NovoAgendamentoClient({
       return
     }
 
-    const timestamp = Date.now()
-    const appointment: Appointment = {
-      id: `apt_local_${timestamp}`,
-      barbershopId: barber.barbershopId,
-      clientId: client.id,
-      clientName: client.name,
-      employeeId: barber.id,
-      employeeName: barber.name,
-      serviceId: service.id,
-      serviceName: service.name,
-      date,
-      start,
-      durationMin: service.durationMin ?? 40,
-      status,
-      price: service.price,
-    }
-
-    saveStoredAppointment(appointment)
+    const result = await insertRecord('appointments', { barbershop_id: barbershop.id, client_id: client.id, client_name: client.name, employee_id: barber.id, employee_name: barber.name, service_id: service.id, service_name: service.name, date, start, duration_min: service.durationMin ?? 40, status, price: service.price, notes: notes.trim() || null })
+    if (result.error) { setSaveError(result.error); return }
     router.push('/agenda')
   }
 

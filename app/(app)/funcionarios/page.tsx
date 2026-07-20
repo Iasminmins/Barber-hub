@@ -35,7 +35,11 @@ export default function FuncionariosPage() {
 
   const activeEmployees = useMemo(() => employees.filter((e) => e.active), [employees])
 
-  function deleteEmployee(id: string) {
+  async function deleteEmployee(id: string) {
+    if (appData.member.role !== 'owner' && appData.member.role !== 'manager') { window.alert('Sem permissão para excluir funcionários.'); return }
+    if (!window.confirm('Excluir este funcionário?')) return
+    const result = await appData.deleteRecord('employees', id)
+    if (result.error) { window.alert(result.error); return }
     setEmployees((current) => current.filter((employee) => employee.id !== id))
     setSaved(false)
   }

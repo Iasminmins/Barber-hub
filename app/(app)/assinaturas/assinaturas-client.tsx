@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/table'
 import { daysUntil, formatCurrency, formatDate } from '@/lib/format'
 import type { Plan, Subscription } from '@/lib/types'
+import { useAppData } from '@/components/data/app-data-provider'
 
 type View = 'assinaturas' | 'planos'
 
@@ -70,6 +71,7 @@ export function AssinaturasClient({
   plans: Plan[]
   subscriptions: Subscription[]
 }) {
+  const { barbershop, insertRecord, updateRecord } = useAppData()
   const [view, setView] = React.useState<View>('assinaturas')
   const [plans, setPlans] = React.useState(initialPlans)
   const [draft, setDraft] = React.useState<PlanDraft>(emptyDraft)
@@ -90,13 +92,15 @@ export function AssinaturasClient({
     setDraft(emptyDraft)
   }
 
-  function savePlan() {
+  async function savePlan() {
     const price = parseMoney(draft.price)
     const credits = Number(draft.credits || 0) || undefined
 
     if (!draft.name.trim()) return
 
     if (draft.id) {
+      const result = await updateRecord('plans', draft.id, { name: draft.name.trim(), price, type: draft.type, credits: draft.type === 'mensal' ? null : credits, description: draft.description.trim() || null, active: draft.active })
+      if (result.error) { window.alert(result.error); return }
       setPlans((current) =>
         current.map((plan) =>
           plan.id === draft.id
@@ -113,9 +117,11 @@ export function AssinaturasClient({
         ),
       )
     } else {
+      const result = await insertRecord('plans', { barbershop_id: barbershop.id, name: draft.name.trim(), price, type: draft.type, credits: draft.type === 'mensal' ? null : credits, description: draft.description.trim() || null, active: draft.active })
+      if (result.error || !result.data) { window.alert(result.error ?? 'Não foi possível salvar o plano.'); return }
       const next: Plan = {
-        id: `pln_local_${Date.now()}`,
-        barbershopId: 'bsp_1',
+        id: result.data.id,
+        barbershopId: barbershop.id,
         name: draft.name.trim(),
         price,
         type: draft.type,

@@ -27,7 +27,7 @@ export interface SaasPlan {
 
 export const FREE_TRIAL_DAYS = 30
 export const FREE_TRIAL_LABEL = '1 mês grátis'
-export const FREE_TRIAL_DESCRIPTION = 'Novos usuários testam qualquer plano por 30 dias antes da primeira cobrança.'
+export const FREE_TRIAL_DESCRIPTION = 'Novos usuários testam o sistema por 30 dias. A ativação do plano é confirmada comercialmente antes do fim do período.'
 
 export const saasPlans: SaasPlan[] = [
   {

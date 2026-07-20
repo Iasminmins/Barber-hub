@@ -1,112 +1,16 @@
 'use client'
-
 import Link from 'next/link'
-import { ArrowLeft, CreditCard, Edit3, Save } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { useState } from 'react'
+import { ArrowLeft, Save } from 'lucide-react'
+import { useAppData } from '@/components/data/app-data-provider'
 import { PageHeader } from '@/components/page-header'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
-import { useAppData } from '@/components/data/app-data-provider'
 
-export default function NovaAssinaturaPage() {
-  const { clients, plans: databasePlans } = useAppData()
-  const plans = databasePlans.filter((plan) => plan.active)
-
-  return (
-    <div>
-      <PageHeader title="Nova assinatura" description="Associe um cliente a um plano recorrente, pacote ou crédito.">
-        <Link href="/assinaturas" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
-          <ArrowLeft className="size-4" />
-          Voltar
-        </Link>
-      </PageHeader>
-
-      <form className="grid gap-4 lg:grid-cols-[1fr_320px]">
-        <Card className="p-5">
-          <h2 className="mb-4 flex items-center gap-2 font-semibold text-foreground">
-            <CreditCard className="size-4 text-muted-foreground" />
-            Dados da assinatura
-          </h2>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="client">Cliente</Label>
-              <Select id="client" defaultValue="">
-                <option value="" disabled>
-                  Selecionar cliente
-                </option>
-                {clients.map((client) => (
-                  <option key={client.id} value={client.id}>
-                    {client.name}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-3">
-                <Label htmlFor="plan">Plano</Label>
-                <Link href="/assinaturas?tab=planos#planos" className="text-xs font-semibold text-primary hover:underline">
-                  criar/editar planos
-                </Link>
-              </div>
-              <Select id="plan" defaultValue="">
-                <option value="" disabled>
-                  Selecionar plano
-                </option>
-                {plans.map((plan) => (
-                  <option key={plan.id} value={plan.id}>
-                    {plan.name}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="startDate">Início</Label>
-              <Input id="startDate" type="date" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="dueDate">Próximo vencimento</Label>
-              <Input id="dueDate" type="date" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="price">Valor negociado</Label>
-              <Input id="price" placeholder="R$ 0,00" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="status">Status</Label>
-              <Select id="status" defaultValue="ativo">
-                <option value="ativo">Ativo</option>
-                <option value="vencendo">Vencendo</option>
-                <option value="vencido">Vencido</option>
-              </Select>
-            </div>
-          </div>
-        </Card>
-
-        <div className="space-y-4">
-          <Card className="p-5">
-            <h3 className="mb-2 font-semibold text-foreground">Onde escrevo os planos?</h3>
-            <p className="mb-4 text-sm text-muted-foreground">
-              Clique abaixo para abrir diretamente a aba Planos, onde ficam os campos de nome, valor, tipo, créditos e descrição.
-            </p>
-            <Link href="/assinaturas?tab=planos#planos" className={buttonVariants({ variant: 'outline', className: 'w-full' })}>
-              <Edit3 className="size-4" />
-              Abrir editor de planos
-            </Link>
-          </Card>
-          <Card className="p-5">
-            <h3 className="mb-2 font-semibold text-foreground">Cobrança</h3>
-            <p className="mb-4 text-sm text-muted-foreground">
-              Use o vencimento para alimentar alertas de renovação e notificações da plataforma.
-            </p>
-            <Button type="button" variant="gold" className="w-full">
-              <Save className="size-4" />
-              Salvar assinatura
-            </Button>
-          </Card>
-        </div>
-      </form>
-    </div>
-  )
-}
+export default function NovaAssinaturaPage(){const router=useRouter();const {barbershop,clients,plans,insertRecord}=useAppData();const [form,setForm]=useState({clientId:'',planId:'',startDate:'',dueDate:'',price:'',status:'ativo'});const [message,setMessage]=useState('');const set=(k:keyof typeof form,v:string)=>setForm(c=>({...c,[k]:v}));async function save(){const client=clients.find(c=>c.id===form.clientId);const plan=plans.find(p=>p.id===form.planId);if(!client||!plan||!form.startDate||!form.dueDate){setMessage('Preencha cliente, plano e datas.');return}const result=await insertRecord('subscriptions',{barbershop_id:barbershop.id,client_id:client.id,client_name:client.name,plan_id:plan.id,plan_name:plan.name,price:Number(form.price.replace(',','.'))||plan.price,start_date:form.startDate,due_date:form.dueDate,status:form.status,credits_used:0,credits_total:plan.credits??null});if(result.error){setMessage(result.error);return}router.push('/assinaturas')}
+return <div><PageHeader title="Nova assinatura" description="Associe um cliente a um plano."><Link href="/assinaturas" className={buttonVariants({variant:'outline',size:'sm'})}><ArrowLeft className="size-4"/>Voltar</Link></PageHeader><Card className="mx-auto max-w-2xl p-5"><div className="grid gap-4 sm:grid-cols-2"><Field label="Cliente"><Select value={form.clientId} onChange={e=>set('clientId',e.target.value)}><option value="">Selecionar</option>{clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</Select></Field><Field label="Plano"><Select value={form.planId} onChange={e=>{set('planId',e.target.value);const p=plans.find(x=>x.id===e.target.value);if(p)set('price',String(p.price).replace('.',','))}}><option value="">Selecionar</option>{plans.filter(p=>p.active).map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field><Field label="Início"><Input type="date" value={form.startDate} onChange={e=>set('startDate',e.target.value)}/></Field><Field label="Próximo vencimento"><Input type="date" value={form.dueDate} onChange={e=>set('dueDate',e.target.value)}/></Field><Field label="Valor"><Input value={form.price} onChange={e=>set('price',e.target.value)}/></Field><Field label="Status"><Select value={form.status} onChange={e=>set('status',e.target.value)}><option value="ativo">Ativo</option><option value="vencendo">Vencendo</option><option value="vencido">Vencido</option><option value="cancelado">Cancelado</option></Select></Field></div>{message?<p className="mt-4 text-sm">{message}</p>:null}<Button variant="gold" className="mt-5 w-full" onClick={save}><Save className="size-4"/>Salvar assinatura</Button></Card></div>}
+function Field({label,children}:{label:string;children:React.ReactNode}){return <div className="space-y-2"><Label>{label}</Label>{children}</div>}

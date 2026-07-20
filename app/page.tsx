@@ -441,7 +441,7 @@ export default function Home() {
                 </span>
               </p>
               <p className={cn('mt-1 text-xs text-muted-foreground', plan.featured && 'text-primary-foreground/65')}>
-                Cobrança somente após 30 dias grátis.
+                Ativação do plano confirmada antes do fim do teste.
               </p>
               <div className="mt-6 space-y-3">
                 {plan.items.map((item) => (

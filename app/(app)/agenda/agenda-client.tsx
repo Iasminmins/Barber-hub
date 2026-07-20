@@ -11,7 +11,6 @@ import { Tabs } from '@/components/ui/tabs'
 import { Avatar } from '@/components/ui/avatar'
 import { cn } from '@/lib/utils'
 import { formatCurrency } from '@/lib/format'
-import { getAllAppointments } from '@/lib/appointments-storage'
 import type { Appointment, Employee } from '@/lib/types'
 
 const HOURS = Array.from({ length: 12 }, (_, i) => 8 + i) // 08:00 - 19:00
@@ -39,11 +38,7 @@ export function AgendaClient({
 }) {
   const [view, setView] = React.useState('dia')
   const [barberFilter, setBarberFilter] = React.useState<string>('todos')
-  const [agendaAppointments, setAgendaAppointments] = React.useState(appointments)
-
-  React.useEffect(() => {
-    setAgendaAppointments(getAllAppointments(appointments))
-  }, [appointments])
+  const agendaAppointments = appointments
 
   const barbers = employees.filter((e) => e.active && e.role.toLowerCase().includes('barbeiro'))
   const columns = barberFilter === 'todos' ? barbers : barbers.filter((b) => b.id === barberFilter)

@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { CreditCard, Plus, Printer, Receipt, Save, Trash2 } from 'lucide-react'
+import { CreditCard, Plus, Printer, Receipt, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { PageHeader } from '@/components/page-header'
 import { StatusBadge } from '@/components/status-badge'
@@ -18,7 +18,6 @@ import {
 } from '@/components/ui/table'
 import { useAppData } from '@/components/data/app-data-provider'
 import { formatCurrency, formatDate } from '@/lib/format'
-import { getAllOrders, removeStoredOrder } from '@/lib/orders-storage'
 
 const METHOD_LABEL: Record<string, string> = {
   dinheiro: 'Dinheiro',
@@ -29,11 +28,8 @@ const METHOD_LABEL: Record<string, string> = {
 }
 
 export default function ComandasPage() {
-  const { orders: databaseOrders } = useAppData()
-  const [orders, setOrders] = useState(() =>
-    getAllOrders(databaseOrders).sort((a, b) => b.number - a.number),
-  )
-  const [saved, setSaved] = useState(false)
+  const { orders: databaseOrders, deleteRecord } = useAppData()
+  const [orders, setOrders] = useState(() => [...databaseOrders].sort((a, b) => b.number - a.number))
 
   const metrics = useMemo(() => {
     const paid = orders.filter((o) => o.status === 'paga')
@@ -43,14 +39,11 @@ export default function ComandasPage() {
     return { paid, open, pending, revenue }
   }, [orders])
 
-  function deleteOrder(id: string) {
+  async function deleteOrder(id: string) {
+    if (!window.confirm('Excluir esta comanda?')) return
+    const result = await deleteRecord('orders', id)
+    if (result.error) { window.alert(result.error); return }
     setOrders((current) => current.filter((order) => order.id !== id))
-    removeStoredOrder(id)
-    setSaved(false)
-  }
-
-  function saveChanges() {
-    setSaved(true)
   }
 
   return (
@@ -59,12 +52,7 @@ export default function ComandasPage() {
         title="Comandas / PDV"
         description="Acompanhe comandas abertas, pagamentos, itens vendidos e pendências do balcão."
       >
-        {saved ? <span className="text-sm font-medium text-success">Alterações salvas</span> : null}
-        <Button variant="outline" size="sm" onClick={saveChanges}>
-          <Save className="size-4" />
-          Salvar alterações
-        </Button>
-        <Button variant="outline" size="sm">
+        <Button variant="outline" size="sm" onClick={() => window.print()}>
           <Printer className="size-4" />
           Imprimir resumo
         </Button>

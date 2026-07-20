@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useMemo, useState } from "react"
-import { Cake, Mail, Phone, Plus, Save, Scissors, Search, Star, Trash2, X } from "lucide-react"
+import { Cake, Mail, Phone, Plus, Scissors, Search, Star, Trash2, X } from "lucide-react"
 import type { Client, ClientTag } from "@/lib/types"
 import { formatCurrency, formatDate } from "@/lib/format"
 import { Input } from "@/components/ui/input"
@@ -19,6 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { useAppData } from '@/components/data/app-data-provider'
 
 type Filter = "todos" | "vip" | "recorrente" | "inadimplente" | "inativo"
 
@@ -31,11 +32,11 @@ const TAG_LABEL: Record<ClientTag, string> = {
 }
 
 export function ClientesClient({ clients }: { clients: Client[] }) {
+  const { deleteRecord } = useAppData()
   const [records, setRecords] = useState(clients)
   const [query, setQuery] = useState("")
   const [filter, setFilter] = useState<Filter>("todos")
   const [selectedId, setSelectedId] = useState<string | null>(clients[0]?.id ?? null)
-  const [saved, setSaved] = useState(false)
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -52,10 +53,12 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
 
   const selected = records.find((c) => c.id === selectedId) ?? null
 
-  function deleteClient(id: string) {
+  async function deleteClient(id: string) {
+    if (!window.confirm('Excluir este cliente?')) return
+    const result = await deleteRecord('clients', id)
+    if (result.error) { window.alert(result.error); return }
     setRecords((current) => current.filter((client) => client.id !== id))
     if (selectedId === id) setSelectedId(null)
-    setSaved(false)
   }
 
   const filters: { key: Filter; label: string }[] = [
@@ -69,11 +72,6 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
   return (
     <div>
       <PageHeader title="Clientes" description="Base de clientes, histórico e relacionamento.">
-        {saved ? <span className="text-sm font-medium text-success">Alterações salvas</span> : null}
-        <Button variant="outline" onClick={() => setSaved(true)}>
-          <Save className="size-4" />
-          Salvar
-        </Button>
         <Link href="/clientes/novo" className={buttonVariants({ variant: "gold" })}>
           <Plus className="size-4" />
           Novo cliente

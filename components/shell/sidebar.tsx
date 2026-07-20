@@ -18,7 +18,13 @@ export function SidebarContent({
   onToggle?: () => void
 }) {
   const pathname = usePathname()
-  const currentPlan = getSaasPlan(useAppData().barbershop.plan)
+  const { barbershop, member } = useAppData()
+  const currentPlan = getSaasPlan(barbershop.plan)
+  const allowedPaths = member.role === 'barber'
+    ? ['/dashboard', '/agenda']
+    : member.role === 'reception'
+      ? ['/dashboard', '/agenda', '/comandas', '/clientes']
+      : null
 
   return (
     <div className="flex h-full flex-col bg-sidebar">
@@ -65,7 +71,7 @@ export function SidebarContent({
               </p>
             ) : null}
             <ul className="flex flex-col gap-0.5">
-              {group.items.map((item) => {
+              {group.items.filter((item) => !allowedPaths || allowedPaths.includes(item.href)).map((item) => {
                 const active = pathname === item.href
                 const Icon = item.icon
                 return (

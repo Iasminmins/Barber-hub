@@ -1,6 +1,5 @@
 'use client'
 
-import Link from 'next/link'
 import { Bell, Building2, CheckCircle2, LogOut, Palette, Save, ShieldCheck } from 'lucide-react'
 import { useState } from 'react'
 import { PageHeader } from '@/components/page-header'
@@ -12,11 +11,20 @@ import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { useAppData } from '@/components/data/app-data-provider'
 import { getSaasPlan, saasPlans } from '@/lib/saas-plans'
+import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 
 export default function ConfiguracoesPage() {
   const [saved, setSaved] = useState(false)
-  const { barbershop } = useAppData()
+  const { barbershop, updateRecord } = useAppData()
+  const [shop, setShop] = useState({ name: barbershop.name, slug: barbershop.slug, city: barbershop.city, color: barbershop.color })
   const currentPlan = getSaasPlan(barbershop.plan)
+  async function saveSettings() {
+    setSaved(false)
+    const result = await updateRecord('barbershops', barbershop.id, shop)
+    if (result.error) { window.alert(result.error); return }
+    setSaved(true)
+  }
+  async function signOut() { await createBrowserSupabaseClient().auth.signOut(); window.location.replace('/login') }
 
   return (
     <div>
@@ -25,7 +33,7 @@ export default function ConfiguracoesPage() {
         description="Dados da unidade, preferências operacionais, plano contratado e parâmetros de segurança."
       >
         {saved ? <span className="text-sm font-medium text-success">Alterações salvas</span> : null}
-        <Button variant="gold" size="sm" onClick={() => setSaved(true)}>
+        <Button variant="gold" size="sm" onClick={saveSettings}>
           <Save className="size-4" />
           Salvar alterações
         </Button>
@@ -41,19 +49,19 @@ export default function ConfiguracoesPage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="name">Nome da unidade</Label>
-                <Input id="name" defaultValue={barbershop.name} />
+                <Input id="name" value={shop.name} onChange={(e)=>setShop(c=>({...c,name:e.target.value}))} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="slug">Slug público</Label>
-                <Input id="slug" defaultValue={barbershop.slug} />
+                <Input id="slug" value={shop.slug} onChange={(e)=>setShop(c=>({...c,slug:e.target.value}))} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="city">Cidade</Label>
-                <Input id="city" defaultValue={barbershop.city} />
+                <Input id="city" value={shop.city} onChange={(e)=>setShop(c=>({...c,city:e.target.value}))} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="plan">Plano da conta</Label>
-                <Select id="plan" defaultValue={barbershop.plan}>
+                <Select id="plan" value={barbershop.plan} disabled>
                   {saasPlans.map((plan) => (
                     <option key={plan.id} value={plan.id}>
                       {plan.name} - {plan.price}/mês
@@ -74,7 +82,7 @@ export default function ConfiguracoesPage() {
                 <Label htmlFor="color">Cor principal</Label>
                 <div className="flex items-center gap-2">
                   <span className="size-9 rounded-md border border-border" style={{ background: barbershop.color }} />
-                  <Input id="color" defaultValue={barbershop.color} />
+                  <Input id="color" value={shop.color} onChange={(e)=>setShop(c=>({...c,color:e.target.value}))} />
                 </div>
               </div>
               <div className="space-y-2">
@@ -177,13 +185,14 @@ export default function ConfiguracoesPage() {
             <p className="mb-4 text-sm text-muted-foreground">
               Encerre o acesso desta conta e volte para a tela de login.
             </p>
-            <Link
-              href="/login"
+            <button
+              type="button"
+              onClick={signOut}
               className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-muted"
             >
               <LogOut className="size-4" />
               Sair da conta
-            </Link>
+            </button>
           </Card>
         </div>
       </div>

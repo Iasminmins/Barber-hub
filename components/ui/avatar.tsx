@@ -1,4 +1,5 @@
 import * as React from 'react'
+import Image from 'next/image'
 import { cn } from '@/lib/utils'
 
 interface AvatarProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -24,8 +25,7 @@ function Avatar({ className, name, src, ...props }: AvatarProps) {
       {...props}
     >
       {src ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={src || '/placeholder.svg'} alt={name ?? ''} className="size-full object-cover" />
+        <Image src={src} alt={name ?? ''} fill sizes="36px" className="object-cover" />
       ) : (
         <span>{initials(name)}</span>
       )}

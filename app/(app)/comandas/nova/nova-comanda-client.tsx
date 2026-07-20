@@ -22,8 +22,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { formatCurrency } from '@/lib/format'
-import { getNextOrderNumber, saveStoredOrder } from '@/lib/orders-storage'
-import type { CatalogItem, CatalogType, Client, Employee, Order, PaymentMethod } from '@/lib/types'
+import { useAppData } from '@/components/data/app-data-provider'
+import type { CatalogItem, CatalogType, Client, Employee, PaymentMethod } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
 type CatalogFilter = CatalogType | 'todos'
@@ -51,6 +51,7 @@ export function NovaComandaClient({
   nextOrderNumber,
 }: NovaComandaClientProps) {
   const router = useRouter()
+  const { insertRecord, deleteRecord } = useAppData()
   const [quantities, setQuantities] = useState(() => initialQuantities(items))
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<CatalogFilter>('todos')
@@ -107,7 +108,7 @@ export function NovaComandaClient({
     setItemQuantity(itemId, 0)
   }
 
-  function saveOrder() {
+  async function saveOrder() {
     setSaveError('')
 
     const employee = employees.find((item) => item.id === employeeId)
@@ -127,35 +128,16 @@ export function NovaComandaClient({
     }
 
     const client = clients.find((item) => item.id === clientId)
-    const now = new Date()
-    const timestamp = now.getTime()
-    const orderItems = selectedItems.map((item, index) => ({
-      id: `oi_local_${timestamp}_${index + 1}`,
-      refId: item.id,
-      type: item.type,
-      name: item.name,
-      quantity: quantities[item.id] ?? 0,
-      unitPrice: item.price,
-    }))
-
-    const order: Order = {
-      id: `ord_local_${timestamp}`,
-      barbershopId,
-      number: getNextOrderNumber(nextOrderNumber - 1),
-      clientId: client?.id,
-      clientName: client?.name ?? 'Cliente avulso',
-      employeeId: employee.id,
-      employeeName: employee.name,
-      items: orderItems,
-      discount: 0,
-      surcharge: 0,
-      status: payment === 'pendente' ? 'pendente' : 'paga',
-      method: payment === 'pendente' ? undefined : payment,
-      total: subtotal,
-      createdAt: now.toISOString().slice(0, 10),
+    const orderResult = await insertRecord('orders', { barbershop_id: barbershopId, number: nextOrderNumber, client_id: client?.id ?? null, client_name: client?.name ?? 'Cliente avulso', employee_id: employee.id, employee_name: employee.name, discount: 0, surcharge: 0, status: payment === 'pendente' ? 'pendente' : 'paga', method: payment === 'pendente' ? null : payment, total: subtotal })
+    if (orderResult.error || !orderResult.data) { setSaveError(orderResult.error ?? 'Não foi possível criar a comanda.'); return }
+    for (const item of selectedItems) {
+      const itemResult = await insertRecord('order_items', { order_id: orderResult.data.id, barbershop_id: barbershopId, ref_id: item.id, type: item.type, name: item.name, quantity: quantities[item.id] ?? 1, unit_price: item.price })
+      if (itemResult.error) { await deleteRecord('orders', orderResult.data.id); setSaveError(itemResult.error); return }
     }
-
-    saveStoredOrder(order)
+    if (payment !== 'pendente') {
+      const financialResult = await insertRecord('financial_entries', { barbershop_id: barbershopId, type:'entrada', category:'Comandas', description:`Comanda #${nextOrderNumber}`, amount:subtotal, method:payment, date:new Date().toISOString().slice(0,10) })
+      if (financialResult.error) { setSaveError(`Comanda salva, mas o financeiro falhou: ${financialResult.error}`); return }
+    }
     router.push('/comandas')
   }
 

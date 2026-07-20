@@ -16,8 +16,6 @@ import {
 } from '@/components/ui/table'
 import { useAppData } from '@/components/data/app-data-provider'
 import { formatCurrency, formatDate } from '@/lib/format'
-import { getStoredOrders } from '@/lib/orders-storage'
-import type { FinancialEntry } from '@/lib/types'
 
 const METHOD_LABEL: Record<string, string> = {
   dinheiro: 'Dinheiro',
@@ -29,8 +27,7 @@ const METHOD_LABEL: Record<string, string> = {
 
 export default function FinanceiroPage() {
   const { financialEntries } = useAppData()
-  const [localEntries, setLocalEntries] = React.useState<FinancialEntry[]>([])
-  const entries = [...localEntries, ...financialEntries].sort((a, b) => b.date.localeCompare(a.date))
+  const entries = [...financialEntries].sort((a, b) => b.date.localeCompare(a.date))
   const byMethod = Object.entries(METHOD_LABEL).map(([method, label]) => ({
     method: label,
     value: entries
@@ -40,22 +37,6 @@ export default function FinanceiroPage() {
   const income = entries.filter((e) => e.type === 'entrada').reduce((sum, entry) => sum + entry.amount, 0)
   const outcome = entries.filter((e) => e.type === 'saida').reduce((sum, entry) => sum + entry.amount, 0)
   const balance = income - outcome
-
-  React.useEffect(() => {
-    const entriesFromOrders = getStoredOrders()
-      .filter((order) => order.status === 'paga')
-      .map<FinancialEntry>((order) => ({
-        id: `fin_${order.id}`,
-        barbershopId: order.barbershopId,
-        type: 'entrada',
-        category: 'Comandas',
-        description: `Comanda #${order.number}`,
-        amount: order.total,
-        method: order.method,
-        date: order.createdAt,
-      }))
-    setLocalEntries(entriesFromOrders)
-  }, [])
 
   return (
     <div>

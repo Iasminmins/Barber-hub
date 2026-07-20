@@ -2,10 +2,11 @@
 
 import * as React from 'react'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
-import type { Appointment, Barbershop, CatalogItem, Client, Commission, Employee, FinancialEntry, ImportRecord, Order, Plan, Subscription } from '@/lib/types'
+import type { Appointment, Barbershop, CatalogItem, Client, Commission, Employee, FinancialEntry, ImportRecord, Member, Order, Plan, Subscription } from '@/lib/types'
 
 type AppData = {
   barbershop: Barbershop
+  member: Member
   employees: Employee[]
   clients: Client[]
   catalog: CatalogItem[]
@@ -19,7 +20,15 @@ type AppData = {
 }
 
 const fallbackShop: Barbershop = { id: '', name: '', slug: '', color: '#1E3A32', city: '', plan: 'starter' }
-const AppDataContext = React.createContext<(AppData & { refresh: () => Promise<void> }) | null>(null)
+type MutationResult = { error?: string; data?: any }
+type AppDataContextValue = AppData & {
+  refresh: () => Promise<void>
+  insertRecord: (table: string, values: Record<string, unknown>) => Promise<MutationResult>
+  insertMany: (table: string, values: Record<string, unknown>[]) => Promise<MutationResult>
+  updateRecord: (table: string, id: string, values: Record<string, unknown>) => Promise<MutationResult>
+  deleteRecord: (table: string, id: string) => Promise<MutationResult>
+}
+const AppDataContext = React.createContext<AppDataContextValue | null>(null)
 const num = (value: unknown) => Number(value ?? 0)
 
 export function AppDataProvider({ children }: { children: React.ReactNode }) {
@@ -40,7 +49,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
     const { data: memberships, error: memberError } = await supabase
       .from('members')
-      .select('barbershop_id')
+      .select('id, barbershop_id, name, email, role, active')
       .eq('user_id', user.id)
       .eq('active', true)
       .limit(1)
@@ -70,6 +79,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
     setValue({
       barbershop: { id: shopId, name: shop.name, slug: shop.slug, color: shop.color, city: shop.city ?? '', plan: shop.plan },
+      member: { id: memberships[0].id, barbershopId: shopId, name: memberships[0].name, email: memberships[0].email, role: memberships[0].role, active: memberships[0].active },
       employees: employees.map((r: any) => ({ id:r.id, barbershopId:r.barbershop_id, name:r.name, role:r.role, phone:r.phone??'', email:r.email??'', active:r.active, serviceCommission:num(r.service_commission), productCommission:num(r.product_commission), subscriptionCommission:num(r.subscription_commission), avatarColor:r.avatar_color??undefined })),
       clients: clients.map((r: any) => ({ id:r.id, barbershopId:r.barbershop_id, name:r.name, phone:r.phone??'', email:r.email??'', birthDate:r.birth_date??'', address:r.address??'', notes:r.notes??'', tags:r.tags??[], totalSpent:num(r.total_spent), visits:num(r.visits), lastVisit:r.last_visit??'', favoriteService:r.favorite_service??'', preferredBarber:r.preferred_barber??'', createdAt:r.created_at })),
       catalog: catalog.map((r: any) => ({ id:r.id, barbershopId:r.barbershop_id, type:r.type, name:r.name, category:r.category??'', price:num(r.price), cost:num(r.cost), durationMin:r.duration_min??undefined, stock:r.stock??undefined, minStock:r.min_stock??undefined, commission:num(r.commission), active:r.active })),
@@ -83,6 +93,38 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     })
   }, [])
 
+  const insertRecord = React.useCallback(async (table: string, values: Record<string, unknown>) => {
+    const supabase = createBrowserSupabaseClient()
+    const { data, error: mutationError } = await supabase.from(table).insert(values).select().single()
+    if (mutationError) return { error: mutationError.message }
+    await load()
+    return { data }
+  }, [load])
+
+  const updateRecord = React.useCallback(async (table: string, id: string, values: Record<string, unknown>) => {
+    const supabase = createBrowserSupabaseClient()
+    const { data, error: mutationError } = await supabase.from(table).update(values).eq('id', id).select().single()
+    if (mutationError) return { error: mutationError.message }
+    await load()
+    return { data }
+  }, [load])
+
+  const insertMany = React.useCallback(async (table: string, values: Record<string, unknown>[]) => {
+    const supabase = createBrowserSupabaseClient()
+    const { data, error: mutationError } = await supabase.from(table).insert(values).select()
+    if (mutationError) return { error: mutationError.message }
+    await load()
+    return { data }
+  }, [load])
+
+  const deleteRecord = React.useCallback(async (table: string, id: string) => {
+    const supabase = createBrowserSupabaseClient()
+    const { error: mutationError } = await supabase.from(table).delete().eq('id', id)
+    if (mutationError) return { error: mutationError.message }
+    await load()
+    return {}
+  }, [load])
+
   React.useEffect(() => {
     void load().catch((loadError) => {
       setError(loadError instanceof Error ? loadError.message : 'Erro inesperado ao carregar os dados.')
@@ -90,7 +132,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   }, [load])
   if (error) return <main className="grid min-h-screen place-items-center p-6 text-center"><div><h1 className="text-xl font-bold">Não foi possível carregar os dados</h1><p className="mt-2 text-sm text-muted-foreground">{error}</p></div></main>
   if (!value) return <main className="grid min-h-screen place-items-center text-sm text-muted-foreground">{loadingMessage}</main>
-  return <AppDataContext.Provider value={{ ...value, refresh: load }}>{children}</AppDataContext.Provider>
+  return <AppDataContext.Provider value={{ ...value, refresh: load, insertRecord, insertMany, updateRecord, deleteRecord }}>{children}</AppDataContext.Provider>
 }
 
 export function useAppData() {

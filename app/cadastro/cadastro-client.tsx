@@ -58,6 +58,10 @@ export function CadastroClient({ selectedPlanId }: { selectedPlanId: SaasPlanId 
       setStatus('As senhas não conferem.')
       return
     }
+    if (password.length < 8) {
+      setStatus('A senha deve ter pelo menos 8 caracteres.')
+      return
+    }
 
     setLoading(true)
     const supabase = createBrowserSupabaseClient()

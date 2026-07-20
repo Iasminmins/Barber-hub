@@ -1,6 +1,5 @@
 'use client'
 
-import Link from 'next/link'
 import * as React from 'react'
 import {
   Bell,
@@ -20,6 +19,7 @@ import {
   X,
 } from 'lucide-react'
 import { Avatar } from '@/components/ui/avatar'
+import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { useAppData } from '@/components/data/app-data-provider'
 import { daysUntil, formatCurrency } from '@/lib/format'
@@ -304,14 +304,19 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
           </span>
         </div>
 
-        <Link
-          href="/login"
+        <button
+          type="button"
+          onClick={signOut}
           className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-muted"
         >
           <LogOut className="size-4" />
           <span className="hidden sm:inline">Sair</span>
-        </Link>
+        </button>
       </div>
     </header>
   )
 }
+  async function signOut() {
+    await createBrowserSupabaseClient().auth.signOut()
+    window.location.replace('/login')
+  }

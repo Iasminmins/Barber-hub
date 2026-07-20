@@ -42,7 +42,7 @@ export function LoginClient() {
 
     setLoading(true)
     const supabase = createBrowserSupabaseClient()
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email: email.trim(),
       password,
     })
@@ -52,6 +52,18 @@ export function LoginClient() {
     if (error) {
       setStatus(error.message)
       return
+    }
+
+    const { data: memberships, error: membershipError } = await supabase.from('members').select('id').limit(1)
+    if (membershipError) { setStatus(membershipError.message); return }
+    if (!memberships?.length && data.user) {
+      const metadata = data.user.user_metadata ?? {}
+      const { error: onboardingError } = await supabase.rpc('create_barbershop_for_current_user', {
+        barbershop_name: metadata.barbershop_name || 'Minha barbearia',
+        barbershop_city: metadata.barbershop_city || null,
+        owner_name: metadata.owner_name || null,
+      })
+      if (onboardingError) { setStatus(onboardingError.message); return }
     }
 
     router.push('/dashboard')
@@ -139,7 +151,7 @@ export function LoginClient() {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="password">Senha</Label>
-                <Link href="/login" className="text-xs font-semibold text-primary hover:underline">
+                <Link href="/recuperar-senha" className="text-xs font-semibold text-primary hover:underline">
                   Esqueci a senha
                 </Link>
               </div>
