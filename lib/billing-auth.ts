@@ -1,4 +1,4 @@
-import { createAdminSupabaseClient, createAuthenticatedServerClient } from '@/lib/supabase/server'
+import { createAuthenticatedServerClient } from '@/lib/supabase/server'
 
 export async function getBillingContext(request: Request) {
   const authorization = request.headers.get('authorization')
@@ -18,8 +18,7 @@ export async function getBillingContext(request: Request) {
   if (memberError || !member) throw new Error('Empresa não encontrada para esta conta.')
   if (member.role !== 'owner') throw new Error('Somente o proprietário pode gerenciar pagamentos.')
 
-  const admin = createAdminSupabaseClient()
-  const { data: barbershop, error: shopError } = await admin
+  const { data: barbershop, error: shopError } = await supabase
     .from('barbershops')
     .select('id, name, plan, billing_status, trial_ends_at, next_billing_date, billing_document, asaas_customer_id, asaas_subscription_id')
     .eq('id', member.barbershop_id)
