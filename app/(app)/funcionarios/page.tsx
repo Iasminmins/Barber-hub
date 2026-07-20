@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/table'
 import { useAppData } from '@/components/data/app-data-provider'
 import { formatCurrency, formatPercent } from '@/lib/format'
+import { isBarberRole } from '@/lib/employees'
 
 export default function FuncionariosPage() {
   const appData = useAppData()
@@ -87,7 +88,7 @@ export default function FuncionariosPage() {
         <Card className="p-4">
           <p className="text-sm text-muted-foreground">Barbeiros ativos</p>
           <p className="mt-1 text-2xl font-bold text-foreground">
-            {activeEmployees.filter((e) => e.role.toLowerCase().includes('barbeiro')).length}
+            {activeEmployees.filter((e) => isBarberRole(e.role)).length}
           </p>
         </Card>
         <Card className="p-4">

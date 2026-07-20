@@ -12,6 +12,7 @@ import { Avatar } from '@/components/ui/avatar'
 import { cn } from '@/lib/utils'
 import { formatCurrency } from '@/lib/format'
 import type { Appointment, Employee } from '@/lib/types'
+import { isBarberRole } from '@/lib/employees'
 
 const HOURS = Array.from({ length: 12 }, (_, i) => 8 + i) // 08:00 - 19:00
 
@@ -40,7 +41,7 @@ export function AgendaClient({
   const [barberFilter, setBarberFilter] = React.useState<string>('todos')
   const agendaAppointments = appointments
 
-  const barbers = employees.filter((e) => e.active && e.role.toLowerCase().includes('barbeiro'))
+  const barbers = employees.filter((e) => e.active && isBarberRole(e.role))
   const columns = barberFilter === 'todos' ? barbers : barbers.filter((b) => b.id === barberFilter)
 
   const todayAppts = agendaAppointments.filter((a) => a.date === new Date().toISOString().slice(0, 10))

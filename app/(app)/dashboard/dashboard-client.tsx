@@ -37,6 +37,7 @@ import type {
   Order,
   Subscription,
 } from '@/lib/types'
+import { isBarberRole } from '@/lib/employees'
 
 const METHOD_LABEL: Record<string, string> = {
   pix: 'Pix',
@@ -138,7 +139,7 @@ function buildRanking(orders: Order[], employees: Employee[], range: DateRange) 
     map.set(order.employeeId, cur)
   }
 
-  for (const employee of employees.filter((item) => item.active && item.role.toLowerCase().includes('barbeiro'))) {
+  for (const employee of employees.filter((item) => item.active && isBarberRole(item.role))) {
     if (!map.has(employee.id)) {
       map.set(employee.id, { name: employee.name, revenue: 0, services: 0 })
     }
