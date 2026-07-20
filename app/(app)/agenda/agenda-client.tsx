@@ -30,6 +30,27 @@ function timeToTop(start: string) {
   return (h - 8) * 64 + (mm / 60) * 64
 }
 
+function toDateKey(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function fromDateKey(value: string) {
+  const [year, month, day] = value.split('-').map(Number)
+  return new Date(year, month - 1, day)
+}
+
+function getWeekRange(value: string) {
+  const start = fromDateKey(value)
+  const daysSinceMonday = (start.getDay() + 6) % 7
+  start.setDate(start.getDate() - daysSinceMonday)
+  const end = new Date(start)
+  end.setDate(end.getDate() + 6)
+  return { start: toDateKey(start), end: toDateKey(end) }
+}
+
 export function AgendaClient({
   appointments,
   employees,
@@ -39,19 +60,49 @@ export function AgendaClient({
 }) {
   const [view, setView] = React.useState('dia')
   const [barberFilter, setBarberFilter] = React.useState<string>('todos')
+  const [selectedDate, setSelectedDate] = React.useState(() => toDateKey(new Date()))
   const agendaAppointments = appointments
 
   const barbers = employees.filter((e) => e.active && isBarberRole(e.role))
   const columns = barberFilter === 'todos' ? barbers : barbers.filter((b) => b.id === barberFilter)
 
-  const todayAppts = agendaAppointments.filter((a) => a.date === new Date().toISOString().slice(0, 10))
+  const selectedDayAppointments = agendaAppointments.filter((a) => a.date === selectedDate)
+  const weekRange = getWeekRange(selectedDate)
+  const periodAppointments = agendaAppointments
+    .filter((appointment) => {
+      if (view === 'dia') return appointment.date === selectedDate
+      if (view === 'semana') return appointment.date >= weekRange.start && appointment.date <= weekRange.end
+      return appointment.date.slice(0, 7) === selectedDate.slice(0, 7)
+    })
+    .filter((appointment) => barberFilter === 'todos' || appointment.employeeId === barberFilter)
+    .sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start))
 
   const stats = {
-    total: todayAppts.length,
-    confirmados: todayAppts.filter((a) => ['confirmado', 'chegou'].includes(a.status)).length,
-    concluidos: todayAppts.filter((a) => a.status === 'concluido').length,
-    receita: todayAppts.filter((a) => a.status === 'concluido').reduce((s, a) => s + a.price, 0),
+    total: periodAppointments.length,
+    confirmados: periodAppointments.filter((a) => ['confirmado', 'chegou'].includes(a.status)).length,
+    concluidos: periodAppointments.filter((a) => a.status === 'concluido').length,
+    receita: periodAppointments.filter((a) => a.status === 'concluido').reduce((s, a) => s + a.price, 0),
   }
+
+  function changePeriod(direction: -1 | 1) {
+    setSelectedDate((current) => {
+      const date = fromDateKey(current)
+      if (view === 'mes') {
+        date.setDate(1)
+        date.setMonth(date.getMonth() + direction)
+      } else {
+        date.setDate(date.getDate() + direction * (view === 'semana' ? 7 : 1))
+      }
+      return toDateKey(date)
+    })
+  }
+
+  const selectedDateObject = fromDateKey(selectedDate)
+  const periodLabel = view === 'dia'
+    ? new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' }).format(selectedDateObject)
+    : view === 'semana'
+      ? `Semana de ${new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' }).format(fromDateKey(weekRange.start))} a ${new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' }).format(fromDateKey(weekRange.end))}`
+      : new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(selectedDateObject)
 
   return (
     <div>
@@ -73,7 +124,7 @@ export function AgendaClient({
       {/* Resumo do dia */}
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Card className="p-3">
-          <p className="text-xs text-muted-foreground">Agendamentos hoje</p>
+          <p className="text-xs text-muted-foreground">Agendamentos no período</p>
           <p className="mt-1 text-xl font-bold text-foreground">{stats.total}</p>
         </Card>
         <Card className="p-3">
@@ -93,16 +144,16 @@ export function AgendaClient({
       {/* Controles */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon-sm" aria-label="Dia anterior">
+          <Button variant="outline" size="icon-sm" aria-label="Período anterior" onClick={() => changePeriod(-1)}>
             <ChevronLeft className="size-4" />
           </Button>
           <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5">
             <CalendarDays className="size-4 text-muted-foreground" />
             <span className="text-sm font-medium capitalize text-foreground">
-              {new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' }).format(new Date())}
+              {periodLabel}
             </span>
           </div>
-          <Button variant="outline" size="icon-sm" aria-label="Próximo dia">
+          <Button variant="outline" size="icon-sm" aria-label="Próximo período" onClick={() => changePeriod(1)}>
             <ChevronRight className="size-4" />
           </Button>
         </div>
@@ -146,7 +197,7 @@ export function AgendaClient({
             {/* Colunas de barbeiros */}
             <div className="flex min-w-0 flex-1">
               {columns.map((barber) => {
-                const appts = todayAppts.filter((a) => a.employeeId === barber.id)
+                const appts = selectedDayAppointments.filter((a) => a.employeeId === barber.id)
                 return (
                   <div key={barber.id} className="min-w-40 flex-1 border-r border-border last:border-r-0">
                     <div className="flex h-12 items-center gap-2 border-b border-border bg-muted/40 px-3">
@@ -185,9 +236,7 @@ export function AgendaClient({
             </p>
           </div>
           <div className="divide-y divide-border">
-            {agendaAppointments
-              .sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start))
-              .map((a) => (
+            {periodAppointments.map((a) => (
                 <div key={a.id} className="flex items-center gap-3 p-3 hover:bg-muted/50">
                   <div className="flex w-16 flex-col items-center rounded-md bg-muted py-1">
                     <span className="text-xs font-semibold text-foreground">{a.start}</span>
@@ -204,6 +253,9 @@ export function AgendaClient({
                   <StatusBadge status={a.status} />
                 </div>
               ))}
+            {periodAppointments.length === 0 && (
+              <p className="p-6 text-center text-sm text-muted-foreground">Nenhum agendamento neste período.</p>
+            )}
           </div>
         </Card>
       )}
