@@ -2,12 +2,13 @@
 
 import * as React from 'react'
 import Link from 'next/link'
-import { CreditCard, Edit3, Plus, Repeat, Save, Users } from 'lucide-react'
+import { CreditCard, Edit3, Pencil, Plus, Repeat, Save, Users } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { StatusBadge } from '@/components/status-badge'
 import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { Dialog, DialogHeader } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
@@ -23,10 +24,11 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { daysUntil, formatCurrency, formatDate } from '@/lib/format'
-import type { Plan, Subscription } from '@/lib/types'
+import type { Plan, Subscription, SubscriptionStatus } from '@/lib/types'
 import { useAppData } from '@/components/data/app-data-provider'
 
 type View = 'assinaturas' | 'planos'
+type SubscriptionDraft = { id:string; clientId:string; planId:string; price:string; startDate:string; dueDate:string; status:SubscriptionStatus; creditsUsed:string; creditsTotal:string }
 
 type PlanDraft = {
   id?: string
@@ -71,12 +73,15 @@ export function AssinaturasClient({
   plans: Plan[]
   subscriptions: Subscription[]
 }) {
-  const { barbershop, insertRecord, updateRecord } = useAppData()
+  const { barbershop, clients, insertRecord, updateRecord } = useAppData()
   const [view, setView] = React.useState<View>('assinaturas')
   const [plans, setPlans] = React.useState(initialPlans)
+  const [subscriptionRecords, setSubscriptionRecords] = React.useState(subscriptions)
+  const [editingSubscription, setEditingSubscription] = React.useState<SubscriptionDraft | null>(null)
+  const [subscriptionStatus, setSubscriptionStatus] = React.useState('')
   const [draft, setDraft] = React.useState<PlanDraft>(emptyDraft)
-  const active = subscriptions.filter((s) => s.status === 'ativo' || s.status === 'vencendo')
-  const overdue = subscriptions.filter((s) => s.status === 'vencido')
+  const active = subscriptionRecords.filter((s) => s.status === 'ativo' || s.status === 'vencendo')
+  const overdue = subscriptionRecords.filter((s) => s.status === 'vencido')
   const mrr = active.reduce((sum, sub) => sum + sub.price, 0)
   const editing = Boolean(draft.id)
 
@@ -134,6 +139,20 @@ export function AssinaturasClient({
 
     resetDraft()
     setView('planos')
+  }
+
+  async function saveSubscription() {
+    if (!editingSubscription) return
+    const client = clients.find((item) => item.id === editingSubscription.clientId)
+    const plan = plans.find((item) => item.id === editingSubscription.planId)
+    const price = parseMoney(editingSubscription.price)
+    if (!client || !plan || !editingSubscription.startDate || !editingSubscription.dueDate) { setSubscriptionStatus('Preencha cliente, plano e datas.'); return }
+    const creditsUsed = Number(editingSubscription.creditsUsed || 0), creditsTotal = Number(editingSubscription.creditsTotal || 0)
+    if (price < 0 || creditsUsed < 0 || creditsTotal < 0) { setSubscriptionStatus('Informe valores válidos.'); return }
+    const result = await updateRecord('subscriptions', editingSubscription.id, { client_id:client.id, client_name:client.name, plan_id:plan.id, plan_name:plan.name, price, start_date:editingSubscription.startDate, due_date:editingSubscription.dueDate, status:editingSubscription.status, credits_used:creditsTotal ? creditsUsed : null, credits_total:creditsTotal || null })
+    if (result.error) { setSubscriptionStatus(result.error); return }
+    setSubscriptionRecords((current) => current.map((sub) => sub.id === editingSubscription.id ? { ...sub, clientId:client.id, clientName:client.name, planId:plan.id, planName:plan.name, price, startDate:editingSubscription.startDate, dueDate:editingSubscription.dueDate, status:editingSubscription.status, creditsUsed:creditsTotal?creditsUsed:undefined, creditsTotal:creditsTotal||undefined } : sub))
+    setEditingSubscription(null)
   }
 
   return (
@@ -199,10 +218,11 @@ export function AssinaturasClient({
                 <TableHead className="text-right">Valor</TableHead>
                 <TableHead>Uso</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {subscriptions.map((sub) => {
+              {subscriptionRecords.map((sub) => {
                 const due = daysUntil(sub.dueDate)
                 const hasCredits = sub.creditsTotal && sub.creditsTotal > 0
                 return (
@@ -236,6 +256,7 @@ export function AssinaturasClient({
                     <TableCell>
                       <StatusBadge status={sub.status} />
                     </TableCell>
+                    <TableCell className="text-right"><Button variant="ghost" size="icon-sm" aria-label={`Editar assinatura de ${sub.clientName}`} onClick={()=>{setSubscriptionStatus('');setEditingSubscription({id:sub.id,clientId:sub.clientId,planId:sub.planId,price:String(sub.price).replace('.',','),startDate:sub.startDate,dueDate:sub.dueDate,status:sub.status,creditsUsed:String(sub.creditsUsed??''),creditsTotal:String(sub.creditsTotal??'')})}}><Pencil className="size-4"/></Button></TableCell>
                   </TableRow>
                 )
               })}
@@ -356,6 +377,20 @@ export function AssinaturasClient({
           </Card>
         </div>
       )}
+      <Dialog open={Boolean(editingSubscription)} onClose={()=>setEditingSubscription(null)} className="sm:max-w-2xl">
+        {editingSubscription?<><DialogHeader title="Editar assinatura" description="Corrija cliente, plano, datas, valor, créditos e status."/><div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Cliente"><Select value={editingSubscription.clientId} onChange={e=>setEditingSubscription({...editingSubscription,clientId:e.target.value})}>{clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</Select></Field>
+          <Field label="Plano"><Select value={editingSubscription.planId} onChange={e=>setEditingSubscription({...editingSubscription,planId:e.target.value})}>{plans.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field>
+          <Field label="Início"><Input type="date" value={editingSubscription.startDate} onChange={e=>setEditingSubscription({...editingSubscription,startDate:e.target.value})}/></Field>
+          <Field label="Próximo vencimento"><Input type="date" value={editingSubscription.dueDate} onChange={e=>setEditingSubscription({...editingSubscription,dueDate:e.target.value})}/></Field>
+          <Field label="Valor"><Input inputMode="decimal" value={editingSubscription.price} onChange={e=>setEditingSubscription({...editingSubscription,price:e.target.value})}/></Field>
+          <Field label="Status"><Select value={editingSubscription.status} onChange={e=>setEditingSubscription({...editingSubscription,status:e.target.value as SubscriptionStatus})}><option value="ativo">Ativo</option><option value="vencendo">Vencendo</option><option value="vencido">Vencido</option><option value="cancelado">Cancelado</option></Select></Field>
+          <Field label="Créditos usados"><Input type="number" min="0" value={editingSubscription.creditsUsed} onChange={e=>setEditingSubscription({...editingSubscription,creditsUsed:e.target.value})}/></Field>
+          <Field label="Créditos totais"><Input type="number" min="0" value={editingSubscription.creditsTotal} onChange={e=>setEditingSubscription({...editingSubscription,creditsTotal:e.target.value})}/></Field>
+        </div>{subscriptionStatus?<p className="mt-4 text-sm text-destructive">{subscriptionStatus}</p>:null}<div className="mt-5 flex justify-end gap-2"><Button variant="outline" onClick={()=>setEditingSubscription(null)}>Cancelar</Button><Button variant="gold" onClick={saveSubscription}><Save className="size-4"/>Salvar alterações</Button></div></>:null}
+      </Dialog>
     </div>
   )
 }
+
+function Field({label,children}:{label:string;children:React.ReactNode}) { return <div className="space-y-2"><Label>{label}</Label>{children}</div> }

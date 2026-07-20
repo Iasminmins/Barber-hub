@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useMemo, useState } from "react"
-import { Cake, CalendarDays, Mail, Phone, Plus, Scissors, Search, Star, Trash2, X } from "lucide-react"
+import { Cake, CalendarDays, Mail, Pencil, Phone, Plus, Save, Scissors, Search, Star, Trash2, X } from "lucide-react"
 import type { Client, ClientTag } from "@/lib/types"
 import { formatCurrency, formatDate } from "@/lib/format"
 import { Input } from "@/components/ui/input"
@@ -12,6 +12,9 @@ import { Card } from "@/components/ui/card"
 import { Avatar } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogHeader } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Select } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
 import { PageHeader } from "@/components/page-header"
 import { StatusBadge } from "@/components/status-badge"
 import {
@@ -25,6 +28,7 @@ import {
 import { useAppData } from '@/components/data/app-data-provider'
 
 type Filter = "todos" | "vip" | "recorrente" | "inadimplente" | "inativo"
+type ClientDraft = { id:string; name:string; phone:string; email:string; birthDate:string; preferredBarber:string; address:string; notes:string; tags:ClientTag[] }
 
 const TAG_LABEL: Record<ClientTag, string> = {
   vip: "VIP",
@@ -36,12 +40,14 @@ const TAG_LABEL: Record<ClientTag, string> = {
 
 export function ClientesClient({ clients }: { clients: Client[] }) {
   const router = useRouter()
-  const { appointments, deleteRecord } = useAppData()
+  const { appointments, employees, deleteRecord, updateRecord } = useAppData()
   const [records, setRecords] = useState(clients)
   const [query, setQuery] = useState("")
   const [filter, setFilter] = useState<Filter>("todos")
   const [selectedId, setSelectedId] = useState<string | null>(clients[0]?.id ?? null)
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [editing, setEditing] = useState<ClientDraft | null>(null)
+  const [editStatus, setEditStatus] = useState("")
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -70,6 +76,16 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
     if (result.error) { window.alert(result.error); return }
     setRecords((current) => current.filter((client) => client.id !== id))
     if (selectedId === id) setSelectedId(null)
+  }
+
+  async function saveClient() {
+    if (!editing) return
+    if (!editing.name.trim()) { setEditStatus("Informe o nome do cliente."); return }
+    const values = { name:editing.name.trim(), phone:editing.phone.trim()||null, email:editing.email.trim()||null, birth_date:editing.birthDate||null, preferred_barber:editing.preferredBarber||null, address:editing.address.trim()||null, notes:editing.notes.trim()||null, tags:editing.tags }
+    const result = await updateRecord("clients", editing.id, values)
+    if (result.error) { setEditStatus(result.error); return }
+    setRecords((current) => current.map((client) => client.id === editing.id ? { ...client, name:editing.name.trim(), phone:editing.phone.trim(), email:editing.email.trim(), birthDate:editing.birthDate, preferredBarber:editing.preferredBarber, address:editing.address.trim(), notes:editing.notes.trim(), tags:editing.tags } : client))
+    setEditing(null)
   }
 
   const filters: { key: Filter; label: string }[] = [
@@ -201,6 +217,7 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
               <p className="mb-4 text-sm text-muted-foreground">{selected.notes || "Sem observações registradas."}</p>
 
               <div className="flex gap-2">
+                <Button variant="outline" size="icon" aria-label={`Editar ${selected.name}`} onClick={() => { setEditStatus(""); setEditing({ id:selected.id, name:selected.name, phone:selected.phone, email:selected.email, birthDate:selected.birthDate, preferredBarber:selected.preferredBarber, address:selected.address, notes:selected.notes, tags:[...selected.tags] }) }}><Pencil className="size-4" /></Button>
                 <Button variant="outline" className="flex-1" onClick={() => setHistoryOpen(true)}>Histórico</Button>
                 <Button variant="gold" className="flex-1" onClick={() => router.push(`/agenda/novo?cliente=${encodeURIComponent(selected.id)}`)}>Agendar</Button>
                 <Button variant="destructive" size="icon" aria-label="Excluir cliente" onClick={() => deleteClient(selected.id)}>
@@ -252,6 +269,20 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
           <Button variant="outline" onClick={() => setHistoryOpen(false)}>Fechar</Button>
         </div>
       </Dialog>
+      <Dialog open={Boolean(editing)} onClose={() => setEditing(null)} className="sm:max-w-2xl">
+        {editing ? <><DialogHeader title="Editar cliente" description="Corrija os dados pessoais, preferências e classificação."/><div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Nome completo"><Input value={editing.name} onChange={e=>setEditing({...editing,name:e.target.value})}/></Field>
+          <Field label="Telefone / WhatsApp"><Input value={editing.phone} onChange={e=>setEditing({...editing,phone:e.target.value})}/></Field>
+          <Field label="E-mail"><Input type="email" value={editing.email} onChange={e=>setEditing({...editing,email:e.target.value})}/></Field>
+          <Field label="Data de nascimento"><Input type="date" value={editing.birthDate} onChange={e=>setEditing({...editing,birthDate:e.target.value})}/></Field>
+          <Field label="Barbeiro preferido"><Select value={editing.preferredBarber} onChange={e=>setEditing({...editing,preferredBarber:e.target.value})}><option value="">Selecionar</option>{employees.filter(e=>e.active).map(e=><option key={e.id} value={e.name}>{e.name}</option>)}</Select></Field>
+          <Field label="Endereço"><Input value={editing.address} onChange={e=>setEditing({...editing,address:e.target.value})}/></Field>
+          <div className="space-y-2 sm:col-span-2"><Label>Observações</Label><Textarea value={editing.notes} onChange={e=>setEditing({...editing,notes:e.target.value})}/></div>
+          <div className="space-y-2 sm:col-span-2"><Label>Classificação</Label><div className="grid grid-cols-2 gap-2">{([['vip','VIP'],['recorrente','Recorrente'],['aniversariante','Aniversariante'],['inadimplente','Inadimplente'],['inativo','Inativo']] as const).map(([tag,label])=><label key={tag} className="flex items-center justify-between rounded-md border p-2 text-sm"><span>{label}</span><input type="checkbox" checked={editing.tags.includes(tag)} onChange={e=>setEditing({...editing,tags:e.target.checked?[...editing.tags,tag]:editing.tags.filter(item=>item!==tag)})}/></label>)}</div></div>
+        </div>{editStatus?<p className="mt-4 text-sm text-destructive">{editStatus}</p>:null}<div className="mt-5 flex justify-end gap-2"><Button variant="outline" onClick={()=>setEditing(null)}>Cancelar</Button><Button variant="gold" onClick={saveClient}><Save className="size-4"/>Salvar alterações</Button></div></>:null}
+      </Dialog>
     </div>
   )
 }
+
+function Field({label,children}:{label:string;children:React.ReactNode}) { return <div className="space-y-2"><Label>{label}</Label>{children}</div> }

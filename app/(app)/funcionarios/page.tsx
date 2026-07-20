@@ -1,12 +1,16 @@
 'use client'
 
 import Link from 'next/link'
-import { Mail, Phone, Plus, Save, Scissors, Trash2, Trophy } from 'lucide-react'
+import { Mail, Pencil, Phone, Plus, Save, Scissors, Trash2, Trophy } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Avatar } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { Dialog, DialogHeader } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select } from '@/components/ui/select'
 import { PageHeader } from '@/components/page-header'
 import {
   Table,
@@ -23,6 +27,8 @@ export default function FuncionariosPage() {
   const appData = useAppData()
   const [employees, setEmployees] = useState(() => appData.employees)
   const [saved, setSaved] = useState(false)
+  const [editing, setEditing] = useState<null | { id:string; name:string; role:string; phone:string; email:string; active:string; service:string; product:string; subscription:string }>(null)
+  const [editStatus, setEditStatus] = useState('')
   const commissions = appData.commissions
   const ranking = employees.map((employee) => ({
     name: employee.name,
@@ -42,6 +48,18 @@ export default function FuncionariosPage() {
     if (result.error) { window.alert(result.error); return }
     setEmployees((current) => current.filter((employee) => employee.id !== id))
     setSaved(false)
+  }
+
+  async function saveEmployee() {
+    if (!editing) return
+    if (appData.member.role !== 'owner' && appData.member.role !== 'manager') { setEditStatus('Sem permissão para editar funcionários.'); return }
+    if (!editing.name.trim()) { setEditStatus('Informe o nome.'); return }
+    const service = Number(editing.service), product = Number(editing.product), subscription = Number(editing.subscription)
+    if ([service, product, subscription].some((value) => !Number.isFinite(value) || value < 0 || value > 100)) { setEditStatus('As comissões devem estar entre 0% e 100%.'); return }
+    const result = await appData.updateRecord('employees', editing.id, { name:editing.name.trim(), role:editing.role, phone:editing.phone.trim()||null, email:editing.email.trim()||null, active:editing.active==='true', service_commission:service, product_commission:product, subscription_commission:subscription })
+    if (result.error) { setEditStatus(result.error); return }
+    setEmployees((current) => current.map((employee) => employee.id === editing.id ? { ...employee, name:editing.name.trim(), role:editing.role, phone:editing.phone.trim(), email:editing.email.trim(), active:editing.active==='true', serviceCommission:service, productCommission:product, subscriptionCommission:subscription } : employee))
+    setEditing(null); setSaved(true)
   }
 
   return (
@@ -121,9 +139,10 @@ export default function FuncionariosPage() {
                     <Badge variant={employee.active ? 'success' : 'secondary'}>{employee.active ? 'Ativo' : 'Inativo'}</Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="icon-sm" aria-label="Excluir funcionário" onClick={() => deleteEmployee(employee.id)}>
-                      <Trash2 className="size-4" />
-                    </Button>
+                    <div className="inline-flex gap-1">
+                      <Button variant="ghost" size="icon-sm" aria-label={`Editar ${employee.name}`} onClick={() => { setEditStatus(''); setEditing({ id:employee.id, name:employee.name, role:employee.role, phone:employee.phone, email:employee.email, active:String(employee.active), service:String(employee.serviceCommission), product:String(employee.productCommission), subscription:String(employee.subscriptionCommission) }) }}><Pencil className="size-4" /></Button>
+                      <Button variant="ghost" size="icon-sm" aria-label={`Excluir ${employee.name}`} onClick={() => deleteEmployee(employee.id)}><Trash2 className="size-4" /></Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -153,6 +172,20 @@ export default function FuncionariosPage() {
           </div>
         </Card>
       </div>
+      <Dialog open={Boolean(editing)} onClose={() => setEditing(null)} className="sm:max-w-2xl">
+        {editing ? <><DialogHeader title="Editar funcionário" description="Corrija os dados, função, status e comissões." /><div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Nome"><Input value={editing.name} onChange={e=>setEditing({...editing,name:e.target.value})}/></Field>
+          <Field label="Função"><Select value={editing.role} onChange={e=>setEditing({...editing,role:e.target.value})}><option value="barber">Barbeiro</option><option value="manager">Gerente</option><option value="reception">Recepção</option></Select></Field>
+          <Field label="E-mail"><Input type="email" value={editing.email} onChange={e=>setEditing({...editing,email:e.target.value})}/></Field>
+          <Field label="Telefone"><Input value={editing.phone} onChange={e=>setEditing({...editing,phone:e.target.value})}/></Field>
+          <Field label="Status"><Select value={editing.active} onChange={e=>setEditing({...editing,active:e.target.value})}><option value="true">Ativo</option><option value="false">Inativo</option></Select></Field>
+          <Field label="Comissão em serviços (%)"><Input type="number" min="0" max="100" value={editing.service} onChange={e=>setEditing({...editing,service:e.target.value})}/></Field>
+          <Field label="Comissão em produtos (%)"><Input type="number" min="0" max="100" value={editing.product} onChange={e=>setEditing({...editing,product:e.target.value})}/></Field>
+          <Field label="Comissão em assinaturas (%)"><Input type="number" min="0" max="100" value={editing.subscription} onChange={e=>setEditing({...editing,subscription:e.target.value})}/></Field>
+        </div>{editStatus?<p className="mt-4 text-sm text-destructive">{editStatus}</p>:null}<div className="mt-5 flex justify-end gap-2"><Button variant="outline" onClick={()=>setEditing(null)}>Cancelar</Button><Button variant="gold" onClick={saveEmployee}><Save className="size-4"/>Salvar alterações</Button></div></>:null}
+      </Dialog>
     </div>
   )
 }
+
+function Field({label,children}:{label:string;children:React.ReactNode}) { return <div className="space-y-2"><Label>{label}</Label>{children}</div> }
