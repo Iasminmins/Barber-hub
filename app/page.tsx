@@ -120,8 +120,8 @@ const testimonials = [
 
 const faqs = [
   {
-    question: 'O Starter tem o sistema completo?',
-    answer: 'Sim. O Starter tem o núcleo completo do BarberHub. A diferença está em limites de usuários, relatórios, importação e suporte.',
+    question: 'O que entra no Starter?',
+    answer: 'O Starter traz a gestão essencial para a barbearia organizar agenda, clientes, comandas e controles do dia a dia. O Pro adiciona mais usuários, relatórios avançados e importação/exportação.',
   },
   {
     question: 'Consigo testar antes de contratar?',
@@ -394,7 +394,7 @@ export default function Home() {
             <h2 className="mt-3 text-3xl font-bold tracking-tight text-foreground">Mesmo sistema, acessos diferentes.</h2>
           </div>
           <p className="max-w-md text-sm leading-6 text-muted-foreground">
-            Minha sugestão é manter o Starter completo e vender os upgrades por quantidade de usuários, relatórios, importação, suporte e multiunidade.
+            O Starter cobre a gestão essencial. Os upgrades entram quando a barbearia precisa de mais usuários, relatórios avançados, importação, suporte e multiunidade.
           </p>
         </div>
         <Card className="mb-4 border-success/30 bg-success/10 p-4">
@@ -441,7 +441,7 @@ export default function Home() {
                 </span>
               </p>
               <p className={cn('mt-1 text-xs text-muted-foreground', plan.featured && 'text-primary-foreground/65')}>
-                Ativação do plano confirmada antes do fim do teste.
+                Nenhuma cobrança é feita durante os 30 dias grátis.
               </p>
               <div className="mt-6 space-y-3">
                 {plan.items.map((item) => (

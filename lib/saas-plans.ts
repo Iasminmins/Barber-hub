@@ -28,21 +28,21 @@ export interface SaasPlan {
 
 export const FREE_TRIAL_DAYS = 30
 export const FREE_TRIAL_LABEL = '1 mês grátis'
-export const FREE_TRIAL_DESCRIPTION = 'Novos usuários testam o sistema por 30 dias. A ativação do plano é confirmada comercialmente antes do fim do período.'
+export const FREE_TRIAL_DESCRIPTION = 'Teste grátis por 30 dias. Nenhuma cobrança é feita durante esse período.'
 
 export const saasPlans: SaasPlan[] = [
   {
     id: 'starter',
     name: 'Starter',
-    price: 'R$ 80',
-    monthlyPrice: 80,
-    shortDescription: 'Sistema completo para começar com controle de verdade.',
-    description: 'Sistema completo para uma barbearia pequena começar com controle de verdade.',
+    price: 'R$ 89',
+    monthlyPrice: 89,
+    shortDescription: 'Gestão essencial para começar com organização e controle.',
+    description: 'Gestão essencial para uma barbearia começar com organização e controle.',
     users: 'Até 3 usuários',
     units: '1 unidade',
     support: 'E-mail',
     reports: 'Essenciais',
-    items: ['Sistema completo', '1 unidade', 'Até 3 usuários', 'Relatórios essenciais'],
+    items: ['Gestão essencial', '1 unidade', 'Até 3 usuários', 'Relatórios essenciais'],
     features: {
       coreSystem: true,
       appointments: true,

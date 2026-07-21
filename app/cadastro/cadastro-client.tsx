@@ -221,7 +221,7 @@ export function CadastroClient({ selectedPlanId }: { selectedPlanId: SaasPlanId 
             </div>
             <div className="mt-4 rounded-lg bg-success/10 p-3">
               <p className="text-sm font-semibold text-foreground">{FREE_TRIAL_LABEL}</p>
-              <p className="text-xs text-muted-foreground">Primeira cobrança somente após 30 dias.</p>
+              <p className="text-xs text-muted-foreground">Nenhuma cobrança é feita durante os 30 dias grátis.</p>
             </div>
             <div className="mt-5 space-y-3">
               {selectedPlan.items.map((item) => (

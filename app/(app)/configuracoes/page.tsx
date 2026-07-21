@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { useAppData } from '@/components/data/app-data-provider'
-import { getSaasPlan, saasPlans } from '@/lib/saas-plans'
+import { getSaasPlan } from '@/lib/saas-plans'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import { BillingCard } from '@/components/billing/billing-card'
 import { formatBillingDocument, onlyDigits } from '@/lib/billing-document'
@@ -189,14 +189,16 @@ export default function ConfiguracoesPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="plan">Plano da conta</Label>
-                <Select id="plan" value={barbershop.plan} disabled>
-                  {saasPlans.map((plan) => (
-                    <option key={plan.id} value={plan.id}>
-                      {plan.name} - {plan.price}/mês
-                    </option>
-                  ))}
-                </Select>
+                <Label>Plano contratado</Label>
+                <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-medium text-foreground">{currentPlan.name}</span>
+                    <span className="text-sm font-semibold text-foreground">{currentPlan.price}/mês</span>
+                  </div>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    O teste grátis dura 30 dias. Alteração de plano não é automática por aqui; se precisar mudar, ajuste antes de gerar a cobrança.
+                  </p>
+                </div>
               </div>
             </div>
           </Card>

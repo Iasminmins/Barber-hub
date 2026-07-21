@@ -84,7 +84,7 @@ export default function ImportacaoPage() {
             <div>
               <h3 className="font-semibold text-foreground">Importação liberada a partir do Pro</h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                O plano {currentPlan.name} mantém o sistema completo, mas importação/exportação entra nos planos Pro e Premium.
+                O plano {currentPlan.name} mantém a gestão do dia a dia, mas importação/exportação entra nos planos Pro e Premium.
               </p>
             </div>
           </div>
