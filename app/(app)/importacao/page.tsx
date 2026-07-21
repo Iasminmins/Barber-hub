@@ -55,6 +55,7 @@ export default function ImportacaoPage() {
   const toTags = (value: unknown) => String(value ?? '').split(/[|;]/).map((tag) => tag.trim()).filter(Boolean) as ClientTag[]
   const normalizePhone = (value: unknown) => String(value ?? '').replace(/\D/g, '')
   const normalizeName = (value: unknown) => String(value ?? '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ')
+  const normalizeEmployeeName = (value: unknown) => normalizeName(String(value ?? '').replace(/\s*Barbeiro$/i, ''))
   const mergeTags = (current: ClientTag[], imported: ClientTag[]) => Array.from(new Set([...current, ...imported]))
   const rowType = (row: Record<string, string>) => row.tipo || (row.id_comanda ? 'comanda' : row.plano ? 'assinatura' : row.nome && row.preco ? 'produto' : '')
   const stockValue = (row: Record<string, string>) => row.estoque || row['estoque / duracao'] || row['estoque/duracao'] || row.duracao || ''
@@ -244,6 +245,7 @@ export default function ImportacaoPage() {
     if (importedOrders.length && !error) {
       setMessage(`Importando ${importedOrders.length} comandas...`)
       const clientByName = new Map(existingClients.map((client) => [normalizeName(client.name), { id: client.id, name: client.name }]))
+      const employeeByName = new Map(employees.map((employee) => [normalizeEmployeeName(employee.name), { id: employee.id, name: employee.name }]))
 
       for (let i = 0; i < importedOrders.length && !error; i += 25) {
         const batch = importedOrders.slice(i, i + 25)
@@ -262,7 +264,8 @@ export default function ImportacaoPage() {
           }
 
           const current = orders.find((order) => order.number === item.number)
-          const orderValues = { barbershop_id: barbershop.id, number:item.number, client_id:client.id, client_name:client.name, employee_id:null, employee_name:item.employee_name, discount:0, surcharge:0, status:item.status, method:item.method, total:item.total, created_at:item.created_at }
+          const employee = employeeByName.get(normalizeEmployeeName(item.employee_name))
+          const orderValues = { barbershop_id: barbershop.id, number:item.number, client_id:client.id, client_name:client.name, employee_id:employee?.id ?? null, employee_name:employee?.name ?? item.employee_name, discount:0, surcharge:0, status:item.status, method:item.method, total:item.total, created_at:item.created_at }
           const orderResult = current
             ? await supabase.from('orders').update(orderValues).eq('id', current.id).select('id').single()
             : await supabase.from('orders').insert(orderValues).select('id').single()

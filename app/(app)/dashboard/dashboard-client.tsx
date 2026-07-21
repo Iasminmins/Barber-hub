@@ -133,10 +133,11 @@ function buildRanking(orders: Order[], employees: Employee[], range: DateRange) 
   const map = new Map<string, { name: string; revenue: number; services: number }>()
   for (const order of orders) {
     if (order.status !== 'paga' || !isInsideRange(order.createdAt, range)) continue
-    const cur = map.get(order.employeeId) ?? { name: order.employeeName, revenue: 0, services: 0 }
+    const key = order.employeeId || `name:${order.employeeName}`
+    const cur = map.get(key) ?? { name: order.employeeName, revenue: 0, services: 0 }
     cur.revenue += order.total
     cur.services += order.items.filter((item) => item.type === 'servico').length
-    map.set(order.employeeId, cur)
+    map.set(key, cur)
   }
 
   for (const employee of employees.filter((item) => item.active && isBarberRole(item.role))) {
