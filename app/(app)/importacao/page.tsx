@@ -17,9 +17,11 @@ import {
 import { useAppData } from '@/components/data/app-data-provider'
 import { formatDate, formatNumber } from '@/lib/format'
 import { canUsePlanFeature, getSaasPlan } from '@/lib/saas-plans'
+import { createBrowserSupabaseClient } from '@/lib/supabase/client'
+import type { ClientTag } from '@/lib/types'
 
 export default function ImportacaoPage() {
-  const { barbershop, member, clients, catalog, employees, imports: databaseImports, insertMany, insertRecord } = useAppData()
+  const { barbershop, member, clients: existingClients, catalog, employees, imports: databaseImports, insertMany, insertRecord } = useAppData()
   const fileRef = useRef<HTMLInputElement>(null)
   const [message, setMessage] = useState('')
   const currentPlan = getSaasPlan(barbershop.plan)
@@ -32,6 +34,7 @@ export default function ImportacaoPage() {
   const normalizeHeader = (value: string) => value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
   const toDate = (value: unknown) => {
     const text = String(value ?? '').trim()
+    if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text
     const match = text.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/)
     if (!match) return null
     const day = match[1].padStart(2, '0')
@@ -40,7 +43,10 @@ export default function ImportacaoPage() {
     return `${year}-${month}-${day}`
   }
   const toNumber = (value: unknown, fallback = 0) => Number(String(value ?? '').replace(',', '.')) || fallback
-  const toTags = (value: unknown) => String(value ?? '').split(/[|;]/).map((tag) => tag.trim()).filter(Boolean)
+  const toTags = (value: unknown) => String(value ?? '').split(/[|;]/).map((tag) => tag.trim()).filter(Boolean) as ClientTag[]
+  const normalizePhone = (value: unknown) => String(value ?? '').replace(/\D/g, '')
+  const normalizeName = (value: unknown) => String(value ?? '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ')
+  const mergeTags = (current: ClientTag[], imported: ClientTag[]) => Array.from(new Set([...current, ...imported]))
   function downloadTemplate() {
     const content = '\uFEFF' + [
       csvHeaders.join(','),
@@ -55,7 +61,7 @@ export default function ImportacaoPage() {
     const escape = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`
     const rows = [
       csvHeaders,
-      ...clients.map(item=>['cliente',item.name,item.phone,item.email,item.birthDate,item.address,item.notes,item.tags.join('|'),item.visits,'','','','','','']),
+      ...existingClients.map(item=>['cliente',item.name,item.phone,item.email,item.birthDate,item.address,item.notes,item.tags.join('|'),item.visits,'','','','','','']),
       ...catalog.map(item=>[item.type,item.name,'','','','','','','',item.category,item.price,item.cost,item.commission,item.durationMin??'',item.stock??'']),
       ...employees.map(item=>['funcionario',item.name,item.phone,item.email,'','','','','',item.role,'','','','','']),
     ]
@@ -66,10 +72,28 @@ export default function ImportacaoPage() {
     const file=event.target.files?.[0]; if(!file)return; setMessage('Importando...')
     const lines=(await file.text()).replace(/^\uFEFF/,'').split(/\r?\n/).filter(Boolean); const headers=parseLine(lines.shift()??'').map(normalizeHeader)
     const rows=lines.map(line=>{const values=parseLine(line);return Object.fromEntries(headers.map((h,i)=>[h,values[i]??'']))})
-    const clients=rows.filter(r=>r.tipo==='cliente').map(r=>({barbershop_id:barbershop.id,name:r.nome,phone:r.telefone||null,email:r.email||null,birth_date:toDate(r.aniversario||r.data_nascimento),address:r.endereco||null,notes:r.observacoes||r.notas||null,tags:toTags(r.tags),visits:toNumber(r.visitas)}))
+    const importedClients=rows.filter(r=>r.tipo==='cliente').map(r=>({barbershop_id:barbershop.id,name:r.nome,phone:r.telefone||null,email:r.email||null,birth_date:toDate(r.aniversario||r.data_nascimento),address:r.endereco||null,notes:r.observacoes||r.notas||null,tags:toTags(r.tags),visits:toNumber(r.visitas)}))
     const catalog=rows.filter(r=>r.tipo==='produto'||r.tipo==='servico').map(r=>({barbershop_id:barbershop.id,type:r.tipo,name:r.nome,category:r.categoria||null,price:toNumber(r.preco),cost:toNumber(r.custo),commission:toNumber(r.comissao),duration_min:r.tipo==='servico'?toNumber(r.duracao,40):null,stock:r.tipo==='produto'?toNumber(r.estoque):null,active:true}))
     const staff=rows.filter(r=>r.tipo==='funcionario').map(r=>({barbershop_id:barbershop.id,name:r.nome,phone:r.telefone||null,email:r.email||null,role:r.categoria||'barber',active:true}))
-    let imported=0; let error=''; if(clients.length){const r=await insertMany('clients',clients);if(r.error)error=r.error;else imported+=clients.length} if(catalog.length&&!error){const r=await insertMany('catalog_items',catalog);if(r.error)error=r.error;else imported+=catalog.length} if(staff.length&&!error){const r=await insertMany('employees',staff);if(r.error)error=r.error;else imported+=staff.length}
+    const clientsToInsert = []
+    const clientsToUpdate = []
+    for (const client of importedClients) {
+      const phone = normalizePhone(client.phone)
+      const name = normalizeName(client.name)
+      const current = existingClients.find((item) => phone ? normalizePhone(item.phone) === phone : normalizeName(item.name) === name)
+      if (!current) { clientsToInsert.push(client); continue }
+      clientsToUpdate.push({
+        id: current.id,
+        ...client,
+        email: client.email || current.email || null,
+        birth_date: client.birth_date || current.birthDate || null,
+        address: client.address || current.address || null,
+        notes: client.notes || current.notes || null,
+        tags: mergeTags(current.tags, client.tags),
+        visits: Math.max(current.visits, client.visits),
+      })
+    }
+    let imported=0; let error=''; if(clientsToUpdate.length){const supabase=createBrowserSupabaseClient();const r=await supabase.from('clients').upsert(clientsToUpdate,{onConflict:'id'}).select('id');if(r.error)error=r.error.message;else imported+=clientsToUpdate.length} if(clientsToInsert.length&&!error){const r=await insertMany('clients',clientsToInsert);if(r.error)error=r.error;else imported+=clientsToInsert.length} if(catalog.length&&!error){const r=await insertMany('catalog_items',catalog);if(r.error)error=r.error;else imported+=catalog.length} if(staff.length&&!error){const r=await insertMany('employees',staff);if(r.error)error=r.error;else imported+=staff.length}
     await insertRecord('import_records',{barbershop_id:barbershop.id,entity:catalog.length?'produtos':'clientes',file_name:file.name,total_rows:rows.length,imported_rows:imported,error_rows:rows.length-imported,status:error?'com_erros':'concluida',created_by:member.name})
     setMessage(error||`${imported} registros importados.`); event.target.value=''
   }
