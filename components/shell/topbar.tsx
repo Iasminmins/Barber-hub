@@ -3,7 +3,6 @@
 import * as React from 'react'
 import {
   Bell,
-  Building2,
   Cake,
   Check,
   CheckCheck,
@@ -18,6 +17,7 @@ import {
   ShoppingCart,
   X,
 } from 'lucide-react'
+import { BrandMark } from '@/components/brand-mark'
 import { Avatar } from '@/components/ui/avatar'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -107,6 +107,10 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
   const notificationRef = React.useRef<HTMLDivElement>(null)
 
   React.useEffect(() => {
+    setActive(barbershop)
+  }, [barbershop])
+
+  React.useEffect(() => {
     const onClick = (e: MouseEvent) => {
       const target = e.target as Node
       if (barbershopRef.current && !barbershopRef.current.contains(target)) setOpen(false)
@@ -138,9 +142,7 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
           onClick={() => setOpen((value) => !value)}
           className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-border bg-background px-3 py-1.5 text-left transition-colors hover:bg-muted"
         >
-          <span className="flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
-            <Building2 className="size-4" />
-          </span>
+          <BrandMark name={active.name} color={active.color} logoUrl={active.logoUrl} className="size-8 rounded-md text-xs" />
           <span className="hidden leading-tight sm:block">
             <span className="block text-sm font-semibold text-foreground">{active.name}</span>
             <span className="block text-[11px] text-muted-foreground">{active.city}</span>
@@ -162,9 +164,7 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
                 }}
                 className="flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-muted"
               >
-                <span className="flex size-8 items-center justify-center rounded-md bg-primary/10 text-primary">
-                  <Building2 className="size-4" />
-                </span>
+                <BrandMark name={barbershop.name} color={barbershop.color} logoUrl={barbershop.logoUrl} className="size-8 rounded-md text-xs" />
                 <span className="flex-1 leading-tight">
                   <span className="block text-sm font-medium text-foreground">{barbershop.name}</span>
                   <span className="block text-[11px] text-muted-foreground capitalize">

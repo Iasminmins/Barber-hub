@@ -2,7 +2,8 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { PanelLeftClose, Scissors, Sparkles } from 'lucide-react'
+import { PanelLeftClose, Sparkles } from 'lucide-react'
+import { BrandMark } from '@/components/brand-mark'
 import { useAppData } from '@/components/data/app-data-provider'
 import { navGroups } from '@/lib/nav'
 import { getSaasPlan } from '@/lib/saas-plans'
@@ -33,19 +34,19 @@ export function SidebarContent({
           type="button"
           onClick={collapsed ? onToggle : undefined}
           className={cn(
-            'flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground',
+            'flex size-9 items-center justify-center rounded-lg',
             collapsed && 'cursor-pointer transition-transform hover:scale-105',
           )}
-          aria-label={collapsed ? 'Abrir lateral' : 'BarberHub'}
-          title={collapsed ? 'Abrir lateral' : 'BarberHub'}
+          aria-label={collapsed ? 'Abrir lateral' : barbershop.name || 'BarberHub'}
+          title={collapsed ? 'Abrir lateral' : barbershop.name || 'BarberHub'}
         >
-          <Scissors className="size-5" />
+          <BrandMark name={barbershop.name} color={barbershop.color} logoUrl={barbershop.logoUrl} className="size-9" />
         </button>
         {!collapsed ? (
           <>
             <div className="min-w-0 flex-1 leading-tight">
-              <p className="text-sm font-bold text-sidebar-foreground">BarberHub</p>
-              <p className="text-[11px] text-muted-foreground">Sua barbearia conectada</p>
+              <p className="truncate text-sm font-bold text-sidebar-foreground">{barbershop.name || 'BarberHub'}</p>
+              <p className="truncate text-[11px] text-muted-foreground">{barbershop.city || 'Sua barbearia conectada'}</p>
             </div>
             {onToggle ? (
               <button
