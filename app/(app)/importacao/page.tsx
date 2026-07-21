@@ -21,7 +21,7 @@ import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import type { ClientTag } from '@/lib/types'
 
 export default function ImportacaoPage() {
-  const { barbershop, member, clients: existingClients, catalog, employees, imports: databaseImports, insertMany, insertRecord } = useAppData()
+  const { barbershop, member, clients: existingClients, catalog, employees, plans, subscriptions, imports: databaseImports, insertMany, insertRecord } = useAppData()
   const fileRef = useRef<HTMLInputElement>(null)
   const [message, setMessage] = useState('')
   const currentPlan = getSaasPlan(barbershop.plan)
@@ -30,7 +30,7 @@ export default function ImportacaoPage() {
   const totalRows = imports.reduce((sum, item) => sum + item.totalRows, 0)
   const importedRows = imports.reduce((sum, item) => sum + item.importedRows, 0)
   const errorRows = imports.reduce((sum, item) => sum + item.errorRows, 0)
-  const csvHeaders = ['tipo','nome','telefone','email','aniversario','endereco','observacoes','tags','visitas','categoria','preco','custo','comissao','duracao','estoque']
+  const csvHeaders = ['tipo','nome','telefone','email','aniversario','endereco','observacoes','tags','visitas','plano','inicio','expira_em','status','vendedor','metodo','categoria','preco','custo','comissao','duracao','estoque']
   const normalizeHeader = (value: string) => value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
   const toDate = (value: unknown) => {
     const text = String(value ?? '').trim()
@@ -56,14 +56,16 @@ export default function ImportacaoPage() {
   const normalizePhone = (value: unknown) => String(value ?? '').replace(/\D/g, '')
   const normalizeName = (value: unknown) => String(value ?? '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ')
   const mergeTags = (current: ClientTag[], imported: ClientTag[]) => Array.from(new Set([...current, ...imported]))
-  const rowType = (row: Record<string, string>) => row.tipo || (row.nome && row.preco ? 'produto' : '')
+  const rowType = (row: Record<string, string>) => row.tipo || (row.plano ? 'assinatura' : row.nome && row.preco ? 'produto' : '')
   const stockValue = (row: Record<string, string>) => row.estoque || row['estoque / duracao'] || row['estoque/duracao'] || row.duracao || ''
+  const subscriptionStatus = (value: unknown) => String(value ?? '').toUpperCase().includes('VENCIDO') ? 'vencido' : 'ativo'
   function downloadTemplate() {
     const content = '\uFEFF' + [
       csvHeaders.join(','),
-      'cliente,Joao Silva,11999999999,joao@email.com,15/04,"Rua Exemplo, 123","Cliente recorrente",recorrente,8,,,,,,',
-      'servico,Corte,,,,,,,,Cabelo,50,0,40,45,',
-      'produto,Pomada,,,,,,,,Finalizacao,35,18,10,,20',
+      'cliente,Joao Silva,11999999999,joao@email.com,15/04,"Rua Exemplo, 123","Cliente recorrente",recorrente,8,,,,,,,,,,,,',
+      'assinatura,Joao Silva,,,,,,,,Plano Corte De Cabelo,20/07/2026,19/08/2026,ATIVO,Otavio,PIX,,,,,,',
+      'servico,Corte,,,,,,,,,,,,,,,Cabelo,50,0,40,45,',
+      'produto,Pomada,,,,,,,,,,,,,,,Finalizacao,35,18,10,,20',
     ].join('\n')
     const url = URL.createObjectURL(new Blob([content], { type:'text/csv;charset=utf-8' }))
     const link = document.createElement('a'); link.href=url; link.download='modelo-barberhub.csv'; link.click(); URL.revokeObjectURL(url)
@@ -72,9 +74,10 @@ export default function ImportacaoPage() {
     const escape = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`
     const rows = [
       csvHeaders,
-      ...existingClients.map(item=>['cliente',item.name,item.phone,item.email,item.birthDate,item.address,item.notes,item.tags.join('|'),item.visits,'','','','','','']),
-      ...catalog.map(item=>[item.type,item.name,'','','','','','','',item.category,item.price,item.cost,item.commission,item.durationMin??'',item.stock??'']),
-      ...employees.map(item=>['funcionario',item.name,item.phone,item.email,'','','','','',item.role,'','','','','']),
+      ...existingClients.map(item=>['cliente',item.name,item.phone,item.email,item.birthDate,item.address,item.notes,item.tags.join('|'),item.visits,'','','','','','','','','','','','']),
+      ...subscriptions.map(item=>['assinatura',item.clientName,'','','','','','','',item.planName,item.startDate,item.dueDate,item.status,'','','','','','','','']),
+      ...catalog.map(item=>[item.type,item.name,'','','','','','','','','','','','','',item.category,item.price,item.cost,item.commission,item.durationMin??'',item.stock??'']),
+      ...employees.map(item=>['funcionario',item.name,item.phone,item.email,'','','','','','','','','','','',item.role,'','','','','']),
     ]
     const content='\uFEFF'+rows.map(row=>row.map(escape).join(',')).join('\n'); const url=URL.createObjectURL(new Blob([content],{type:'text/csv;charset=utf-8'})); const link=document.createElement('a');link.href=url;link.download=`barberhub-${new Date().toISOString().slice(0,10)}.csv`;link.click();URL.revokeObjectURL(url)
   }
@@ -85,6 +88,7 @@ export default function ImportacaoPage() {
     const rows=lines.map(line=>{const values=parseLine(line);return Object.fromEntries(headers.map((h,i)=>[h,values[i]??'']))})
     const importedClients=rows.filter(r=>r.tipo==='cliente').map(r=>({barbershop_id:barbershop.id,name:r.nome,phone:r.telefone||null,email:r.email||null,birth_date:toDate(r.aniversario||r.data_nascimento),address:r.endereco||null,notes:r.observacoes||r.notas||null,tags:toTags(r.tags),visits:toNumber(r.visitas)}))
     const importedCatalog=rows.filter(r=>rowType(r)==='produto'||rowType(r)==='servico').map(r=>({barbershop_id:barbershop.id,type:rowType(r),name:r.nome,category:r.categoria||null,price:toNumber(r.preco),cost:toNumber(r.custo),commission:toNumber(r.comissao),duration_min:rowType(r)==='servico'?toInteger(stockValue(r),40):null,stock:rowType(r)==='produto'?toInteger(stockValue(r)):null,active:true}))
+    const importedSubscriptions=rows.filter(r=>rowType(r)==='assinatura').map(r=>({client_name:r.nome,plan_name:r.plano,start_date:toDate(r.inicio),due_date:toDate(r.expira_em||r.vencimento),status:subscriptionStatus(r.status),seller:r.vendedor||'',method:r.metodo||''}))
     const staff=rows.filter(r=>r.tipo==='funcionario').map(r=>({barbershop_id:barbershop.id,name:r.nome,phone:r.telefone||null,email:r.email||null,role:r.categoria||'barber',active:true}))
     const clientsToInsert = []
     const clientsToUpdate = new Map<string, Record<string, unknown>>()
@@ -114,9 +118,103 @@ export default function ImportacaoPage() {
     }
     const duplicateClientRows = Math.max(0, importedClients.length - clientsToUpdate.size - clientsToInsert.length)
     const duplicateCatalogRows = Math.max(0, importedCatalog.length - catalogToUpdate.size - catalogToInsert.length)
-    let imported=0; let error=''; const supabase=createBrowserSupabaseClient(); const updates=[...clientsToUpdate.entries()]; for(let i=0;i<updates.length&&!error;i+=25){const batch=updates.slice(i,i+25);setMessage(`Atualizando clientes ${Math.min(i+batch.length,updates.length)} de ${updates.length}...`);const results=await Promise.all(batch.map(([id,values])=>supabase.from('clients').update(values).eq('id',id)));const failed=results.find(result=>result.error);if(failed?.error)error=failed.error.message;else imported+=batch.length} if(clientsToInsert.length&&!error){setMessage(`Criando ${clientsToInsert.length} clientes novos...`);const r=await insertMany('clients',clientsToInsert);if(r.error)error=r.error;else imported+=clientsToInsert.length} const catalogUpdates=[...catalogToUpdate.entries()]; for(let i=0;i<catalogUpdates.length&&!error;i+=25){const batch=catalogUpdates.slice(i,i+25);setMessage(`Atualizando produtos ${Math.min(i+batch.length,catalogUpdates.length)} de ${catalogUpdates.length}...`);const results=await Promise.all(batch.map(([id,values])=>supabase.from('catalog_items').update(values).eq('id',id)));const failed=results.find(result=>result.error);if(failed?.error)error=failed.error.message;else imported+=batch.length} if(catalogToInsert.length&&!error){setMessage(`Criando ${catalogToInsert.length} produtos/serviços...`);const r=await insertMany('catalog_items',catalogToInsert);if(r.error)error=r.error;else imported+=catalogToInsert.length} if(staff.length&&!error){setMessage(`Importando ${staff.length} funcionários...`);const r=await insertMany('employees',staff);if(r.error)error=r.error;else imported+=staff.length} if(!error) imported+=duplicateClientRows+duplicateCatalogRows
+    let imported = 0
+    let error = ''
+    const supabase = createBrowserSupabaseClient()
+    const updates = [...clientsToUpdate.entries()]
+    for (let i = 0; i < updates.length && !error; i += 25) {
+      const batch = updates.slice(i, i + 25)
+      setMessage(`Atualizando clientes ${Math.min(i + batch.length, updates.length)} de ${updates.length}...`)
+      const results = await Promise.all(batch.map(([id, values]) => supabase.from('clients').update(values).eq('id', id)))
+      const failed = results.find((result) => result.error)
+      if (failed?.error) error = failed.error.message
+      else imported += batch.length
+    }
+    if (clientsToInsert.length && !error) {
+      setMessage(`Criando ${clientsToInsert.length} clientes novos...`)
+      const r = await insertMany('clients', clientsToInsert)
+      if (r.error) error = r.error
+      else imported += clientsToInsert.length
+    }
+    const catalogUpdates = [...catalogToUpdate.entries()]
+    for (let i = 0; i < catalogUpdates.length && !error; i += 25) {
+      const batch = catalogUpdates.slice(i, i + 25)
+      setMessage(`Atualizando produtos ${Math.min(i + batch.length, catalogUpdates.length)} de ${catalogUpdates.length}...`)
+      const results = await Promise.all(batch.map(([id, values]) => supabase.from('catalog_items').update(values).eq('id', id)))
+      const failed = results.find((result) => result.error)
+      if (failed?.error) error = failed.error.message
+      else imported += batch.length
+    }
+    if (catalogToInsert.length && !error) {
+      setMessage(`Criando ${catalogToInsert.length} produtos/serviços...`)
+      const r = await insertMany('catalog_items', catalogToInsert)
+      if (r.error) error = r.error
+      else imported += catalogToInsert.length
+    }
+    if (staff.length && !error) {
+      setMessage(`Importando ${staff.length} funcionários...`)
+      const r = await insertMany('employees', staff)
+      if (r.error) error = r.error
+      else imported += staff.length
+    }
+    if (importedSubscriptions.length && !error) {
+      setMessage(`Importando ${importedSubscriptions.length} assinaturas...`)
+      const clientByName = new Map(existingClients.map((client) => [normalizeName(client.name), { id: client.id, name: client.name }]))
+      const planByName = new Map(plans.map((plan) => [normalizeName(plan.name), plan]))
+      const subscriptionsToInsert = new Map<string, Record<string, unknown>>()
+      const subscriptionsToUpdate = new Map<string, Record<string, unknown>>()
+
+      for (const item of importedSubscriptions) {
+        let client = clientByName.get(normalizeName(item.client_name))
+        if (!client) {
+          const clientResult = await supabase
+            .from('clients')
+            .insert({ barbershop_id: barbershop.id, name: item.client_name, tags: item.status === 'vencido' ? ['inadimplente'] : ['recorrente'] })
+            .select('id, name')
+            .single()
+          if (clientResult.error || !clientResult.data) { error = clientResult.error?.message ?? 'Não foi possível criar cliente da assinatura.'; break }
+          client = { id: clientResult.data.id, name: clientResult.data.name }
+          clientByName.set(normalizeName(item.client_name), client)
+        }
+
+        let plan = planByName.get(normalizeName(item.plan_name))
+        if (!plan) {
+          const planResult = await supabase
+            .from('plans')
+            .insert({ barbershop_id: barbershop.id, name: item.plan_name, price: 0, type: 'mensal', description: 'Importado por CSV', active: true, rules: { cycle: 'mensal', cycleDays: 30, includedServices: [] } })
+            .select('id, name, price')
+            .single()
+          if (planResult.error || !planResult.data) { error = planResult.error?.message ?? 'Não foi possível criar plano da assinatura.'; break }
+          plan = { id: planResult.data.id, barbershopId: barbershop.id, name: planResult.data.name, price: Number(planResult.data.price), type: 'mensal', description: 'Importado por CSV', active: true, rules: { cycle: 'mensal', cycleDays: 30, includedServices: [] } }
+          planByName.set(normalizeName(item.plan_name), plan)
+        }
+
+        const current = subscriptions.find((subscription) => normalizeName(subscription.clientName) === normalizeName(item.client_name) && normalizeName(subscription.planName) === normalizeName(item.plan_name))
+        const values = { barbershop_id: barbershop.id, plan_id: plan.id, client_id: client.id, plan_name: plan.name, client_name: client.name, price: plan.price, start_date: item.start_date, due_date: item.due_date, status: item.status }
+        if (current) subscriptionsToUpdate.set(current.id, values)
+        else subscriptionsToInsert.set(`${normalizeName(item.client_name)}|${normalizeName(item.plan_name)}`, values)
+      }
+
+      const subscriptionUpdates = [...subscriptionsToUpdate.entries()]
+      for (let i = 0; i < subscriptionUpdates.length && !error; i += 25) {
+        const batch = subscriptionUpdates.slice(i, i + 25)
+        const results = await Promise.all(batch.map(([id, values]) => supabase.from('subscriptions').update(values).eq('id', id)))
+        const failed = results.find((result) => result.error)
+        if (failed?.error) error = failed.error.message
+        else imported += batch.length
+      }
+      const subscriptionInserts = [...subscriptionsToInsert.values()]
+      if (subscriptionInserts.length && !error) {
+        const r = await supabase.from('subscriptions').insert(subscriptionInserts)
+        if (r.error) error = r.error.message
+        else imported += subscriptionInserts.length
+      }
+      if (!error) imported += Math.max(0, importedSubscriptions.length - subscriptionsToUpdate.size - subscriptionsToInsert.size)
+    }
+    if (!error) imported += duplicateClientRows + duplicateCatalogRows
     const errorCount = Math.max(0, rows.length - imported)
-    await insertRecord('import_records',{barbershop_id:barbershop.id,entity:importedCatalog.length?'produtos':'clientes',file_name:file.name,total_rows:rows.length,imported_rows:imported,error_rows:errorCount,status:error||errorCount?'com_erros':'concluida',created_by:member.name})
+    const entity = importedSubscriptions.length ? 'assinaturas' : importedCatalog.length ? 'produtos' : 'clientes'
+    await insertRecord('import_records',{barbershop_id:barbershop.id,entity,file_name:file.name,total_rows:rows.length,imported_rows:imported,error_rows:errorCount,status:error||errorCount?'com_erros':'concluida',created_by:member.name})
     setMessage(error||`${imported} registros absorvidos pelo CSV.`); event.target.value=''
   }
 
