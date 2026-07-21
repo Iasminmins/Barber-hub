@@ -2,15 +2,13 @@ import { NextResponse } from 'next/server'
 import { asaasRequest, type AsaasPayment, type AsaasSubscription } from '@/lib/asaas'
 import { getBillingContext } from '@/lib/billing-auth'
 import { getSaasPlan, type SaasPlanId } from '@/lib/saas-plans'
-import { createAdminSupabaseClient } from '@/lib/supabase/server'
 import { onlyDigits } from '@/lib/billing-document'
 
 type PaymentList = { data?: AsaasPayment[] }
 
 export async function POST(request: Request) {
   try {
-    const { member, barbershop } = await getBillingContext(request)
-    const admin = createAdminSupabaseClient()
+    const { supabase, member, barbershop } = await getBillingContext(request)
 
     if (barbershop.asaas_subscription_id) {
       const payments = await asaasRequest<PaymentList>(`/subscriptions/${barbershop.asaas_subscription_id}/payments`)
@@ -56,7 +54,7 @@ export async function POST(request: Request) {
       }),
     })
 
-    const { error: updateError } = await admin.from('barbershops').update({
+    const { error: updateError } = await supabase.from('barbershops').update({
       asaas_customer_id: customerId,
       asaas_subscription_id: subscription.id,
       next_billing_date: subscription.nextDueDate ?? nextDueDate,

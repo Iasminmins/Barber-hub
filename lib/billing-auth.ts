@@ -25,5 +25,5 @@ export async function getBillingContext(request: Request) {
     .single()
   if (shopError || !barbershop) throw new Error('Dados de cobrança não encontrados. Aplique a migração do banco.')
 
-  return { member, barbershop }
+  return { supabase, member, barbershop }
 }
