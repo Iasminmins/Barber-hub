@@ -76,24 +76,25 @@ export default function ImportacaoPage() {
     const catalog=rows.filter(r=>r.tipo==='produto'||r.tipo==='servico').map(r=>({barbershop_id:barbershop.id,type:r.tipo,name:r.nome,category:r.categoria||null,price:toNumber(r.preco),cost:toNumber(r.custo),commission:toNumber(r.comissao),duration_min:r.tipo==='servico'?toNumber(r.duracao,40):null,stock:r.tipo==='produto'?toNumber(r.estoque):null,active:true}))
     const staff=rows.filter(r=>r.tipo==='funcionario').map(r=>({barbershop_id:barbershop.id,name:r.nome,phone:r.telefone||null,email:r.email||null,role:r.categoria||'barber',active:true}))
     const clientsToInsert = []
-    const clientsToUpdate = []
+    const clientsToUpdate = new Map<string, Record<string, unknown>>()
     for (const client of importedClients) {
       const phone = normalizePhone(client.phone)
       const name = normalizeName(client.name)
       const current = existingClients.find((item) => phone ? normalizePhone(item.phone) === phone : normalizeName(item.name) === name)
       if (!current) { clientsToInsert.push(client); continue }
-      clientsToUpdate.push({
-        id: current.id,
+      const previous = clientsToUpdate.get(current.id)
+      const previousTags = Array.isArray(previous?.tags) ? previous.tags as ClientTag[] : current.tags
+      clientsToUpdate.set(current.id, {
         ...client,
         email: client.email || current.email || null,
         birth_date: client.birth_date || current.birthDate || null,
         address: client.address || current.address || null,
         notes: client.notes || current.notes || null,
-        tags: mergeTags(current.tags, client.tags),
-        visits: Math.max(current.visits, client.visits),
+        tags: mergeTags(previousTags, client.tags),
+        visits: Math.max(current.visits, Number(previous?.visits ?? 0), client.visits),
       })
     }
-    let imported=0; let error=''; if(clientsToUpdate.length){const supabase=createBrowserSupabaseClient();const r=await supabase.from('clients').upsert(clientsToUpdate,{onConflict:'id'}).select('id');if(r.error)error=r.error.message;else imported+=clientsToUpdate.length} if(clientsToInsert.length&&!error){const r=await insertMany('clients',clientsToInsert);if(r.error)error=r.error;else imported+=clientsToInsert.length} if(catalog.length&&!error){const r=await insertMany('catalog_items',catalog);if(r.error)error=r.error;else imported+=catalog.length} if(staff.length&&!error){const r=await insertMany('employees',staff);if(r.error)error=r.error;else imported+=staff.length}
+    let imported=0; let error=''; const supabase=createBrowserSupabaseClient(); for (const [id, values] of clientsToUpdate) { const r=await supabase.from('clients').update(values).eq('id',id).select('id').single(); if(r.error){error=r.error.message; break} imported++ } if(clientsToInsert.length&&!error){const r=await insertMany('clients',clientsToInsert);if(r.error)error=r.error;else imported+=clientsToInsert.length} if(catalog.length&&!error){const r=await insertMany('catalog_items',catalog);if(r.error)error=r.error;else imported+=catalog.length} if(staff.length&&!error){const r=await insertMany('employees',staff);if(r.error)error=r.error;else imported+=staff.length}
     await insertRecord('import_records',{barbershop_id:barbershop.id,entity:catalog.length?'produtos':'clientes',file_name:file.name,total_rows:rows.length,imported_rows:imported,error_rows:rows.length-imported,status:error?'com_erros':'concluida',created_by:member.name})
     setMessage(error||`${imported} registros importados.`); event.target.value=''
   }
