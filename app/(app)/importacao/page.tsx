@@ -21,7 +21,7 @@ import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import type { ClientTag } from '@/lib/types'
 
 export default function ImportacaoPage() {
-  const { barbershop, member, clients: existingClients, catalog, employees, plans, subscriptions, imports: databaseImports, insertMany, insertRecord } = useAppData()
+  const { barbershop, member, clients: existingClients, catalog, employees, orders, plans, subscriptions, imports: databaseImports, insertMany, insertRecord } = useAppData()
   const fileRef = useRef<HTMLInputElement>(null)
   const [message, setMessage] = useState('')
   const currentPlan = getSaasPlan(barbershop.plan)
@@ -56,9 +56,30 @@ export default function ImportacaoPage() {
   const normalizePhone = (value: unknown) => String(value ?? '').replace(/\D/g, '')
   const normalizeName = (value: unknown) => String(value ?? '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ')
   const mergeTags = (current: ClientTag[], imported: ClientTag[]) => Array.from(new Set([...current, ...imported]))
-  const rowType = (row: Record<string, string>) => row.tipo || (row.plano ? 'assinatura' : row.nome && row.preco ? 'produto' : '')
+  const rowType = (row: Record<string, string>) => row.tipo || (row.id_comanda ? 'comanda' : row.plano ? 'assinatura' : row.nome && row.preco ? 'produto' : '')
   const stockValue = (row: Record<string, string>) => row.estoque || row['estoque / duracao'] || row['estoque/duracao'] || row.duracao || ''
   const subscriptionStatus = (value: unknown) => String(value ?? '').toUpperCase().includes('VENCIDO') ? 'vencido' : 'ativo'
+  const orderStatus = (value: unknown) => {
+    const text = String(value ?? '').toLowerCase()
+    if (text.includes('paga')) return 'paga'
+    if (text.includes('pendente')) return 'pendente'
+    if (text.includes('cancel')) return 'cancelada'
+    return 'aberta'
+  }
+  const paymentMethod = (value: unknown) => {
+    const text = String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    if (text.includes('pix')) return 'pix'
+    if (text.includes('credito')) return 'credito'
+    if (text.includes('debito')) return 'debito'
+    if (text.includes('dinheiro')) return 'dinheiro'
+    return null
+  }
+  const toDateTime = (value: unknown) => {
+    const match = String(value ?? '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:,\s*(\d{1,2}):(\d{2}))?/)
+    if (!match) return new Date().toISOString()
+    const [, day, month, year, hour = '12', minute = '00'] = match
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T${hour.padStart(2, '0')}:${minute}:00`
+  }
   function downloadTemplate() {
     const content = '\uFEFF' + [
       csvHeaders.join(','),
@@ -81,14 +102,23 @@ export default function ImportacaoPage() {
     ]
     const content='\uFEFF'+rows.map(row=>row.map(escape).join(',')).join('\n'); const url=URL.createObjectURL(new Blob([content],{type:'text/csv;charset=utf-8'})); const link=document.createElement('a');link.href=url;link.download=`barberhub-${new Date().toISOString().slice(0,10)}.csv`;link.click();URL.revokeObjectURL(url)
   }
-  function parseLine(line:string){const values:string[]=[];let value='';let quoted=false;for(let i=0;i<line.length;i++){const char=line[i];if(char==='"'&&quoted&&line[i+1]==='"'){value+='"';i++}else if(char==='"'){quoted=!quoted}else if(char===','&&!quoted){values.push(value.trim());value=''}else value+=char}values.push(value.trim());return values}
+  async function readCsvFile(file: File) {
+    const buffer = await file.arrayBuffer()
+    try {
+      return new TextDecoder('utf-8', { fatal: true }).decode(buffer)
+    } catch {
+      return new TextDecoder('windows-1252').decode(buffer)
+    }
+  }
+  function parseLine(line:string, delimiter=','){const values:string[]=[];let value='';let quoted=false;for(let i=0;i<line.length;i++){const char=line[i];if(char==='"'&&quoted&&line[i+1]==='"'){value+='"';i++}else if(char==='"'){quoted=!quoted}else if(char===delimiter&&!quoted){values.push(value.trim());value=''}else value+=char}values.push(value.trim());return values}
   async function importCsv(event: React.ChangeEvent<HTMLInputElement>) {
     const file=event.target.files?.[0]; if(!file)return; setMessage('Importando...')
-    const lines=(await file.text()).replace(/^\uFEFF/,'').split(/\r?\n/).filter(Boolean); const headers=parseLine(lines.shift()??'').map(normalizeHeader)
-    const rows=lines.map(line=>{const values=parseLine(line);return Object.fromEntries(headers.map((h,i)=>[h,values[i]??'']))})
+    const lines=(await readCsvFile(file)).replace(/^\uFEFF/,'').split(/\r?\n/).filter(Boolean); const headerLine=lines.shift()??''; const delimiter=headerLine.includes(';')?';':','; const headers=parseLine(headerLine,delimiter).map(normalizeHeader)
+    const rows=lines.map(line=>{const values=parseLine(line,delimiter);return Object.fromEntries(headers.map((h,i)=>[h,values[i]??'']))})
     const importedClients=rows.filter(r=>r.tipo==='cliente').map(r=>({barbershop_id:barbershop.id,name:r.nome,phone:r.telefone||null,email:r.email||null,birth_date:toDate(r.aniversario||r.data_nascimento),address:r.endereco||null,notes:r.observacoes||r.notas||null,tags:toTags(r.tags),visits:toNumber(r.visitas)}))
     const importedCatalog=rows.filter(r=>rowType(r)==='produto'||rowType(r)==='servico').map(r=>({barbershop_id:barbershop.id,type:rowType(r),name:r.nome,category:r.categoria||null,price:toNumber(r.preco),cost:toNumber(r.custo),commission:toNumber(r.comissao),duration_min:rowType(r)==='servico'?toInteger(stockValue(r),40):null,stock:rowType(r)==='produto'?toInteger(stockValue(r)):null,active:true}))
     const importedSubscriptions=rows.filter(r=>rowType(r)==='assinatura').map(r=>({client_name:r.nome,plan_name:r.plano,start_date:toDate(r.inicio),due_date:toDate(r.expira_em||r.vencimento),status:subscriptionStatus(r.status),seller:r.vendedor||'',method:r.metodo||''}))
+    const importedOrders=rows.filter(r=>rowType(r)==='comanda').map(r=>({number:toInteger(r.posicao_geral_estimada),client_name:r.cliente || 'Cliente importado',employee_name:String(r.responsavel||'').replace(/\s*Barbeiro$/i,'') || 'Não atribuído',status:orderStatus(r.status),method:paymentMethod(r.pagamento),total:toNumber(r.total),created_at:toDateTime(r.data),quantity:toInteger(r.quantidade_itens,1),source_id:r.id_comanda,plan_client:Boolean(r.cliente_indicador_plano),notes:r.observacao||''}))
     const staff=rows.filter(r=>r.tipo==='funcionario').map(r=>({barbershop_id:barbershop.id,name:r.nome,phone:r.telefone||null,email:r.email||null,role:r.categoria||'barber',active:true}))
     const clientsToInsert = []
     const clientsToUpdate = new Map<string, Record<string, unknown>>()
@@ -211,9 +241,55 @@ export default function ImportacaoPage() {
       }
       if (!error) imported += Math.max(0, importedSubscriptions.length - subscriptionsToUpdate.size - subscriptionsToInsert.size)
     }
+    if (importedOrders.length && !error) {
+      setMessage(`Importando ${importedOrders.length} comandas...`)
+      const clientByName = new Map(existingClients.map((client) => [normalizeName(client.name), { id: client.id, name: client.name }]))
+
+      for (let i = 0; i < importedOrders.length && !error; i += 25) {
+        const batch = importedOrders.slice(i, i + 25)
+        setMessage(`Importando comandas ${Math.min(i + batch.length, importedOrders.length)} de ${importedOrders.length}...`)
+        for (const item of batch) {
+          let client = clientByName.get(normalizeName(item.client_name))
+          if (!client) {
+            const clientResult = await supabase
+              .from('clients')
+              .insert({ barbershop_id: barbershop.id, name: item.client_name, tags: item.plan_client ? ['recorrente'] : [] })
+              .select('id, name')
+              .single()
+            if (clientResult.error || !clientResult.data) { error = clientResult.error?.message ?? 'Não foi possível criar cliente da comanda.'; break }
+            client = { id: clientResult.data.id, name: clientResult.data.name }
+            clientByName.set(normalizeName(item.client_name), client)
+          }
+
+          const current = orders.find((order) => order.number === item.number)
+          const orderValues = { barbershop_id: barbershop.id, number:item.number, client_id:client.id, client_name:client.name, employee_id:null, employee_name:item.employee_name, discount:0, surcharge:0, status:item.status, method:item.method, total:item.total, created_at:item.created_at }
+          const orderResult = current
+            ? await supabase.from('orders').update(orderValues).eq('id', current.id).select('id').single()
+            : await supabase.from('orders').insert(orderValues).select('id').single()
+          if (orderResult.error || !orderResult.data) { error = orderResult.error?.message ?? 'Não foi possível importar comanda.'; break }
+
+          if (current) {
+            const deleteItems = await supabase.from('order_items').delete().eq('order_id', current.id)
+            if (deleteItems.error) { error = deleteItems.error.message; break }
+          }
+          const orderId = orderResult.data.id
+          const quantity = Math.max(1, item.quantity)
+          const itemResult = await supabase.from('order_items').insert({
+            order_id: orderId,
+            barbershop_id: barbershop.id,
+            type: 'servico',
+            name: item.notes && item.notes !== '-' ? `Itens importados - ${item.notes}` : 'Itens importados',
+            quantity,
+            unit_price: quantity > 0 ? item.total / quantity : item.total,
+          })
+          if (itemResult.error) { error = itemResult.error.message; break }
+          imported++
+        }
+      }
+    }
     if (!error) imported += duplicateClientRows + duplicateCatalogRows
     const errorCount = Math.max(0, rows.length - imported)
-    const entity = importedSubscriptions.length ? 'assinaturas' : importedCatalog.length ? 'produtos' : 'clientes'
+    const entity = importedOrders.length ? 'comandas' : importedSubscriptions.length ? 'assinaturas' : importedCatalog.length ? 'produtos' : 'clientes'
     await insertRecord('import_records',{barbershop_id:barbershop.id,entity,file_name:file.name,total_rows:rows.length,imported_rows:imported,error_rows:errorCount,status:error||errorCount?'com_erros':'concluida',created_by:member.name})
     setMessage(error||`${imported} registros absorvidos pelo CSV.`); event.target.value=''
   }
