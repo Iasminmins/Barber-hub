@@ -94,9 +94,11 @@ export default function ImportacaoPage() {
         visits: Math.max(current.visits, Number(previous?.visits ?? 0), client.visits),
       })
     }
-    let imported=0; let error=''; const supabase=createBrowserSupabaseClient(); for (const [id, values] of clientsToUpdate) { const r=await supabase.from('clients').update(values).eq('id',id).select('id').single(); if(r.error){error=r.error.message; break} imported++ } if(clientsToInsert.length&&!error){const r=await insertMany('clients',clientsToInsert);if(r.error)error=r.error;else imported+=clientsToInsert.length} if(catalog.length&&!error){const r=await insertMany('catalog_items',catalog);if(r.error)error=r.error;else imported+=catalog.length} if(staff.length&&!error){const r=await insertMany('employees',staff);if(r.error)error=r.error;else imported+=staff.length}
-    await insertRecord('import_records',{barbershop_id:barbershop.id,entity:catalog.length?'produtos':'clientes',file_name:file.name,total_rows:rows.length,imported_rows:imported,error_rows:rows.length-imported,status:error?'com_erros':'concluida',created_by:member.name})
-    setMessage(error||`${imported} registros importados.`); event.target.value=''
+    const duplicateClientRows = Math.max(0, importedClients.length - clientsToUpdate.size - clientsToInsert.length)
+    let imported=0; let error=''; const supabase=createBrowserSupabaseClient(); const updates=[...clientsToUpdate.entries()]; for(let i=0;i<updates.length&&!error;i+=25){const batch=updates.slice(i,i+25);setMessage(`Atualizando clientes ${Math.min(i+batch.length,updates.length)} de ${updates.length}...`);const results=await Promise.all(batch.map(([id,values])=>supabase.from('clients').update(values).eq('id',id)));const failed=results.find(result=>result.error);if(failed?.error)error=failed.error.message;else imported+=batch.length} if(clientsToInsert.length&&!error){setMessage(`Criando ${clientsToInsert.length} clientes novos...`);const r=await insertMany('clients',clientsToInsert);if(r.error)error=r.error;else imported+=clientsToInsert.length} if(catalog.length&&!error){setMessage(`Importando ${catalog.length} produtos/serviços...`);const r=await insertMany('catalog_items',catalog);if(r.error)error=r.error;else imported+=catalog.length} if(staff.length&&!error){setMessage(`Importando ${staff.length} funcionários...`);const r=await insertMany('employees',staff);if(r.error)error=r.error;else imported+=staff.length} if(!error) imported+=duplicateClientRows
+    const errorCount = Math.max(0, rows.length - imported)
+    await insertRecord('import_records',{barbershop_id:barbershop.id,entity:catalog.length?'produtos':'clientes',file_name:file.name,total_rows:rows.length,imported_rows:imported,error_rows:errorCount,status:error||errorCount?'com_erros':'concluida',created_by:member.name})
+    setMessage(error||`${imported} registros absorvidos pelo CSV.`); event.target.value=''
   }
 
   return (
