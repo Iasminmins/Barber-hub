@@ -51,22 +51,39 @@ const toneClass = {
   gold: 'bg-gold/20 text-gold-foreground',
 }
 
+function formatBirthdayDescription(birthDate: string) {
+  if (!birthDate) return null
+  const date = new Date(`${birthDate}T00:00:00`)
+  if (Number.isNaN(date.getTime())) return null
+  return `Aniversário em ${new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: 'long',
+  }).format(date)}`
+}
+
+function isBirthdayThisMonth(birthDate: string) {
+  if (!birthDate) return false
+  const date = new Date(`${birthDate}T00:00:00`)
+  if (Number.isNaN(date.getTime())) return false
+  return date.getMonth() === new Date().getMonth()
+}
+
 function buildNotifications(clients: ReturnType<typeof useAppData>['clients'], catalog: ReturnType<typeof useAppData>['catalog'], orders: ReturnType<typeof useAppData>['orders'], subscriptions: ReturnType<typeof useAppData>['subscriptions']): Record<NotificationTab, NotificationItem[]> {
   const lowStock = catalog.filter((item) => item.type === 'produto' && (item.stock ?? 0) <= (item.minStock ?? 0))
   const expiringSubscriptions = subscriptions.filter((item) => daysUntil(item.dueDate) <= 7)
 
   return {
     aniversarios: clients
-      .filter((client) => client.tags.includes('aniversariante'))
-      .map((client) => ({
-        id: `birthday-${client.id}`,
-        title: client.name,
-        description: `Aniversário em ${new Intl.DateTimeFormat('pt-BR', {
-          day: '2-digit',
-          month: 'long',
-        }).format(new Date(`${client.birthDate}T00:00:00`))}`,
-        tone: 'purple',
-      })),
+      .filter((client) => client.tags.includes('aniversariante') || isBirthdayThisMonth(client.birthDate))
+      .flatMap((client) => {
+        const description = formatBirthdayDescription(client.birthDate)
+        return description ? [{
+          id: `birthday-${client.id}`,
+          title: client.name,
+          description,
+          tone: 'purple' as const,
+        }] : []
+      }),
     estoque: lowStock.map((item) => ({
       id: `stock-${item.id}`,
       title: item.name,
