@@ -42,11 +42,22 @@ export default function ImportacaoPage() {
     const year = match[3] ? match[3].padStart(4, '20') : '2000'
     return `${year}-${month}-${day}`
   }
-  const toNumber = (value: unknown, fallback = 0) => Number(String(value ?? '').replace(',', '.')) || fallback
+  const toNumber = (value: unknown, fallback = 0) => {
+    const text = String(value ?? '').trim().replace(/[^\d,.-]/g, '')
+    const normalized = text.includes(',') ? text.replace(/\./g, '').replace(',', '.') : text
+    const number = Number(normalized)
+    return Number.isFinite(number) ? number : fallback
+  }
+  const toInteger = (value: unknown, fallback = 0) => {
+    const match = String(value ?? '').match(/\d+/)
+    return match ? Number(match[0]) : fallback
+  }
   const toTags = (value: unknown) => String(value ?? '').split(/[|;]/).map((tag) => tag.trim()).filter(Boolean) as ClientTag[]
   const normalizePhone = (value: unknown) => String(value ?? '').replace(/\D/g, '')
   const normalizeName = (value: unknown) => String(value ?? '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ')
   const mergeTags = (current: ClientTag[], imported: ClientTag[]) => Array.from(new Set([...current, ...imported]))
+  const rowType = (row: Record<string, string>) => row.tipo || (row.nome && row.preco ? 'produto' : '')
+  const stockValue = (row: Record<string, string>) => row.estoque || row['estoque / duracao'] || row['estoque/duracao'] || row.duracao || ''
   function downloadTemplate() {
     const content = '\uFEFF' + [
       csvHeaders.join(','),
@@ -73,7 +84,7 @@ export default function ImportacaoPage() {
     const lines=(await file.text()).replace(/^\uFEFF/,'').split(/\r?\n/).filter(Boolean); const headers=parseLine(lines.shift()??'').map(normalizeHeader)
     const rows=lines.map(line=>{const values=parseLine(line);return Object.fromEntries(headers.map((h,i)=>[h,values[i]??'']))})
     const importedClients=rows.filter(r=>r.tipo==='cliente').map(r=>({barbershop_id:barbershop.id,name:r.nome,phone:r.telefone||null,email:r.email||null,birth_date:toDate(r.aniversario||r.data_nascimento),address:r.endereco||null,notes:r.observacoes||r.notas||null,tags:toTags(r.tags),visits:toNumber(r.visitas)}))
-    const catalog=rows.filter(r=>r.tipo==='produto'||r.tipo==='servico').map(r=>({barbershop_id:barbershop.id,type:r.tipo,name:r.nome,category:r.categoria||null,price:toNumber(r.preco),cost:toNumber(r.custo),commission:toNumber(r.comissao),duration_min:r.tipo==='servico'?toNumber(r.duracao,40):null,stock:r.tipo==='produto'?toNumber(r.estoque):null,active:true}))
+    const importedCatalog=rows.filter(r=>rowType(r)==='produto'||rowType(r)==='servico').map(r=>({barbershop_id:barbershop.id,type:rowType(r),name:r.nome,category:r.categoria||null,price:toNumber(r.preco),cost:toNumber(r.custo),commission:toNumber(r.comissao),duration_min:rowType(r)==='servico'?toInteger(stockValue(r),40):null,stock:rowType(r)==='produto'?toInteger(stockValue(r)):null,active:true}))
     const staff=rows.filter(r=>r.tipo==='funcionario').map(r=>({barbershop_id:barbershop.id,name:r.nome,phone:r.telefone||null,email:r.email||null,role:r.categoria||'barber',active:true}))
     const clientsToInsert = []
     const clientsToUpdate = new Map<string, Record<string, unknown>>()
@@ -94,10 +105,18 @@ export default function ImportacaoPage() {
         visits: Math.max(current.visits, Number(previous?.visits ?? 0), client.visits),
       })
     }
+    const catalogToInsert = []
+    const catalogToUpdate = new Map<string, Record<string, unknown>>()
+    for (const item of importedCatalog) {
+      const current = catalog.find((currentItem) => currentItem.type === item.type && normalizeName(currentItem.name) === normalizeName(item.name))
+      if (!current) { catalogToInsert.push(item); continue }
+      catalogToUpdate.set(current.id, { ...item, category:item.category || current.category || null, cost:item.cost || current.cost, commission:item.commission || current.commission })
+    }
     const duplicateClientRows = Math.max(0, importedClients.length - clientsToUpdate.size - clientsToInsert.length)
-    let imported=0; let error=''; const supabase=createBrowserSupabaseClient(); const updates=[...clientsToUpdate.entries()]; for(let i=0;i<updates.length&&!error;i+=25){const batch=updates.slice(i,i+25);setMessage(`Atualizando clientes ${Math.min(i+batch.length,updates.length)} de ${updates.length}...`);const results=await Promise.all(batch.map(([id,values])=>supabase.from('clients').update(values).eq('id',id)));const failed=results.find(result=>result.error);if(failed?.error)error=failed.error.message;else imported+=batch.length} if(clientsToInsert.length&&!error){setMessage(`Criando ${clientsToInsert.length} clientes novos...`);const r=await insertMany('clients',clientsToInsert);if(r.error)error=r.error;else imported+=clientsToInsert.length} if(catalog.length&&!error){setMessage(`Importando ${catalog.length} produtos/serviços...`);const r=await insertMany('catalog_items',catalog);if(r.error)error=r.error;else imported+=catalog.length} if(staff.length&&!error){setMessage(`Importando ${staff.length} funcionários...`);const r=await insertMany('employees',staff);if(r.error)error=r.error;else imported+=staff.length} if(!error) imported+=duplicateClientRows
+    const duplicateCatalogRows = Math.max(0, importedCatalog.length - catalogToUpdate.size - catalogToInsert.length)
+    let imported=0; let error=''; const supabase=createBrowserSupabaseClient(); const updates=[...clientsToUpdate.entries()]; for(let i=0;i<updates.length&&!error;i+=25){const batch=updates.slice(i,i+25);setMessage(`Atualizando clientes ${Math.min(i+batch.length,updates.length)} de ${updates.length}...`);const results=await Promise.all(batch.map(([id,values])=>supabase.from('clients').update(values).eq('id',id)));const failed=results.find(result=>result.error);if(failed?.error)error=failed.error.message;else imported+=batch.length} if(clientsToInsert.length&&!error){setMessage(`Criando ${clientsToInsert.length} clientes novos...`);const r=await insertMany('clients',clientsToInsert);if(r.error)error=r.error;else imported+=clientsToInsert.length} const catalogUpdates=[...catalogToUpdate.entries()]; for(let i=0;i<catalogUpdates.length&&!error;i+=25){const batch=catalogUpdates.slice(i,i+25);setMessage(`Atualizando produtos ${Math.min(i+batch.length,catalogUpdates.length)} de ${catalogUpdates.length}...`);const results=await Promise.all(batch.map(([id,values])=>supabase.from('catalog_items').update(values).eq('id',id)));const failed=results.find(result=>result.error);if(failed?.error)error=failed.error.message;else imported+=batch.length} if(catalogToInsert.length&&!error){setMessage(`Criando ${catalogToInsert.length} produtos/serviços...`);const r=await insertMany('catalog_items',catalogToInsert);if(r.error)error=r.error;else imported+=catalogToInsert.length} if(staff.length&&!error){setMessage(`Importando ${staff.length} funcionários...`);const r=await insertMany('employees',staff);if(r.error)error=r.error;else imported+=staff.length} if(!error) imported+=duplicateClientRows+duplicateCatalogRows
     const errorCount = Math.max(0, rows.length - imported)
-    await insertRecord('import_records',{barbershop_id:barbershop.id,entity:catalog.length?'produtos':'clientes',file_name:file.name,total_rows:rows.length,imported_rows:imported,error_rows:errorCount,status:error||errorCount?'com_erros':'concluida',created_by:member.name})
+    await insertRecord('import_records',{barbershop_id:barbershop.id,entity:importedCatalog.length?'produtos':'clientes',file_name:file.name,total_rows:rows.length,imported_rows:imported,error_rows:errorCount,status:error||errorCount?'com_erros':'concluida',created_by:member.name})
     setMessage(error||`${imported} registros absorvidos pelo CSV.`); event.target.value=''
   }
 
