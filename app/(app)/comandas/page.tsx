@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { CreditCard, Plus, Printer, Receipt, Trash2 } from 'lucide-react'
+import { CalendarDays, CreditCard, Plus, Printer, Receipt, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { PageHeader } from '@/components/page-header'
 import { StatusBadge } from '@/components/status-badge'
@@ -25,6 +25,19 @@ const METHOD_LABEL: Record<string, string> = {
   credito: 'Crédito',
   debito: 'Débito',
   outro: 'Outro',
+}
+
+function formatOrderDateTime(value: string) {
+  if (!value) return '-'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return formatDate(value)
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
 }
 
 export default function ComandasPage() {
@@ -86,6 +99,7 @@ export default function ComandasPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Comanda</TableHead>
+              <TableHead>Data</TableHead>
               <TableHead>Cliente</TableHead>
               <TableHead>Itens</TableHead>
               <TableHead>Responsável</TableHead>
@@ -105,9 +119,14 @@ export default function ComandasPage() {
                     </span>
                     <div>
                       <p className="font-medium text-foreground">#{order.number}</p>
-                      <p className="text-xs text-muted-foreground">{formatDate(order.createdAt)}</p>
                     </div>
                   </div>
+                </TableCell>
+                <TableCell className="text-muted-foreground">
+                  <span className="inline-flex items-center gap-1.5 text-sm">
+                    <CalendarDays className="size-4" />
+                    {formatOrderDateTime(order.createdAt)}
+                  </span>
                 </TableCell>
                 <TableCell className="font-medium text-foreground">{order.clientName}</TableCell>
                 <TableCell>
@@ -145,7 +164,7 @@ export default function ComandasPage() {
             ))}
             {orders.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
+                <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
                   Nenhuma comanda cadastrada.
                 </TableCell>
               </TableRow>
