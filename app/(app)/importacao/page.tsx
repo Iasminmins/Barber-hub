@@ -28,28 +28,46 @@ export default function ImportacaoPage() {
   const totalRows = imports.reduce((sum, item) => sum + item.totalRows, 0)
   const importedRows = imports.reduce((sum, item) => sum + item.importedRows, 0)
   const errorRows = imports.reduce((sum, item) => sum + item.errorRows, 0)
+  const csvHeaders = ['tipo','nome','telefone','email','aniversario','endereco','observacoes','tags','visitas','categoria','preco','custo','comissao','duracao','estoque']
+  const normalizeHeader = (value: string) => value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  const toDate = (value: unknown) => {
+    const text = String(value ?? '').trim()
+    const match = text.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/)
+    if (!match) return null
+    const day = match[1].padStart(2, '0')
+    const month = match[2].padStart(2, '0')
+    const year = match[3] ? match[3].padStart(4, '20') : '2000'
+    return `${year}-${month}-${day}`
+  }
+  const toNumber = (value: unknown, fallback = 0) => Number(String(value ?? '').replace(',', '.')) || fallback
+  const toTags = (value: unknown) => String(value ?? '').split(/[|;]/).map((tag) => tag.trim()).filter(Boolean)
   function downloadTemplate() {
-    const content = '\uFEFFtipo,nome,telefone,email,categoria,preco,custo,comissao,duracao,estoque\ncliente,João Silva,11999999999,joao@email.com,,,,,,\nservico,Corte,,,Cabelo,50,0,40,45,\nproduto,Pomada,,,Finalização,35,18,10,,20'
+    const content = '\uFEFF' + [
+      csvHeaders.join(','),
+      'cliente,Joao Silva,11999999999,joao@email.com,15/04,"Rua Exemplo, 123","Cliente recorrente",recorrente,8,,,,,,',
+      'servico,Corte,,,,,,,,Cabelo,50,0,40,45,',
+      'produto,Pomada,,,,,,,,Finalizacao,35,18,10,,20',
+    ].join('\n')
     const url = URL.createObjectURL(new Blob([content], { type:'text/csv;charset=utf-8' }))
     const link = document.createElement('a'); link.href=url; link.download='modelo-barberhub.csv'; link.click(); URL.revokeObjectURL(url)
   }
   function exportData() {
     const escape = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`
     const rows = [
-      ['tipo','nome','telefone','email','categoria','preco','custo','comissao','duracao','estoque'],
-      ...clients.map(item=>['cliente',item.name,item.phone,item.email,'','','','','','']),
-      ...catalog.map(item=>[item.type,item.name,'','',item.category,item.price,item.cost,item.commission,item.durationMin??'',item.stock??'']),
-      ...employees.map(item=>['funcionario',item.name,item.phone,item.email,item.role,'','','','','']),
+      csvHeaders,
+      ...clients.map(item=>['cliente',item.name,item.phone,item.email,item.birthDate,item.address,item.notes,item.tags.join('|'),item.visits,'','','','','','']),
+      ...catalog.map(item=>[item.type,item.name,'','','','','','','',item.category,item.price,item.cost,item.commission,item.durationMin??'',item.stock??'']),
+      ...employees.map(item=>['funcionario',item.name,item.phone,item.email,'','','','','',item.role,'','','','','']),
     ]
     const content='\uFEFF'+rows.map(row=>row.map(escape).join(',')).join('\n'); const url=URL.createObjectURL(new Blob([content],{type:'text/csv;charset=utf-8'})); const link=document.createElement('a');link.href=url;link.download=`barberhub-${new Date().toISOString().slice(0,10)}.csv`;link.click();URL.revokeObjectURL(url)
   }
   function parseLine(line:string){const values:string[]=[];let value='';let quoted=false;for(let i=0;i<line.length;i++){const char=line[i];if(char==='"'&&quoted&&line[i+1]==='"'){value+='"';i++}else if(char==='"'){quoted=!quoted}else if(char===','&&!quoted){values.push(value.trim());value=''}else value+=char}values.push(value.trim());return values}
   async function importCsv(event: React.ChangeEvent<HTMLInputElement>) {
     const file=event.target.files?.[0]; if(!file)return; setMessage('Importando...')
-    const lines=(await file.text()).replace(/^\uFEFF/,'').split(/\r?\n/).filter(Boolean); const headers=parseLine(lines.shift()??'').map(x=>x.trim().toLowerCase())
+    const lines=(await file.text()).replace(/^\uFEFF/,'').split(/\r?\n/).filter(Boolean); const headers=parseLine(lines.shift()??'').map(normalizeHeader)
     const rows=lines.map(line=>{const values=parseLine(line);return Object.fromEntries(headers.map((h,i)=>[h,values[i]??'']))})
-    const clients=rows.filter(r=>r.tipo==='cliente').map(r=>({barbershop_id:barbershop.id,name:r.nome,phone:r.telefone||null,email:r.email||null}))
-    const catalog=rows.filter(r=>r.tipo==='produto'||r.tipo==='servico').map(r=>({barbershop_id:barbershop.id,type:r.tipo,name:r.nome,category:r.categoria||null,price:Number(r.preco.replace(',','.'))||0,cost:Number(r.custo.replace(',','.'))||0,commission:Number(r.comissao)||0,duration_min:r.tipo==='servico'?Number(r.duracao)||40:null,stock:r.tipo==='produto'?Number(r.estoque)||0:null,active:true}))
+    const clients=rows.filter(r=>r.tipo==='cliente').map(r=>({barbershop_id:barbershop.id,name:r.nome,phone:r.telefone||null,email:r.email||null,birth_date:toDate(r.aniversario||r.data_nascimento),address:r.endereco||null,notes:r.observacoes||r.notas||null,tags:toTags(r.tags),visits:toNumber(r.visitas)}))
+    const catalog=rows.filter(r=>r.tipo==='produto'||r.tipo==='servico').map(r=>({barbershop_id:barbershop.id,type:r.tipo,name:r.nome,category:r.categoria||null,price:toNumber(r.preco),cost:toNumber(r.custo),commission:toNumber(r.comissao),duration_min:r.tipo==='servico'?toNumber(r.duracao,40):null,stock:r.tipo==='produto'?toNumber(r.estoque):null,active:true}))
     const staff=rows.filter(r=>r.tipo==='funcionario').map(r=>({barbershop_id:barbershop.id,name:r.nome,phone:r.telefone||null,email:r.email||null,role:r.categoria||'barber',active:true}))
     let imported=0; let error=''; if(clients.length){const r=await insertMany('clients',clients);if(r.error)error=r.error;else imported+=clients.length} if(catalog.length&&!error){const r=await insertMany('catalog_items',catalog);if(r.error)error=r.error;else imported+=catalog.length} if(staff.length&&!error){const r=await insertMany('employees',staff);if(r.error)error=r.error;else imported+=staff.length}
     await insertRecord('import_records',{barbershop_id:barbershop.id,entity:catalog.length?'produtos':'clientes',file_name:file.name,total_rows:rows.length,imported_rows:imported,error_rows:rows.length-imported,status:error?'com_erros':'concluida',created_by:member.name})
