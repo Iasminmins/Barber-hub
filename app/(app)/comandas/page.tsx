@@ -2,12 +2,13 @@
 
 import Link from 'next/link'
 import { CalendarDays, CreditCard, Plus, Printer, Receipt, Trash2, Upload } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { PageHeader } from '@/components/page-header'
 import { StatusBadge } from '@/components/status-badge'
 import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import {
   Table,
   TableBody,
@@ -27,6 +28,35 @@ const METHOD_LABEL: Record<string, string> = {
   outro: 'Outro',
 }
 
+function toDateKey(value: string | null | undefined) {
+  if (!value) return ''
+  const key = value.slice(0, 10)
+  return /^\d{4}-\d{2}-\d{2}$/.test(key) ? key : ''
+}
+
+function toMonthKey(value: string | null | undefined) {
+  const key = toDateKey(value)
+  return key ? key.slice(0, 7) : ''
+}
+
+function todayKey() {
+  const today = new Date()
+  const year = today.getFullYear()
+  const month = String(today.getMonth() + 1).padStart(2, '0')
+  const day = String(today.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function getLatestOrderMonth(orders: { createdAt: string }[]) {
+  const latest = orders
+    .map((order) => toDateKey(order.createdAt))
+    .filter(Boolean)
+    .sort()
+    .at(-1)
+
+  return latest ? latest.slice(0, 7) : todayKey().slice(0, 7)
+}
+
 function formatOrderDateTime(value: string) {
   if (!value) return '-'
   const date = new Date(value)
@@ -43,14 +73,31 @@ function formatOrderDateTime(value: string) {
 export default function ComandasPage() {
   const { orders: databaseOrders, deleteRecord } = useAppData()
   const [orders, setOrders] = useState(() => [...databaseOrders].sort((a, b) => b.number - a.number))
+  const [selectedMonth, setSelectedMonth] = useState(() => getLatestOrderMonth(databaseOrders))
+
+  useEffect(() => {
+    const nextOrders = [...databaseOrders].sort((a, b) => b.number - a.number)
+    setOrders(nextOrders)
+    setSelectedMonth((current) => {
+      if (current && nextOrders.some((order) => toMonthKey(order.createdAt) === current)) return current
+      return getLatestOrderMonth(nextOrders)
+    })
+  }, [databaseOrders])
+
+  const monthOrders = useMemo(
+    () => orders.filter((order) => toMonthKey(order.createdAt) === selectedMonth),
+    [orders, selectedMonth],
+  )
 
   const metrics = useMemo(() => {
-    const paid = orders.filter((o) => o.status === 'paga')
-    const open = orders.filter((o) => o.status === 'aberta')
-    const pending = orders.filter((o) => o.status === 'pendente')
-    const revenue = paid.reduce((sum, order) => sum + order.total, 0)
+    const paid = monthOrders.filter((o) => o.status === 'paga')
+    const open = monthOrders.filter((o) => o.status === 'aberta')
+    const pending = monthOrders.filter((o) => o.status === 'pendente')
+    const revenue = paid
+      .filter((order) => toDateKey(order.createdAt) === todayKey())
+      .reduce((sum, order) => sum + order.total, 0)
     return { paid, open, pending, revenue }
-  }, [orders])
+  }, [monthOrders])
 
   async function deleteOrder(id: string) {
     if (!window.confirm('Excluir esta comanda?')) return
@@ -79,13 +126,27 @@ export default function ComandasPage() {
         </Link>
       </PageHeader>
 
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-foreground">Mês exibido</p>
+          <p className="text-sm text-muted-foreground">A lista e os indicadores abaixo seguem este mês.</p>
+        </div>
+        <Input
+          type="month"
+          value={selectedMonth}
+          onChange={(event) => setSelectedMonth(event.target.value)}
+          className="h-10 w-full bg-card sm:w-44"
+          aria-label="Mês das comandas"
+        />
+      </div>
+
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Card className="p-4">
           <p className="text-sm text-muted-foreground">Recebido hoje</p>
           <p className="mt-1 text-2xl font-bold text-foreground">{formatCurrency(metrics.revenue)}</p>
         </Card>
         <Card className="p-4">
-          <p className="text-sm text-muted-foreground">Comandas pagas</p>
+          <p className="text-sm text-muted-foreground">Pagas no mês</p>
           <p className="mt-1 text-2xl font-bold text-foreground">{metrics.paid.length}</p>
         </Card>
         <Card className="p-4">
@@ -114,7 +175,7 @@ export default function ComandasPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {orders.map((order) => (
+            {monthOrders.map((order) => (
               <TableRow key={order.id}>
                 <TableCell>
                   <div className="flex items-center gap-3">
@@ -166,7 +227,7 @@ export default function ComandasPage() {
                 </TableCell>
               </TableRow>
             ))}
-            {orders.length === 0 ? (
+            {monthOrders.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
                   Nenhuma comanda cadastrada.

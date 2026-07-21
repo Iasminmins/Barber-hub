@@ -21,15 +21,18 @@ const periodOptions: { value: Period; label: string }[] = [
 ]
 
 function toInputDate(date: Date) {
-  return date.toISOString().slice(0, 10)
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 function formatInputDate(value: string) {
   return new Intl.DateTimeFormat('pt-BR').format(new Date(`${value}T00:00:00`))
 }
 
-export function getDefaultRange(period: Period): DateRange {
-  const today = new Date()
+export function getDefaultRange(period: Period, anchorDate = new Date()): DateRange {
+  const today = new Date(anchorDate)
   const start = new Date(today)
   const end = new Date(today)
 
