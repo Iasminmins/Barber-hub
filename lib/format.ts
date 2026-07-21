@@ -14,12 +14,16 @@ export function formatPercent(value: number): string {
 }
 
 export function formatDate(iso: string): string {
+  if (!iso) return '-'
   const d = new Date(iso.length <= 10 ? `${iso}T00:00:00` : iso)
+  if (Number.isNaN(d.getTime())) return '-'
   return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(d)
 }
 
 export function formatDateShort(iso: string): string {
+  if (!iso) return '-'
   const d = new Date(iso.length <= 10 ? `${iso}T00:00:00` : iso)
+  if (Number.isNaN(d.getTime())) return '-'
   return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' }).format(d)
 }
 
