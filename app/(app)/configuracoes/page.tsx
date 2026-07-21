@@ -7,11 +7,12 @@ import { PageHeader } from '@/components/page-header'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { Dialog, DialogHeader } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { useAppData } from '@/components/data/app-data-provider'
-import { getSaasPlan } from '@/lib/saas-plans'
+import { getSaasPlan, saasPlans, type SaasPlanId } from '@/lib/saas-plans'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import { BillingCard } from '@/components/billing/billing-card'
 import { formatBillingDocument, onlyDigits } from '@/lib/billing-document'
@@ -36,7 +37,11 @@ export default function ConfiguracoesPage() {
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [logoPreview, setLogoPreview] = useState('')
   const [logoError, setLogoError] = useState('')
-  const { barbershop, updateRecord } = useAppData()
+  const { barbershop, updateRecord, refresh } = useAppData()
+  const [planDialogOpen, setPlanDialogOpen] = useState(false)
+  const [planDraft, setPlanDraft] = useState<SaasPlanId>(barbershop.plan)
+  const [planSaving, setPlanSaving] = useState(false)
+  const [planMessage, setPlanMessage] = useState('')
   const [shop, setShop] = useState({
     name: barbershop.name,
     slug: barbershop.slug,
@@ -61,6 +66,7 @@ export default function ConfiguracoesPage() {
     setLogoFile(null)
     setLogoPreview('')
     setLogoError('')
+    setPlanDraft(barbershop.plan)
   }, [barbershop])
 
   useEffect(() => {
@@ -139,6 +145,34 @@ export default function ConfiguracoesPage() {
     setSaved(true)
   }
 
+  async function authenticatedFetch(url: string, init?: RequestInit) {
+    const { data } = await createBrowserSupabaseClient().auth.getSession()
+    const token = data.session?.access_token
+    if (!token) throw new Error('Sua sessão expirou. Entre novamente.')
+    return fetch(url, { ...init, headers: { ...init?.headers, Authorization: `Bearer ${token}` } })
+  }
+
+  async function changePlan() {
+    setPlanSaving(true)
+    setPlanMessage('')
+    try {
+      const response = await authenticatedFetch('/api/billing/plan', {
+        method: 'PATCH',
+        body: JSON.stringify({ plan: planDraft }),
+      })
+      const body = await response.json()
+      if (!response.ok) throw new Error(body.error)
+      await refresh()
+      setPlanMessage(body.message ?? 'Plano atualizado.')
+      setPlanDialogOpen(false)
+      setSaved(true)
+    } catch (error) {
+      setPlanMessage(error instanceof Error ? error.message : 'Não foi possível alterar o plano.')
+    } finally {
+      setPlanSaving(false)
+    }
+  }
+
   async function signOut() {
     await createBrowserSupabaseClient().auth.signOut()
     window.location.replace('/login')
@@ -196,8 +230,22 @@ export default function ConfiguracoesPage() {
                     <span className="text-sm font-semibold text-foreground">{currentPlan.price}/mês</span>
                   </div>
                   <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                    O teste grátis dura 30 dias. Alteração de plano não é automática por aqui; se precisar mudar, ajuste antes de gerar a cobrança.
+                    O teste grátis dura 30 dias. Você pode ajustar o plano antes da cobrança sem pagar agora.
                   </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-3 w-full"
+                    onClick={() => {
+                      setPlanDraft(barbershop.plan)
+                      setPlanMessage('')
+                      setPlanDialogOpen(true)
+                    }}
+                  >
+                    Alterar plano
+                  </Button>
+                  {planMessage ? <p className="mt-2 text-xs text-muted-foreground">{planMessage}</p> : null}
                 </div>
               </div>
             </div>
@@ -398,6 +446,51 @@ export default function ConfiguracoesPage() {
           </Card>
         </div>
       </div>
+
+      <Dialog open={planDialogOpen} onClose={() => setPlanDialogOpen(false)}>
+        <DialogHeader
+          title="Alterar plano"
+          description="Escolha qual plano será usado na assinatura. Durante os 30 dias grátis, isso não gera cobrança imediata."
+        />
+        <div className="space-y-3">
+          {saasPlans.map((plan) => {
+            const selected = planDraft === plan.id
+            return (
+              <button
+                key={plan.id}
+                type="button"
+                onClick={() => setPlanDraft(plan.id)}
+                className={`w-full rounded-lg border p-4 text-left transition-colors ${
+                  selected ? 'border-primary bg-primary/10' : 'border-border bg-card hover:bg-muted/50'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-foreground">{plan.name}</p>
+                    <p className="mt-1 text-sm leading-5 text-muted-foreground">{plan.description}</p>
+                  </div>
+                  <span className="shrink-0 text-sm font-bold text-foreground">{plan.price}/mês</span>
+                </div>
+                <p className="mt-3 text-xs text-muted-foreground">
+                  {plan.users} · {plan.reports}
+                </p>
+              </button>
+            )
+          })}
+        </div>
+        <div className="mt-4 rounded-md border border-success/30 bg-success/10 p-3 text-xs leading-5 text-muted-foreground">
+          Nenhuma cobrança é feita durante os 30 dias grátis. Se já existir uma cobrança pendente no Asaas, ela será ajustada para o novo plano.
+        </div>
+        {planMessage ? <p className="mt-3 text-sm text-destructive">{planMessage}</p> : null}
+        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button type="button" variant="outline" onClick={() => setPlanDialogOpen(false)} disabled={planSaving}>
+            Cancelar
+          </Button>
+          <Button type="button" variant="gold" onClick={changePlan} disabled={planSaving}>
+            {planSaving ? 'Salvando...' : 'Confirmar plano'}
+          </Button>
+        </div>
+      </Dialog>
     </div>
   )
 }
