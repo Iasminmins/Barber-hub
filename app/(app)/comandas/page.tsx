@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { CalendarDays, CreditCard, Plus, Printer, Receipt, Trash2 } from 'lucide-react'
+import { CalendarDays, CreditCard, Plus, Printer, Receipt, Trash2, Upload } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { PageHeader } from '@/components/page-header'
 import { StatusBadge } from '@/components/status-badge'
@@ -65,6 +65,10 @@ export default function ComandasPage() {
         title="Comandas / PDV"
         description="Acompanhe comandas abertas, pagamentos, itens vendidos e pendências do balcão."
       >
+        <Link href="/importacao" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+          <Upload className="size-4" />
+          Importar CSV
+        </Link>
         <Button variant="outline" size="sm" onClick={() => window.print()}>
           <Printer className="size-4" />
           Imprimir resumo
