@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/table'
 import { useAppData } from '@/components/data/app-data-provider'
 import { formatCurrency, formatDate } from '@/lib/format'
+import type { FinancialEntry, Order } from '@/lib/types'
 
 const METHOD_LABEL: Record<string, string> = {
   dinheiro: 'Dinheiro',
@@ -25,9 +26,35 @@ const METHOD_LABEL: Record<string, string> = {
   outro: 'Outro',
 }
 
+function orderFinanceDescription(number: number) {
+  return `Comanda #${number}`
+}
+
+function orderDate(order: Order) {
+  return order.createdAt.slice(0, 10)
+}
+
 export default function FinanceiroPage() {
-  const { financialEntries } = useAppData()
-  const entries = [...financialEntries].sort((a, b) => b.date.localeCompare(a.date))
+  const { financialEntries, orders } = useAppData()
+  const registeredOrderEntries = new Set(
+    financialEntries
+      .filter((entry) => entry.category === 'Comandas')
+      .map((entry) => entry.description),
+  )
+  const orderEntries: FinancialEntry[] = orders
+    .filter((order) => order.status === 'paga' && order.total > 0)
+    .filter((order) => !registeredOrderEntries.has(orderFinanceDescription(order.number)))
+    .map((order) => ({
+      id: `order-${order.id}`,
+      barbershopId: order.barbershopId,
+      type: 'entrada',
+      category: 'Comandas',
+      description: orderFinanceDescription(order.number),
+      amount: order.total,
+      method: order.method,
+      date: orderDate(order),
+    }))
+  const entries = [...financialEntries, ...orderEntries].sort((a, b) => b.date.localeCompare(a.date))
   const byMethod = Object.entries(METHOD_LABEL).map(([method, label]) => ({
     method: label,
     value: entries
