@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { type FormEvent, useState } from 'react'
 import {
   ArrowRight,
   BarChart3,
@@ -19,6 +19,17 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { createBrowserSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/client'
+
+const loginTimeoutMs = 15000
+
+function withTimeout<T>(promise: PromiseLike<T>, message: string) {
+  return Promise.race([
+    Promise.resolve(promise),
+    new Promise<never>((_, reject) => {
+      window.setTimeout(() => reject(new Error(message)), loginTimeoutMs)
+    }),
+  ])
+}
 
 export function LoginClient() {
   const router = useRouter()
@@ -41,34 +52,35 @@ export function LoginClient() {
     }
 
     setLoading(true)
-    const supabase = createBrowserSupabaseClient()
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    })
+    try {
+      const supabase = createBrowserSupabaseClient()
+      const { error } = await withTimeout(
+        supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        }),
+        'O login demorou demais para responder. Atualize a página e tente novamente.',
+      )
 
-    setLoading(false)
+      if (error) {
+        setStatus(error.message)
+        return
+      }
 
-    if (error) {
-      setStatus(error.message)
-      return
+      router.push('/dashboard')
+      router.refresh()
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Não foi possível entrar agora. Tente novamente.')
+    } finally {
+      setLoading(false)
     }
+  }
 
-    const { data: memberships, error: membershipError } = await supabase.from('members').select('id').limit(1)
-    if (membershipError) { setStatus(membershipError.message); return }
-    if (!memberships?.length && data.user) {
-      const metadata = data.user.user_metadata ?? {}
-      const { error: onboardingError } = await supabase.rpc('create_barbershop_for_current_user', {
-        barbershop_name: metadata.barbershop_name || 'Minha barbearia',
-        barbershop_city: metadata.barbershop_city || null,
-        owner_name: metadata.owner_name || null,
-        selected_plan: metadata.plan || 'starter',
-        billing_document: metadata.barbershop_document || null,
-      })
-      if (onboardingError) { setStatus(onboardingError.message); return }
+  function submitLogin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!loading) {
+      void signIn()
     }
-
-    router.push('/dashboard')
   }
 
   return (
@@ -142,7 +154,7 @@ export function LoginClient() {
             </div>
           </div>
 
-          <form className="space-y-4" onSubmit={(event) => event.preventDefault()}>
+          <form className="space-y-4" onSubmit={submitLogin}>
             <div className="space-y-2">
               <Label htmlFor="email">E-mail</Label>
               <div className="relative">
@@ -162,8 +174,8 @@ export function LoginClient() {
                 <Input id="password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} className="pl-9" />
               </div>
             </div>
-            {status ? <p className="text-sm font-medium text-muted-foreground">{status}</p> : null}
-            <Button type="button" variant="gold" className="w-full" onClick={signIn} disabled={loading}>
+            {status ? <p className="text-sm font-medium text-destructive">{status}</p> : null}
+            <Button type="submit" variant="gold" className="w-full" disabled={loading}>
               {loading ? 'Entrando...' : 'Entrar no painel'}
               <ArrowRight className="size-4" />
             </Button>

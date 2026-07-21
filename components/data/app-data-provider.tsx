@@ -31,6 +31,16 @@ type AppDataContextValue = AppData & {
 }
 const AppDataContext = React.createContext<AppDataContextValue | null>(null)
 const num = (value: unknown) => Number(value ?? 0)
+const dataLoadTimeoutMs = 20000
+
+function withTimeout<T>(promise: PromiseLike<T>, message: string) {
+  return Promise.race([
+    Promise.resolve(promise),
+    new Promise<never>((_, reject) => {
+      window.setTimeout(() => reject(new Error(message)), dataLoadTimeoutMs)
+    }),
+  ])
+}
 
 export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [value, setValue] = React.useState<AppData | null>(null)
@@ -40,7 +50,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const load = React.useCallback(async () => {
     setError('')
     const supabase = createBrowserSupabaseClient()
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+    const { data: sessionData, error: sessionError } = await withTimeout(
+      supabase.auth.getSession(),
+      'A sessão demorou demais para responder. Atualize a página e tente novamente.',
+    )
     const user = sessionData.session?.user
     if (sessionError || !user) {
       setLoadingMessage('Redirecionando para o login...')
@@ -48,32 +61,41 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       return
     }
 
-    const { data: memberships, error: memberError } = await supabase
-      .from('members')
-      .select('id, barbershop_id, name, email, role, active')
-      .eq('user_id', user.id)
-      .eq('active', true)
-      .limit(1)
+    const { data: memberships, error: memberError } = await withTimeout(
+      supabase
+        .from('members')
+        .select('id, barbershop_id, name, email, role, active')
+        .eq('user_id', user.id)
+        .eq('active', true)
+        .limit(1),
+      'A barbearia demorou demais para carregar. Atualize a página e tente novamente.',
+    )
     if (memberError) { setError(memberError.message); return }
 
     const shopId = memberships?.[0]?.barbershop_id
     if (!shopId) { setError('Esta conta não possui uma barbearia vinculada.'); return }
-    const { data: shop, error: shopError } = await supabase.from('barbershops').select('*').eq('id', shopId).single()
+    const { data: shop, error: shopError } = await withTimeout(
+      supabase.from('barbershops').select('*').eq('id', shopId).single(),
+      'Os dados da unidade demoraram demais para carregar. Atualize a página e tente novamente.',
+    )
     if (shopError || !shop) { setError(shopError?.message ?? 'Barbearia não encontrada.'); return }
 
-    const results = await Promise.all([
-      supabase.from('employees').select('*').eq('barbershop_id', shopId).order('name'),
-      supabase.from('clients').select('*').eq('barbershop_id', shopId).order('name'),
-      supabase.from('catalog_items').select('*').eq('barbershop_id', shopId).order('name'),
-      supabase.from('appointments').select('*').eq('barbershop_id', shopId).order('date').order('start'),
-      supabase.from('orders').select('*').eq('barbershop_id', shopId).order('number', { ascending: false }),
-      supabase.from('order_items').select('*').eq('barbershop_id', shopId),
-      supabase.from('plans').select('*').eq('barbershop_id', shopId).order('name'),
-      supabase.from('subscriptions').select('*').eq('barbershop_id', shopId).order('due_date'),
-      supabase.from('commissions').select('*').eq('barbershop_id', shopId).order('date', { ascending: false }),
-      supabase.from('financial_entries').select('*').eq('barbershop_id', shopId).order('date', { ascending: false }),
-      supabase.from('import_records').select('*').eq('barbershop_id', shopId).order('created_at', { ascending: false }),
-    ])
+    const results = await withTimeout(
+      Promise.all([
+        supabase.from('employees').select('*').eq('barbershop_id', shopId).order('name'),
+        supabase.from('clients').select('*').eq('barbershop_id', shopId).order('name'),
+        supabase.from('catalog_items').select('*').eq('barbershop_id', shopId).order('name'),
+        supabase.from('appointments').select('*').eq('barbershop_id', shopId).order('date').order('start'),
+        supabase.from('orders').select('*').eq('barbershop_id', shopId).order('number', { ascending: false }),
+        supabase.from('order_items').select('*').eq('barbershop_id', shopId),
+        supabase.from('plans').select('*').eq('barbershop_id', shopId).order('name'),
+        supabase.from('subscriptions').select('*').eq('barbershop_id', shopId).order('due_date'),
+        supabase.from('commissions').select('*').eq('barbershop_id', shopId).order('date', { ascending: false }),
+        supabase.from('financial_entries').select('*').eq('barbershop_id', shopId).order('date', { ascending: false }),
+        supabase.from('import_records').select('*').eq('barbershop_id', shopId).order('created_at', { ascending: false }),
+      ]),
+      'Os dados da plataforma demoraram demais para carregar. Atualize a página e tente novamente.',
+    )
     const failed = results.find((result) => result.error)
     if (failed?.error) { setError(failed.error.message); return }
     const [employees, clients, catalog, appointments, orders, orderItems, plans, subscriptions, commissions, financial, imports] = results.map((result) => result.data ?? [])
@@ -145,7 +167,21 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       setError(loadError instanceof Error ? loadError.message : 'Erro inesperado ao carregar os dados.')
     })
   }, [load])
-  if (error) return <main className="grid min-h-screen place-items-center p-6 text-center"><div><h1 className="text-xl font-bold">Não foi possível carregar os dados</h1><p className="mt-2 text-sm text-muted-foreground">{error}</p></div></main>
+  if (error) return (
+    <main className="grid min-h-screen place-items-center p-6 text-center">
+      <div>
+        <h1 className="text-xl font-bold">Não foi possível carregar os dados</h1>
+        <p className="mt-2 text-sm text-muted-foreground">{error}</p>
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+        >
+          Tentar novamente
+        </button>
+      </div>
+    </main>
+  )
   if (!value) return <main className="grid min-h-screen place-items-center text-sm text-muted-foreground">{loadingMessage}</main>
   return <AppDataContext.Provider value={{ ...value, refresh: load, insertRecord, insertMany, updateRecord, deleteRecord }}>{children}</AppDataContext.Provider>
 }
