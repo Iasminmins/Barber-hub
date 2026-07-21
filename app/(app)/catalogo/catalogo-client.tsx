@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useMemo, useState } from "react"
-import { AlertTriangle, Clock, Package, Pencil, Plus, Save, Scissors, Search, Trash2 } from "lucide-react"
+import { AlertTriangle, Clock, Package, Pencil, Plus, Save, Scissors, Search, Trash2, Upload } from "lucide-react"
 import type { CatalogItem, CatalogType } from "@/lib/types"
 import { useAppData } from '@/components/data/app-data-provider'
 import { formatCurrency, formatPercent } from "@/lib/format"
@@ -153,6 +153,10 @@ export function CatalogoClient({ items }: { items: CatalogItem[] }) {
   return (
     <div>
       <PageHeader title="Produtos & Serviços" description="Catálogo, preços, comissões e controle de estoque.">
+        <Link href="/importacao" className={buttonVariants({ variant: "outline" })}>
+          <Upload className="size-4" />
+          Importar CSV
+        </Link>
         <Link href="/catalogo/novo" className={buttonVariants({ variant: "gold" })}>
           <Plus className="size-4" />
           {tab === "servico" ? "Novo serviço" : "Novo produto"}
