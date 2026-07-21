@@ -11,6 +11,7 @@ import type {
   Plan,
   Subscription,
 } from './types'
+import { defaultAgendaSettings, defaultPaymentMethods } from './barbershop-settings'
 
 const emptyBarbershop: Barbershop = {
   id: 'unconfigured',
@@ -22,6 +23,8 @@ const emptyBarbershop: Barbershop = {
   plan: 'starter',
   billingStatus: 'trialing',
   trialEndsAt: '',
+  paymentMethods: defaultPaymentMethods,
+  agendaSettings: defaultAgendaSettings,
 }
 
 export function getBarbershops(): Barbershop[] {

@@ -1,16 +1,18 @@
 'use client'
 
-import { type ChangeEvent, useEffect, useMemo, useState } from 'react'
+import { type ChangeEvent, type ComponentType, useEffect, useMemo, useState } from 'react'
 import {
   Bell,
   Building2,
   CalendarDays,
+  Clock3,
   CreditCard,
   Grid3X3,
   Home,
   ImageUp,
   LogOut,
   Palette,
+  Receipt,
   Save,
   ShieldCheck,
   Trash2,
@@ -28,23 +30,25 @@ import { Dialog, DialogHeader } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
+import { businessDays, defaultAgendaSettings, makePaymentSlug, normalizeAgendaSettings, normalizePaymentMethods, type AgendaSettings, type BusinessDayKey, type PaymentMethodConfig } from '@/lib/barbershop-settings'
 import { formatBillingDocument, onlyDigits } from '@/lib/billing-document'
 import { getSaasPlan, saasPlans, type SaasPlanId } from '@/lib/saas-plans'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 
-type SettingsTab = 'aparencia' | 'inicio' | 'funcionarios' | 'agenda' | 'pagamentos' | 'modulos'
+type SettingsTab = 'aparencia' | 'inicio' | 'funcionarios' | 'agenda' | 'pagamentos' | 'assinatura' | 'modulos'
 
 const brandColors = ['#1E3A32', '#0F766E', '#111827', '#7C2D12', '#B45309', '#4F46E5', '#7E22CE', '#BE123C']
 const employeeColors = ['#1E3A32', '#22C55E', '#D0021B', '#22C55E', '#7C3AED', '#F59E0B', '#0EA5E9', '#64748B']
 const hexColorPattern = /^#[0-9a-f]{6}$/i
 
-const settingsTabs: Array<{ id: SettingsTab; label: string; icon: React.ComponentType<{ className?: string }> }> = [
+const settingsTabs: Array<{ id: SettingsTab; label: string; icon: ComponentType<{ className?: string }> }> = [
   { id: 'aparencia', label: 'Aparência', icon: Palette },
   { id: 'inicio', label: 'Tela inicial', icon: Home },
   { id: 'funcionarios', label: 'Cores dos funcionários', icon: Users },
   { id: 'agenda', label: 'Agenda', icon: CalendarDays },
-  { id: 'pagamentos', label: 'Pagamentos', icon: CreditCard },
+  { id: 'pagamentos', label: 'Pagamentos da barbearia', icon: CreditCard },
+  { id: 'assinatura', label: 'Assinatura BarberHub', icon: Receipt },
   { id: 'modulos', label: 'Módulos', icon: Grid3X3 },
 ]
 
@@ -90,6 +94,8 @@ export default function ConfiguracoesPage() {
     logoUrl: barbershop.logoUrl ?? '',
     billingDocument: formatBillingDocument(barbershop.billingDocument),
   })
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethodConfig[]>(() => normalizePaymentMethods(barbershop.paymentMethods))
+  const [agendaSettings, setAgendaSettings] = useState<AgendaSettings>(() => normalizeAgendaSettings(barbershop.agendaSettings))
 
   const effectiveLogoUrl = logoPreview || shop.logoUrl
   const effectiveColor = useMemo(() => (hexColorPattern.test(shop.color) ? shop.color : '#1E3A32'), [shop.color])
@@ -107,6 +113,8 @@ export default function ConfiguracoesPage() {
     setLogoPreview('')
     setLogoError('')
     setPlanDraft(barbershop.plan)
+    setPaymentMethods(normalizePaymentMethods(barbershop.paymentMethods))
+    setAgendaSettings(normalizeAgendaSettings(barbershop.agendaSettings))
   }, [barbershop])
 
   useEffect(() => {
@@ -152,9 +160,60 @@ export default function ConfiguracoesPage() {
     setSaved(false)
   }
 
+  function updatePaymentMethod(id: string, values: Partial<PaymentMethodConfig>) {
+    setPaymentMethods((current) => current.map((method) => {
+      if (method.id !== id) return method
+      const name = values.name ?? method.name
+      return {
+        ...method,
+        ...values,
+        slug: values.slug ?? (values.name ? makePaymentSlug(name) : method.slug),
+      }
+    }))
+    setSaved(false)
+  }
+
+  function addPaymentMethod() {
+    if (paymentMethods.length >= 8) return
+    const name = 'Novo método'
+    setPaymentMethods((current) => [
+      ...current,
+      { id: `custom-${Date.now()}`, name, slug: makePaymentSlug(name), active: true },
+    ])
+    setSaved(false)
+  }
+
+  function removePaymentMethod(id: string) {
+    setPaymentMethods((current) => current.filter((method) => method.id !== id))
+    setSaved(false)
+  }
+
+  function updateBusinessHour(day: BusinessDayKey, values: Partial<AgendaSettings['businessHours'][BusinessDayKey]>) {
+    setAgendaSettings((current) => ({
+      ...current,
+      businessHours: {
+        ...current.businessHours,
+        [day]: {
+          ...current.businessHours[day],
+          ...values,
+        },
+      },
+    }))
+    setSaved(false)
+  }
+
   async function saveSettings() {
     if (!hexColorPattern.test(shop.color)) {
       window.alert('Informe a cor principal no formato hexadecimal. Exemplo: #1E3A32')
+      return
+    }
+    const cleanPaymentMethods = normalizePaymentMethods(paymentMethods).map((method) => ({
+      ...method,
+      name: method.name.trim(),
+      slug: makePaymentSlug(method.slug || method.name),
+    }))
+    if (cleanPaymentMethods.some((method) => !method.name || !method.slug)) {
+      window.alert('Revise os métodos de pagamento. Nome e identificador são obrigatórios.')
       return
     }
     setSaved(false)
@@ -185,6 +244,11 @@ export default function ConfiguracoesPage() {
       color: shop.color,
       logo_url: logoUrl || null,
       billing_document: onlyDigits(shop.billingDocument) || null,
+      payment_methods: cleanPaymentMethods,
+      agenda_settings: {
+        ...agendaSettings,
+        lowStockAlert: Math.max(0, Number(agendaSettings.lowStockAlert) || defaultAgendaSettings.lowStockAlert),
+      },
     })
     setSaving(false)
     if (result.error) { window.alert(result.error); return }
@@ -266,7 +330,7 @@ export default function ConfiguracoesPage() {
               Ajuste aparência, tela inicial, funcionários, agenda, pagamentos e módulos em áreas separadas.
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-1 p-2 sm:grid-cols-3 xl:grid-cols-6">
+          <div className="grid grid-cols-2 gap-1 p-2 sm:grid-cols-3 xl:grid-cols-7">
             {settingsTabs.map((tab) => {
               const Icon = tab.icon
               const active = activeTab === tab.id
@@ -508,22 +572,85 @@ export default function ConfiguracoesPage() {
         ) : null}
 
         {activeTab === 'agenda' ? (
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="space-y-4">
             <Card className="p-5">
-              <h3 className="mb-4 flex items-center gap-2 font-semibold text-foreground">
+              <h3 className="mb-1 flex items-center gap-2 font-semibold text-foreground">
                 <CalendarDays className="size-4 text-muted-foreground" />
-                Preferências da agenda
+                Configuração da agenda e limite de estoque
               </h3>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="booking">Intervalo padrão da agenda</Label>
-                  <Select id="booking" defaultValue="30">
-                    <option value="15">15 minutos</option>
-                    <option value="30">30 minutos</option>
-                    <option value="45">45 minutos</option>
-                    <option value="60">60 minutos</option>
-                  </Select>
+              <p className="mb-5 text-sm text-muted-foreground">Defina funcionamento, estoque mínimo e regra de comissão da barbearia.</p>
+
+              <div className="space-y-5">
+                <div className="rounded-xl border border-border bg-card p-4">
+                  <Label htmlFor="lowStockAlert">Alerta de estoque baixo (quantidade)</Label>
+                  <Input
+                    id="lowStockAlert"
+                    type="number"
+                    min={0}
+                    className="mt-2"
+                    value={agendaSettings.lowStockAlert}
+                    onChange={(event) => {
+                      setAgendaSettings((current) => ({ ...current, lowStockAlert: Number(event.target.value) }))
+                      setSaved(false)
+                    }}
+                  />
+                  <p className="mt-2 text-xs text-muted-foreground">Produtos com estoque igual ou menor a este valor aparecem nas notificações.</p>
                 </div>
+
+                <div className="rounded-xl border border-border bg-card p-4">
+                  <Label htmlFor="planCommissionMode">Comissão em serviços cobertos por assinatura de cliente</Label>
+                  <Select
+                    id="planCommissionMode"
+                    className="mt-2"
+                    value={agendaSettings.planCommissionMode}
+                    onChange={(event) => {
+                      setAgendaSettings((current) => ({ ...current, planCommissionMode: event.target.value === 'servico' ? 'servico' : 'receita' }))
+                      setSaved(false)
+                    }}
+                  >
+                    <option value="receita">Por receita — serviço coberto pelo plano NÃO gera comissão</option>
+                    <option value="servico">Por serviço — todo atendimento gera comissão</option>
+                  </Select>
+                  <p className="mt-2 text-xs text-muted-foreground">Define se o profissional ganha comissão quando o cliente usa um plano/assinatura já paga.</p>
+                </div>
+
+                <div className="space-y-3">
+                  {businessDays.map((day) => {
+                    const hours = agendaSettings.businessHours[day.key]
+                    return (
+                      <div key={day.key} className="grid gap-3 rounded-xl border border-border bg-card p-4 md:grid-cols-[130px_110px_150px_32px_150px] md:items-center">
+                        <p className="text-base font-semibold text-foreground">{day.label}</p>
+                        <label className="flex items-center gap-2 text-sm font-medium text-foreground">
+                          <input
+                            type="checkbox"
+                            checked={hours.closed}
+                            onChange={(event) => updateBusinessHour(day.key, { closed: event.target.checked })}
+                            className="size-4 accent-[var(--primary)]"
+                          />
+                          Fechado
+                        </label>
+                        <div className="relative">
+                          <Input type="time" value={hours.start} disabled={hours.closed} onChange={(event) => updateBusinessHour(day.key, { start: event.target.value })} />
+                          <Clock3 className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                        </div>
+                        <span className="hidden text-center text-sm text-muted-foreground md:block">até</span>
+                        <div className="relative">
+                          <Input type="time" value={hours.end} disabled={hours.closed} onChange={(event) => updateBusinessHour(day.key, { end: event.target.value })} />
+                          <Clock3 className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </Card>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Card className="p-5">
+                <h3 className="mb-4 flex items-center gap-2 font-semibold text-foreground">
+                  <CalendarDays className="size-4 text-muted-foreground" />
+                  Preferências rápidas
+                </h3>
                 <div className="grid gap-3 sm:grid-cols-2">
                   {['Mostrar agenda por barbeiro', 'Permitir encaixes', 'Destacar horários livres', 'Avisar atraso no atendimento'].map((label, index) => (
                     <label key={label} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card p-3 text-sm">
@@ -532,35 +659,81 @@ export default function ConfiguracoesPage() {
                     </label>
                   ))}
                 </div>
-              </div>
-            </Card>
-            <Card className="p-5">
-              <h3 className="mb-4 flex items-center gap-2 font-semibold text-foreground">
-                <Bell className="size-4 text-muted-foreground" />
-                Notificações operacionais
-              </h3>
-              <div className="space-y-3">
-                {[
-                  'Lembrar cliente antes do horário',
-                  'Avisar estoque abaixo do mínimo',
-                  'Alertar assinatura vencendo',
-                  'Enviar resumo financeiro diário',
-                ].map((label, index) => (
-                  <label key={label} className="flex items-center justify-between gap-3 text-sm">
-                    <span className="text-muted-foreground">{label}</span>
-                    <input
-                      type="checkbox"
-                      defaultChecked={index < 3 || currentPlan.features.advancedReports}
-                      className="size-4 accent-[var(--primary)]"
-                    />
-                  </label>
-                ))}
-              </div>
-            </Card>
+              </Card>
+              <Card className="p-5">
+                <h3 className="mb-4 flex items-center gap-2 font-semibold text-foreground">
+                  <Bell className="size-4 text-muted-foreground" />
+                  Notificações operacionais
+                </h3>
+                <div className="space-y-3">
+                  {[
+                    'Lembrar cliente antes do horário',
+                    'Avisar estoque abaixo do mínimo',
+                    'Alertar assinatura de cliente vencendo',
+                    'Enviar resumo financeiro diário',
+                  ].map((label, index) => (
+                    <label key={label} className="flex items-center justify-between gap-3 text-sm">
+                      <span className="text-muted-foreground">{label}</span>
+                      <input type="checkbox" defaultChecked={index < 3 || currentPlan.features.advancedReports} className="size-4 accent-[var(--primary)]" />
+                    </label>
+                  ))}
+                </div>
+              </Card>
+            </div>
           </div>
         ) : null}
 
         {activeTab === 'pagamentos' ? (
+          <Card className="p-5">
+            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h3 className="mb-1 flex items-center gap-2 font-semibold text-foreground">
+                  <CreditCard className="size-4 text-muted-foreground" />
+                  Métodos de pagamento da barbearia
+                </h3>
+                <p className="text-sm text-muted-foreground">Gerencie as formas aceitas no fechamento de comandas, agendamentos e vendas da barbearia.</p>
+              </div>
+              <Button type="button" onClick={addPaymentMethod} disabled={paymentMethods.length >= 8}>
+                + Adicionar método
+              </Button>
+            </div>
+
+            <div className="overflow-hidden rounded-xl border border-border">
+              <div className="hidden grid-cols-[1fr_1fr_110px_80px] gap-3 border-b border-border bg-muted/30 px-4 py-3 text-sm font-semibold text-foreground md:grid">
+                <span>Nome</span>
+                <span>Identificador (slug)</span>
+                <span>Status</span>
+                <span className="text-right">Ações</span>
+              </div>
+              <div className="divide-y divide-border">
+                {paymentMethods.map((method) => (
+                  <div key={method.id} className="grid gap-3 p-4 md:grid-cols-[1fr_1fr_110px_80px] md:items-center">
+                    <div className="space-y-1">
+                      <Label className="md:sr-only">Nome</Label>
+                      <Input value={method.name} onChange={(event) => updatePaymentMethod(method.id, { name: event.target.value })} placeholder="Ex.: PIX" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="md:sr-only">Identificador</Label>
+                      <Input value={method.slug} onChange={(event) => updatePaymentMethod(method.id, { slug: makePaymentSlug(event.target.value) })} placeholder="PIX" />
+                    </div>
+                    <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <input type="checkbox" checked={method.active} onChange={(event) => updatePaymentMethod(method.id, { active: event.target.checked })} className="size-4 accent-[var(--primary)]" />
+                      Ativo
+                    </label>
+                    <div className="flex justify-end">
+                      <Button type="button" variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => removePaymentMethod(method.id)} disabled={paymentMethods.length <= 1} title="Remover método">
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <p className="mt-4 text-xs text-muted-foreground">Você pode cadastrar até 8 métodos. Esta aba é da operação da barbearia; a mensalidade do BarberHub fica em “Assinatura BarberHub”.</p>
+          </Card>
+        ) : null}
+
+        {activeTab === 'assinatura' ? (
           <div className="grid gap-4 xl:grid-cols-[1fr_360px]">
             <BillingCard planId={barbershop.plan} />
             <Card className="p-5">
@@ -587,6 +760,9 @@ export default function ConfiguracoesPage() {
                 Alterar plano
               </Button>
               {planMessage ? <p className="mt-2 text-xs text-muted-foreground">{planMessage}</p> : null}
+              <div className="mt-4 rounded-md border border-border bg-muted/30 p-3 text-xs leading-5 text-muted-foreground">
+                Esta é a assinatura que a empresa paga para usar o BarberHub. Ela não altera os métodos de pagamento usados no caixa da barbearia.
+              </div>
             </Card>
           </div>
         ) : null}

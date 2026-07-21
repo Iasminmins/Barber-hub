@@ -6,6 +6,8 @@
  * isolation once Row Level Security is wired up.
  */
 
+import type { AgendaSettings, PaymentMethodConfig } from '@/lib/barbershop-settings'
+
 export type Role = 'owner' | 'manager' | 'barber' | 'reception'
 
 export type PaymentMethod = 'dinheiro' | 'pix' | 'credito' | 'debito' | 'outro'
@@ -22,6 +24,8 @@ export interface Barbershop {
   billingStatus: 'trialing' | 'active' | 'past_due' | 'canceled'
   trialEndsAt: string
   nextBillingDate?: string
+  paymentMethods: PaymentMethodConfig[]
+  agendaSettings: AgendaSettings
 }
 
 export interface Member {

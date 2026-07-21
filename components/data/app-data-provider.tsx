@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
+import { defaultAgendaSettings, defaultPaymentMethods, normalizeAgendaSettings, normalizePaymentMethods } from '@/lib/barbershop-settings'
 import type { Appointment, Barbershop, CatalogItem, Client, Commission, Employee, FinancialEntry, ImportRecord, Member, Order, Plan, Subscription } from '@/lib/types'
 
 type AppData = {
@@ -19,7 +20,7 @@ type AppData = {
   imports: ImportRecord[]
 }
 
-const fallbackShop: Barbershop = { id: '', name: '', slug: '', color: '#1E3A32', city: '', logoUrl: '', billingDocument: '', plan: 'starter', billingStatus: 'trialing', trialEndsAt: '' }
+const fallbackShop: Barbershop = { id: '', name: '', slug: '', color: '#1E3A32', city: '', logoUrl: '', billingDocument: '', plan: 'starter', billingStatus: 'trialing', trialEndsAt: '', paymentMethods: defaultPaymentMethods, agendaSettings: defaultAgendaSettings }
 type MutationResult = { error?: string; data?: any }
 type AppDataContextValue = AppData & {
   refresh: () => Promise<void>
@@ -90,6 +91,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         billingStatus: shop.billing_status ?? 'trialing',
         trialEndsAt: shop.trial_ends_at ?? shop.created_at,
         nextBillingDate: shop.next_billing_date ?? undefined,
+        paymentMethods: normalizePaymentMethods(shop.payment_methods),
+        agendaSettings: normalizeAgendaSettings(shop.agenda_settings),
       },
       member: { id: memberships[0].id, barbershopId: shopId, name: memberships[0].name, email: memberships[0].email, role: memberships[0].role, active: memberships[0].active },
       employees: employees.map((r: any) => ({ id:r.id, barbershopId:r.barbershop_id, name:r.name, role:r.role, phone:r.phone??'', email:r.email??'', active:r.active, serviceCommission:num(r.service_commission), productCommission:num(r.product_commission), subscriptionCommission:num(r.subscription_commission), avatarColor:r.avatar_color??undefined })),
