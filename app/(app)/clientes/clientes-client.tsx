@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/table"
 import { useAppData } from '@/components/data/app-data-provider'
 
-type Filter = "todos" | "vip" | "recorrente" | "inadimplente" | "inativo"
+type Filter = "todos" | "vip" | "recorrente" | "aniversariante" | "inadimplente" | "inativo"
 type ClientDraft = { id:string; name:string; phone:string; email:string; birthDate:string; preferredBarber:string; address:string; notes:string; tags:ClientTag[] }
 
 const TAG_LABEL: Record<ClientTag, string> = {
@@ -36,6 +36,13 @@ const TAG_LABEL: Record<ClientTag, string> = {
   inativo: "Inativo",
   inadimplente: "Inadimplente",
   aniversariante: "Aniversariante",
+}
+
+function isBirthdayThisMonth(birthDate: string) {
+  if (!birthDate) return false
+  const date = new Date(`${birthDate}T00:00:00`)
+  if (Number.isNaN(date.getTime())) return false
+  return date.getMonth() === new Date().getMonth()
 }
 
 export function ClientesClient({ clients }: { clients: Client[] }) {
@@ -57,7 +64,9 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
         c.name.toLowerCase().includes(q) ||
         c.phone.toLowerCase().includes(q) ||
         c.email.toLowerCase().includes(q)
-      const matchesFilter = filter === "todos" || c.tags.includes(filter as ClientTag)
+      const matchesFilter =
+        filter === "todos" ||
+        (filter === "aniversariante" ? c.tags.includes("aniversariante") || isBirthdayThisMonth(c.birthDate) : c.tags.includes(filter as ClientTag))
       return matchesQuery && matchesFilter
     })
   }, [records, query, filter])
@@ -92,6 +101,7 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
     { key: "todos", label: "Todos" },
     { key: "vip", label: "VIP" },
     { key: "recorrente", label: "Recorrentes" },
+    { key: "aniversariante", label: "Aniversariantes" },
     { key: "inadimplente", label: "Inadimplentes" },
     { key: "inativo", label: "Inativos" },
   ]
