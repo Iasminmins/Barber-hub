@@ -32,7 +32,9 @@ export default function FuncionariosPage() {
   const [editStatus, setEditStatus] = useState('')
   const commissions = appData.commissions
   const ranking = employees.map((employee) => ({
+    id: employee.id,
     name: employee.name,
+    color: employee.avatarColor,
     services: commissions.filter((item) => item.employeeId === employee.id && item.origin === 'servico').length,
     revenue: commissions.filter((item) => item.employeeId === employee.id).reduce((sum, item) => sum + item.base, 0),
   })).sort((a, b) => b.revenue - a.revenue)
@@ -120,7 +122,7 @@ export default function FuncionariosPage() {
                 <TableRow key={employee.id}>
                   <TableCell>
                     <div className="flex items-center gap-3">
-                      <Avatar name={employee.name} />
+                      <Avatar name={employee.name} color={employee.avatarColor} />
                       <div>
                         <p className="font-medium text-foreground">{employee.name}</p>
                         <p className="text-xs text-muted-foreground">{employee.role}</p>
@@ -160,7 +162,10 @@ export default function FuncionariosPage() {
             {ranking.map((item, index) => (
               <div key={item.name} className="flex items-center gap-3">
                 <span className="flex size-7 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">{index + 1}</span>
-                <span className="flex size-9 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                <span
+                  className="flex size-9 items-center justify-center rounded-lg bg-muted text-muted-foreground"
+                  style={item.color ? { backgroundColor: `${item.color}1A`, color: item.color } : undefined}
+                >
                   {index === 0 ? <Trophy className="size-4" /> : <Scissors className="size-4" />}
                 </span>
                 <div className="min-w-0 flex-1">

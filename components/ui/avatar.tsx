@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 interface AvatarProps extends React.HTMLAttributes<HTMLDivElement> {
   name?: string
   src?: string
+  color?: string
 }
 
 function initials(name?: string) {
@@ -15,13 +16,22 @@ function initials(name?: string) {
   return (first + last).toUpperCase()
 }
 
-function Avatar({ className, name, src, ...props }: AvatarProps) {
+function Avatar({ className, name, src, color, style, ...props }: AvatarProps) {
+  const colorStyle = color && !src
+    ? {
+        backgroundColor: `${color}1A`,
+        color,
+        ...style,
+      }
+    : style
+
   return (
     <div
       className={cn(
         'relative flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/10 text-xs font-semibold text-primary',
         className,
       )}
+      style={colorStyle}
       {...props}
     >
       {src ? (
