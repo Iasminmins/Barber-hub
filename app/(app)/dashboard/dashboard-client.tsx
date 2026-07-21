@@ -58,20 +58,6 @@ function isInsideRange(date: string, range: DateRange) {
   return Boolean(key && key >= range.start && key <= range.end)
 }
 
-function dateFromKey(key: string) {
-  return new Date(`${key}T00:00:00`)
-}
-
-function getLatestOrderDate(orders: Order[]) {
-  const latest = orders
-    .map((order) => toDateKey(order.createdAt))
-    .filter(Boolean)
-    .sort()
-    .at(-1)
-
-  return latest ? dateFromKey(latest) : new Date()
-}
-
 function getRangeDays(range: DateRange) {
   const start = new Date(`${range.start}T00:00:00`)
   const end = new Date(`${range.end}T00:00:00`)
@@ -182,19 +168,13 @@ export function DashboardClient({
 }) {
   const dashboardOrders = orders
   const dashboardAppointments = appointments
-  const latestOrderDate = React.useMemo(() => getLatestOrderDate(dashboardOrders), [dashboardOrders])
   const [period, setPeriod] = React.useState<Period>('mes')
-  const [range, setRange] = React.useState<DateRange>(() => getDefaultRange('mes', latestOrderDate))
-
-  React.useEffect(() => {
-    if (period === 'personalizado') return
-    setRange(getDefaultRange(period, latestOrderDate))
-  }, [latestOrderDate, period])
+  const [range, setRange] = React.useState<DateRange>(() => getDefaultRange('mes'))
 
   function handlePeriodChange(nextPeriod: Period) {
     setPeriod(nextPeriod)
     if (nextPeriod !== 'personalizado') {
-      setRange(getDefaultRange(nextPeriod, latestOrderDate))
+      setRange(getDefaultRange(nextPeriod))
     }
   }
 

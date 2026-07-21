@@ -32,6 +32,7 @@ type AppDataContextValue = AppData & {
 const AppDataContext = React.createContext<AppDataContextValue | null>(null)
 const num = (value: unknown) => Number(value ?? 0)
 const dataLoadTimeoutMs = 20000
+const supabasePageSize = 1000
 const defaultPlanRules: PlanRules = { cycle: 'mensal', cycleDays: 30, includedServices: [] }
 
 function normalizePlanRules(value: unknown): PlanRules {
@@ -104,14 +105,26 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     )
     if (shopError || !shop) { setError(shopError?.message ?? 'Barbearia não encontrada.'); return }
 
+    async function fetchAllRows(buildQuery: (from: number, to: number) => any) {
+      const allRows: any[] = []
+      for (let from = 0; ; from += supabasePageSize) {
+        const to = from + supabasePageSize - 1
+        const result = await buildQuery(from, to)
+        if (result.error) return result
+        const page = result.data ?? []
+        allRows.push(...page)
+        if (page.length < supabasePageSize) return { data: allRows, error: null }
+      }
+    }
+
     const results = await withTimeout(
       Promise.all([
         supabase.from('employees').select('*').eq('barbershop_id', shopId).order('name'),
-        supabase.from('clients').select('*').eq('barbershop_id', shopId).order('name'),
+        fetchAllRows((from, to) => supabase.from('clients').select('*').eq('barbershop_id', shopId).order('name').range(from, to)),
         supabase.from('catalog_items').select('*').eq('barbershop_id', shopId).order('name'),
         supabase.from('appointments').select('*').eq('barbershop_id', shopId).order('date').order('start'),
-        supabase.from('orders').select('*').eq('barbershop_id', shopId).order('number', { ascending: false }),
-        supabase.from('order_items').select('*').eq('barbershop_id', shopId),
+        fetchAllRows((from, to) => supabase.from('orders').select('*').eq('barbershop_id', shopId).order('created_at', { ascending: false }).range(from, to)),
+        fetchAllRows((from, to) => supabase.from('order_items').select('*').eq('barbershop_id', shopId).range(from, to)),
         supabase.from('plans').select('*').eq('barbershop_id', shopId).order('name'),
         supabase.from('subscriptions').select('*').eq('barbershop_id', shopId).order('due_date'),
         supabase.from('commissions').select('*').eq('barbershop_id', shopId).order('date', { ascending: false }),

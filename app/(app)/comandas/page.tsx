@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/table'
 import { useAppData } from '@/components/data/app-data-provider'
 import { formatCurrency, formatDate } from '@/lib/format'
+import type { Order } from '@/lib/types'
 
 const METHOD_LABEL: Record<string, string> = {
   dinheiro: 'Dinheiro',
@@ -57,6 +58,13 @@ function getLatestOrderMonth(orders: { createdAt: string }[]) {
   return latest ? latest.slice(0, 7) : todayKey().slice(0, 7)
 }
 
+function sortOrdersByDate(orders: Order[]) {
+  return [...orders].sort((a, b) => {
+    const dateComparison = toDateKey(b.createdAt).localeCompare(toDateKey(a.createdAt))
+    return dateComparison || b.number - a.number
+  })
+}
+
 function formatOrderDateTime(value: string) {
   if (!value) return '-'
   const date = new Date(value)
@@ -72,11 +80,11 @@ function formatOrderDateTime(value: string) {
 
 export default function ComandasPage() {
   const { orders: databaseOrders, deleteRecord } = useAppData()
-  const [orders, setOrders] = useState(() => [...databaseOrders].sort((a, b) => b.number - a.number))
+  const [orders, setOrders] = useState(() => sortOrdersByDate(databaseOrders))
   const [selectedMonth, setSelectedMonth] = useState(() => getLatestOrderMonth(databaseOrders))
 
   useEffect(() => {
-    const nextOrders = [...databaseOrders].sort((a, b) => b.number - a.number)
+    const nextOrders = sortOrdersByDate(databaseOrders)
     setOrders(nextOrders)
     setSelectedMonth((current) => {
       if (current && nextOrders.some((order) => toMonthKey(order.createdAt) === current)) return current
