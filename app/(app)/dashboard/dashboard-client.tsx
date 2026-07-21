@@ -131,9 +131,26 @@ function buildRevenueByMethod(orders: Order[], range: DateRange) {
 
 function buildRanking(orders: Order[], employees: Employee[], range: DateRange) {
   const map = new Map<string, { name: string; revenue: number; services: number }>()
+  const employeeKeyByName = new Map(
+    employees.map((employee) => [
+      employee.name
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s+/g, ' '),
+      employee.id,
+    ]),
+  )
   for (const order of orders) {
     if (order.status !== 'paga' || !isInsideRange(order.createdAt, range)) continue
-    const key = order.employeeId || `name:${order.employeeName}`
+    const normalizedName = order.employeeName
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, ' ')
+    const key = order.employeeId || employeeKeyByName.get(normalizedName) || `name:${normalizedName}`
     const cur = map.get(key) ?? { name: order.employeeName, revenue: 0, services: 0 }
     cur.revenue += order.total
     cur.services += order.items.filter((item) => item.type === 'servico').length
