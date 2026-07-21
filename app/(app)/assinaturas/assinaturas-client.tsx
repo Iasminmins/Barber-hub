@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import Link from 'next/link'
-import { CreditCard, Edit3, Pencil, Plus, Repeat, Save, Users } from 'lucide-react'
+import { CalendarDays, CreditCard, DollarSign, Edit3, ListChecks, Pencil, Plus, ReceiptText, Repeat, Save, Search, TrendingUp, Users } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { StatusBadge } from '@/components/status-badge'
 import { Badge } from '@/components/ui/badge'
@@ -24,10 +24,10 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { daysUntil, formatCurrency, formatDate } from '@/lib/format'
-import type { Plan, Subscription, SubscriptionStatus } from '@/lib/types'
+import type { CatalogItem, FinancialEntry, Plan, PlanCycle, PlanRules, Subscription, SubscriptionStatus } from '@/lib/types'
 import { useAppData } from '@/components/data/app-data-provider'
 
-type View = 'assinaturas' | 'planos'
+type View = 'assinaturas' | 'planos' | 'financeiro'
 type SubscriptionDraft = { id:string; clientId:string; planId:string; price:string; startDate:string; dueDate:string; status:SubscriptionStatus; creditsUsed:string; creditsTotal:string }
 
 type PlanDraft = {
@@ -38,6 +38,10 @@ type PlanDraft = {
   credits: string
   description: string
   active: boolean
+  cycle: PlanCycle
+  cycleDays: string
+  globalServiceLimit: string
+  includedServices: Array<{ serviceId: string; limit: string }>
 }
 
 const emptyDraft: PlanDraft = {
@@ -47,7 +51,18 @@ const emptyDraft: PlanDraft = {
   credits: '',
   description: '',
   active: true,
+  cycle: 'mensal',
+  cycleDays: '30',
+  globalServiceLimit: '',
+  includedServices: [],
 }
+
+const cycleOptions: Array<{ value: PlanCycle; label: string; days: number }> = [
+  { value: 'mensal', label: 'Mensal', days: 30 },
+  { value: 'trimestral', label: 'Trimestral', days: 90 },
+  { value: 'semestral', label: 'Semestral', days: 180 },
+  { value: 'anual', label: 'Anual', days: 365 },
+]
 
 function parseMoney(value: string) {
   const normalized = value.replace(/\./g, '').replace(',', '.').replace(/[^\d.]/g, '')
@@ -55,6 +70,7 @@ function parseMoney(value: string) {
 }
 
 function toDraft(plan: Plan): PlanDraft {
+  const rules = plan.rules ?? { cycle: 'mensal', cycleDays: 30, includedServices: [] }
   return {
     id: plan.id,
     name: plan.name,
@@ -63,13 +79,57 @@ function toDraft(plan: Plan): PlanDraft {
     credits: plan.credits ? String(plan.credits) : '',
     description: plan.description,
     active: plan.active,
+    cycle: rules.cycle,
+    cycleDays: String(rules.cycleDays),
+    globalServiceLimit: rules.globalServiceLimit ? String(rules.globalServiceLimit) : '',
+    includedServices: rules.includedServices.map((service) => ({
+      serviceId: service.serviceId,
+      limit: service.limit ? String(service.limit) : '',
+    })),
   }
 }
 
+function toPlanRules(draft: PlanDraft): PlanRules {
+  const cycle = cycleOptions.find((option) => option.value === draft.cycle) ?? cycleOptions[0]
+  const cycleDays = Number(draft.cycleDays || cycle.days) || cycle.days
+  const globalServiceLimit = Number(draft.globalServiceLimit || 0) || undefined
+
+  return {
+    cycle: draft.cycle,
+    cycleDays,
+    globalServiceLimit,
+    includedServices: draft.includedServices.map((service) => ({
+      serviceId: service.serviceId,
+      limit: Number(service.limit || 0) || undefined,
+    })),
+  }
+}
+
+const PAYMENT_METHOD_LABEL: Record<string, string> = {
+  dinheiro: 'Dinheiro',
+  pix: 'Pix',
+  credito: 'Credito',
+  debito: 'Debito',
+  outro: 'Outro',
+}
+
+function isSubscriptionRevenue(entry: FinancialEntry) {
+  const text = `${entry.category} ${entry.description}`
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+
+  return entry.type === 'entrada' && (text.includes('assinatura') || text.includes('plano'))
+}
+
 export function AssinaturasClient({
+  catalog,
+  financialEntries,
   plans: initialPlans,
   subscriptions,
 }: {
+  catalog: CatalogItem[]
+  financialEntries: FinancialEntry[]
   plans: Plan[]
   subscriptions: Subscription[]
 }) {
@@ -79,10 +139,24 @@ export function AssinaturasClient({
   const [subscriptionRecords, setSubscriptionRecords] = React.useState(subscriptions)
   const [editingSubscription, setEditingSubscription] = React.useState<SubscriptionDraft | null>(null)
   const [subscriptionStatus, setSubscriptionStatus] = React.useState('')
+  const [saleSearch, setSaleSearch] = React.useState('')
   const [draft, setDraft] = React.useState<PlanDraft>(emptyDraft)
+  const [planDialogOpen, setPlanDialogOpen] = React.useState(false)
+  const [planDraftTab, setPlanDraftTab] = React.useState<'basicos' | 'regras'>('basicos')
   const active = subscriptionRecords.filter((s) => s.status === 'ativo' || s.status === 'vencendo')
   const overdue = subscriptionRecords.filter((s) => s.status === 'vencido')
+  const services = catalog.filter((item) => item.type === 'servico' && item.active)
   const mrr = active.reduce((sum, sub) => sum + sub.price, 0)
+  const subscriptionSales = React.useMemo(
+    () => financialEntries.filter(isSubscriptionRevenue).sort((a, b) => b.date.localeCompare(a.date)),
+    [financialEntries],
+  )
+  const totalSubscriptionRevenue = subscriptionSales.reduce((sum, entry) => sum + entry.amount, 0)
+  const filteredSubscriptionSales = subscriptionSales.filter((entry) => {
+    const query = saleSearch.trim().toLowerCase()
+    if (!query) return true
+    return `${entry.description} ${entry.category} ${entry.method ?? ''}`.toLowerCase().includes(query)
+  })
   const editing = Boolean(draft.id)
 
   React.useEffect(() => {
@@ -95,16 +169,42 @@ export function AssinaturasClient({
 
   function resetDraft() {
     setDraft(emptyDraft)
+    setPlanDraftTab('basicos')
+  }
+
+  function openPlanDialog(plan?: Plan) {
+    setDraft(plan ? toDraft(plan) : emptyDraft)
+    setPlanDraftTab('basicos')
+    setPlanDialogOpen(true)
+  }
+
+  function toggleDraftService(serviceId: string, checked: boolean) {
+    setDraft((current) => ({
+      ...current,
+      includedServices: checked
+        ? [...current.includedServices, { serviceId, limit: '' }]
+        : current.includedServices.filter((service) => service.serviceId !== serviceId),
+    }))
+  }
+
+  function setDraftServiceLimit(serviceId: string, limit: string) {
+    setDraft((current) => ({
+      ...current,
+      includedServices: current.includedServices.map((service) =>
+        service.serviceId === serviceId ? { ...service, limit } : service,
+      ),
+    }))
   }
 
   async function savePlan() {
     const price = parseMoney(draft.price)
     const credits = Number(draft.credits || 0) || undefined
+    const rules = toPlanRules(draft)
 
     if (!draft.name.trim()) return
 
     if (draft.id) {
-      const result = await updateRecord('plans', draft.id, { name: draft.name.trim(), price, type: draft.type, credits: draft.type === 'mensal' ? null : credits, description: draft.description.trim() || null, active: draft.active })
+      const result = await updateRecord('plans', draft.id, { name: draft.name.trim(), price, type: draft.type, credits: draft.type === 'mensal' ? null : credits, description: draft.description.trim() || null, active: draft.active, rules })
       if (result.error) { window.alert(result.error); return }
       setPlans((current) =>
         current.map((plan) =>
@@ -117,12 +217,13 @@ export function AssinaturasClient({
                 credits: draft.type === 'mensal' ? undefined : credits,
                 description: draft.description.trim(),
                 active: draft.active,
+                rules,
               }
             : plan,
         ),
       )
     } else {
-      const result = await insertRecord('plans', { barbershop_id: barbershop.id, name: draft.name.trim(), price, type: draft.type, credits: draft.type === 'mensal' ? null : credits, description: draft.description.trim() || null, active: draft.active })
+      const result = await insertRecord('plans', { barbershop_id: barbershop.id, name: draft.name.trim(), price, type: draft.type, credits: draft.type === 'mensal' ? null : credits, description: draft.description.trim() || null, active: draft.active, rules })
       if (result.error || !result.data) { window.alert(result.error ?? 'Não foi possível salvar o plano.'); return }
       const next: Plan = {
         id: result.data.id,
@@ -133,11 +234,13 @@ export function AssinaturasClient({
         credits: draft.type === 'mensal' ? undefined : credits,
         description: draft.description.trim(),
         active: draft.active,
+        rules,
       }
       setPlans((current) => [next, ...current])
     }
 
     resetDraft()
+    setPlanDialogOpen(false)
     setView('planos')
   }
 
@@ -176,34 +279,35 @@ export function AssinaturasClient({
           items={[
             { value: 'assinaturas', label: 'Assinaturas' },
             { value: 'planos', label: 'Planos' },
+            { value: 'financeiro', label: 'Financeiro' },
           ]}
           value={view}
           onValueChange={(value) => setView(value as View)}
         />
         {view === 'planos' && (
-          <Button variant="outline" size="sm" onClick={resetDraft}>
+          <Button variant="outline" size="sm" onClick={() => openPlanDialog()}>
             <Plus className="size-4" />
             Escrever novo plano
           </Button>
         )}
       </div>
 
-      <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Card className="p-4">
-          <p className="text-sm text-muted-foreground">Receita recorrente</p>
-          <p className="mt-1 text-2xl font-bold text-foreground">{formatCurrency(mrr)}</p>
+      <div className="mb-4 grid gap-3 lg:grid-cols-2">
+        <Card className="min-h-40 border-primary/10 bg-primary/5 p-6">
+          <div className="flex items-start justify-between gap-3">
+            <p className="font-semibold text-foreground">Assinantes Ativos</p>
+            <Users className="size-5 text-primary" />
+          </div>
+          <p className="mt-10 text-3xl font-bold tabular-nums text-foreground">{active.length}</p>
+          <p className="text-sm text-muted-foreground">{overdue.length} vencidas</p>
         </Card>
-        <Card className="p-4">
-          <p className="text-sm text-muted-foreground">Assinaturas ativas</p>
-          <p className="mt-1 text-2xl font-bold text-foreground">{active.length}</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-sm text-muted-foreground">Vencidas</p>
-          <p className="mt-1 text-2xl font-bold text-foreground">{overdue.length}</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-sm text-muted-foreground">Planos ativos</p>
-          <p className="mt-1 text-2xl font-bold text-foreground">{plans.filter((p) => p.active).length}</p>
+        <Card className="min-h-40 border-pink-100 bg-pink-50/80 p-6">
+          <div className="flex items-start justify-between gap-3">
+            <p className="font-semibold text-foreground">Receita Estimada (Ciclo)</p>
+            <TrendingUp className="size-5 text-pink-500" />
+          </div>
+          <p className="mt-10 text-3xl font-bold tabular-nums text-foreground">{formatCurrency(mrr)}</p>
+          <p className="text-sm text-muted-foreground">Baseado em assinaturas ativas</p>
         </Card>
       </div>
 
@@ -263,15 +367,15 @@ export function AssinaturasClient({
             </TableBody>
           </Table>
         </Card>
-      ) : (
-        <div className="grid gap-4 lg:grid-cols-[1fr_420px]">
-          <div className="grid gap-4 xl:grid-cols-2">
+      ) : view === 'planos' ? (
+        <div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {plans.map((plan) => (
-              <Card key={plan.id} className="p-4">
+              <Card key={plan.id} className="flex min-h-72 flex-col justify-between overflow-hidden p-5">
                 <div className="mb-3 flex items-start justify-between gap-3">
                   <div>
-                    <h3 className="font-semibold text-foreground">{plan.name}</h3>
-                    <p className="text-sm text-muted-foreground">{plan.description}</p>
+                    <h3 className="truncate text-lg font-semibold text-foreground">{plan.name}</h3>
+                    <p className="mt-1 line-clamp-2 min-h-10 text-sm text-muted-foreground">{plan.description || 'Sem descricao externa.'}</p>
                   </div>
                   <StatusBadge status={plan.active ? 'ativo' : 'cancelado'} />
                 </div>
@@ -281,9 +385,30 @@ export function AssinaturasClient({
                     {plan.type}
                     {plan.credits ? ` · ${plan.credits} créditos` : ''}
                   </span>
-                  <span className="text-lg font-bold text-foreground">{formatCurrency(plan.price)}</span>
+                  <span className="text-2xl font-bold tabular-nums text-foreground">{formatCurrency(plan.price)}</span>
                 </div>
-                <Button variant="outline" size="sm" className="w-full" onClick={() => setDraft(toDraft(plan))}>
+                <div className="mb-4 grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-md border border-border bg-muted/30 p-3">
+                    <CalendarDays className="mb-2 size-4 text-muted-foreground" />
+                    <p className="text-xs text-muted-foreground">Ciclo</p>
+                    <p className="mt-1 text-sm font-semibold text-foreground">
+                      {cycleOptions.find((option) => option.value === plan.rules?.cycle)?.label ?? 'Mensal'}
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-border bg-muted/30 p-3">
+                    <TrendingUp className="mb-2 size-4 text-muted-foreground" />
+                    <p className="text-xs text-muted-foreground">Limite</p>
+                    <p className="mt-1 text-sm font-semibold text-foreground">
+                      {plan.rules?.globalServiceLimit ? `${plan.rules.globalServiceLimit}/ciclo` : 'Sem teto'}
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-border bg-muted/30 p-3">
+                    <ListChecks className="mb-2 size-4 text-muted-foreground" />
+                    <p className="text-xs text-muted-foreground">Servicos</p>
+                    <p className="mt-1 text-sm font-semibold text-foreground">{plan.rules?.includedServices.length ?? 0}</p>
+                  </div>
+                </div>
+                <Button variant="outline" size="sm" className="w-full" onClick={() => openPlanDialog(plan)}>
                   <Edit3 className="size-4" />
                   Editar plano
                 </Button>
@@ -291,7 +416,7 @@ export function AssinaturasClient({
             ))}
           </div>
 
-          <Card className="h-fit p-5">
+          <Card className="hidden h-fit p-5">
             <h2 className="mb-1 font-semibold text-foreground">
               {editing ? 'Editar plano' : 'Escrever novo plano'}
             </h2>
@@ -376,7 +501,262 @@ export function AssinaturasClient({
             </div>
           </Card>
         </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="grid gap-4 lg:grid-cols-3">
+            <Card className="p-6">
+              <div className="flex items-start justify-between gap-3">
+                <p className="font-semibold text-success">Receita Total de Assinaturas</p>
+                <DollarSign className="size-5 text-success" />
+              </div>
+              <p className="mt-10 text-3xl font-bold tabular-nums text-success">
+                {formatCurrency(totalSubscriptionRevenue)}
+              </p>
+              <p className="text-sm text-muted-foreground">Todo o historico recebido</p>
+            </Card>
+            <Card className="p-6">
+              <div className="flex items-start justify-between gap-3">
+                <p className="font-semibold text-foreground">Receita Recorrente (MRR Est.)</p>
+                <TrendingUp className="size-5 text-muted-foreground" />
+              </div>
+              <p className="mt-10 text-3xl font-bold tabular-nums text-foreground">{formatCurrency(mrr)}</p>
+              <p className="text-sm text-muted-foreground">Baseado nas assinaturas ativas hoje</p>
+            </Card>
+            <Card className="p-6">
+              <div className="flex items-start justify-between gap-3">
+                <p className="font-semibold text-foreground">Vendas Realizadas</p>
+                <CreditCard className="size-5 text-muted-foreground" />
+              </div>
+              <p className="mt-10 text-3xl font-bold tabular-nums text-foreground">{subscriptionSales.length}</p>
+              <p className="text-sm text-muted-foreground">Planos vendidos ou renovados</p>
+            </Card>
+          </div>
+
+          <Card className="overflow-hidden">
+            <div className="flex flex-col gap-3 border-b border-border p-5 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-foreground">Historico de Vendas</h2>
+                <p className="text-sm text-muted-foreground">Clique em uma venda para ver detalhes de uso.</p>
+              </div>
+              <div className="relative w-full sm:max-w-xs">
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={saleSearch}
+                  onChange={(event) => setSaleSearch(event.target.value)}
+                  placeholder="Buscar cliente..."
+                  className="pl-9"
+                />
+              </div>
+            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Data</TableHead>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead>Plano</TableHead>
+                  <TableHead>Metodo</TableHead>
+                  <TableHead className="text-right">Valor</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredSubscriptionSales.map((entry) => (
+                  <TableRow key={entry.id}>
+                    <TableCell className="text-muted-foreground">{formatDate(entry.date)}</TableCell>
+                    <TableCell className="font-medium text-foreground">{entry.description}</TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">{entry.category}</Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {entry.method ? PAYMENT_METHOD_LABEL[entry.method] : 'A definir'}
+                    </TableCell>
+                    <TableCell className="text-right font-semibold tabular-nums text-success">
+                      {formatCurrency(entry.amount)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {filteredSubscriptionSales.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="h-28 text-center text-sm text-muted-foreground">
+                      <ReceiptText className="mx-auto mb-2 size-5" />
+                      Nenhuma receita de assinatura encontrada.
+                    </TableCell>
+                  </TableRow>
+                ) : null}
+              </TableBody>
+            </Table>
+          </Card>
+        </div>
       )}
+      <Dialog open={planDialogOpen} onClose={()=>setPlanDialogOpen(false)} className="sm:max-w-3xl">
+        <DialogHeader title={editing ? 'Editar Plano' : 'Novo Plano'} description="Configure os detalhes do seu plano de assinatura." />
+        <Tabs
+          items={[
+            { value: 'basicos', label: 'Dados Basicos' },
+            { value: 'regras', label: 'Regras e Limites' },
+          ]}
+          value={planDraftTab}
+          onValueChange={(value) => setPlanDraftTab(value as 'basicos' | 'regras')}
+          className="mb-6 grid w-full grid-cols-2"
+        />
+        {planDraftTab === 'basicos' ? (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Nome do Plano">
+              <Input
+                value={draft.name}
+                onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
+                placeholder="Plano Corte De Cabelo"
+              />
+            </Field>
+            <Field label="Valor Mensal (R$)">
+              <Input
+                inputMode="decimal"
+                value={draft.price}
+                onChange={(event) => setDraft((current) => ({ ...current, price: event.target.value }))}
+                placeholder="79,90"
+              />
+            </Field>
+            <Field label="Tipo do plano">
+              <Select
+                value={draft.type}
+                onChange={(event) => setDraft((current) => ({ ...current, type: event.target.value as Plan['type'] }))}
+              >
+                <option value="mensal">Mensal</option>
+                <option value="pacote">Pacote</option>
+                <option value="creditos">Creditos</option>
+              </Select>
+            </Field>
+            <label className="flex items-center justify-between gap-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm">
+              <span className="font-medium text-foreground">Plano ativo</span>
+              <input
+                type="checkbox"
+                checked={draft.active}
+                onChange={(event) => setDraft((current) => ({ ...current, active: event.target.checked }))}
+                className="size-4 accent-[var(--primary)]"
+              />
+            </label>
+            {draft.type !== 'mensal' ? (
+              <Field label="Quantidade de creditos">
+                <Input
+                  type="number"
+                  min="0"
+                  value={draft.credits}
+                  onChange={(event) => setDraft((current) => ({ ...current, credits: event.target.value }))}
+                  placeholder="4"
+                />
+              </Field>
+            ) : null}
+            <div className="space-y-2 sm:col-span-2">
+              <Label>Descricao Externa</Label>
+              <Textarea
+                value={draft.description}
+                onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))}
+                placeholder="Cortes ilimitados somente de segunda ate quarta."
+                className="min-h-24"
+              />
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label>Validade do Plano (Ciclo)</Label>
+              <div className="grid gap-2 sm:grid-cols-4">
+                {cycleOptions.map((option) => (
+                  <Button
+                    key={option.value}
+                    type="button"
+                    variant={draft.cycle === option.value ? 'gold' : 'outline'}
+                    onClick={() => setDraft((current) => ({ ...current, cycle: option.value, cycleDays: String(option.days) }))}
+                  >
+                    {option.label}
+                  </Button>
+                ))}
+              </div>
+              <Input
+                type="number"
+                min="1"
+                value={draft.cycleDays}
+                onChange={(event) => setDraft((current) => ({ ...current, cycleDays: event.target.value }))}
+              />
+              <p className="text-sm text-muted-foreground">O sistema renova os limites a cada ciclo configurado.</p>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-5">
+            <div className="rounded-lg border border-border p-5">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h3 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+                    <TrendingUp className="size-5 text-primary" />
+                    Limite Global de Servicos
+                  </h3>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Define um teto maximo de agendamentos por ciclo, independente do servico escolhido.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2">
+                  <Input
+                    type="number"
+                    min="0"
+                    value={draft.globalServiceLimit}
+                    onChange={(event) => setDraft((current) => ({ ...current, globalServiceLimit: event.target.value }))}
+                    placeholder="8"
+                    className="w-20 border-0 p-0 text-center shadow-none"
+                  />
+                  <span className="text-sm font-medium text-muted-foreground">/ciclo</span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h3 className="font-semibold text-foreground">Servicos Inclusos no Plano</h3>
+                <p className="text-sm text-muted-foreground">Clique para incluir/remover</p>
+              </div>
+              <div className="max-h-72 space-y-2 overflow-y-auto pr-2">
+                {services.map((service) => {
+                  const selected = draft.includedServices.find((item) => item.serviceId === service.id)
+                  return (
+                    <label
+                      key={service.id}
+                      className="flex items-center justify-between gap-3 rounded-lg border border-border p-3 text-sm transition-colors hover:bg-muted/40"
+                    >
+                      <span className="flex min-w-0 items-center gap-3">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(selected)}
+                          onChange={(event) => toggleDraftService(service.id, event.target.checked)}
+                          className="size-4 accent-[var(--primary)]"
+                        />
+                        <span className={selected ? 'font-semibold text-foreground' : 'font-medium text-muted-foreground'}>{service.name}</span>
+                      </span>
+                      {selected ? (
+                        <span className="flex items-center gap-2 text-muted-foreground">
+                          Limite especifico:
+                          <Input
+                            type="number"
+                            min="0"
+                            value={selected.limit}
+                            onChange={(event) => setDraftServiceLimit(service.id, event.target.value)}
+                            className="w-20"
+                          />
+                        </span>
+                      ) : null}
+                    </label>
+                  )
+                })}
+                {services.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                    Cadastre servicos no catalogo para selecionar aqui.
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        )}
+        <div className="mt-6 flex justify-end gap-2">
+          <Button variant="outline" type="button" onClick={()=>setPlanDialogOpen(false)}>Cancelar</Button>
+          <Button variant="gold" type="button" onClick={savePlan}>
+            <Save className="size-4" />
+            Salvar Alteracoes
+          </Button>
+        </div>
+      </Dialog>
       <Dialog open={Boolean(editingSubscription)} onClose={()=>setEditingSubscription(null)} className="sm:max-w-2xl">
         {editingSubscription?<><DialogHeader title="Editar assinatura" description="Corrija cliente, plano, datas, valor, créditos e status."/><div className="grid gap-4 sm:grid-cols-2">
           <Field label="Cliente"><Select value={editingSubscription.clientId} onChange={e=>setEditingSubscription({...editingSubscription,clientId:e.target.value})}>{clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</Select></Field>

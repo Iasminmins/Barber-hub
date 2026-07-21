@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import { defaultAgendaSettings, defaultPaymentMethods, normalizeAgendaSettings, normalizePaymentMethods } from '@/lib/barbershop-settings'
-import type { Appointment, Barbershop, CatalogItem, Client, Commission, Employee, FinancialEntry, ImportRecord, Member, Order, Plan, Subscription } from '@/lib/types'
+import type { Appointment, Barbershop, CatalogItem, Client, Commission, Employee, FinancialEntry, ImportRecord, Member, Order, Plan, PlanRules, Subscription } from '@/lib/types'
 
 type AppData = {
   barbershop: Barbershop
@@ -32,6 +32,30 @@ type AppDataContextValue = AppData & {
 const AppDataContext = React.createContext<AppDataContextValue | null>(null)
 const num = (value: unknown) => Number(value ?? 0)
 const dataLoadTimeoutMs = 20000
+const defaultPlanRules: PlanRules = { cycle: 'mensal', cycleDays: 30, includedServices: [] }
+
+function normalizePlanRules(value: unknown): PlanRules {
+  if (!value || typeof value !== 'object') return defaultPlanRules
+  const record = value as Partial<PlanRules>
+  const cycle = ['mensal', 'trimestral', 'semestral', 'anual'].includes(String(record.cycle))
+    ? record.cycle as PlanRules['cycle']
+    : 'mensal'
+  const includedServices = Array.isArray(record.includedServices)
+    ? record.includedServices
+        .filter((service) => service && typeof service === 'object' && typeof service.serviceId === 'string')
+        .map((service) => ({
+          serviceId: service.serviceId,
+          limit: Number.isFinite(Number(service.limit)) && Number(service.limit) > 0 ? Number(service.limit) : undefined,
+        }))
+    : []
+
+  return {
+    cycle,
+    cycleDays: Number.isFinite(Number(record.cycleDays)) && Number(record.cycleDays) > 0 ? Number(record.cycleDays) : defaultPlanRules.cycleDays,
+    globalServiceLimit: Number.isFinite(Number(record.globalServiceLimit)) && Number(record.globalServiceLimit) > 0 ? Number(record.globalServiceLimit) : undefined,
+    includedServices,
+  }
+}
 
 function withTimeout<T>(promise: PromiseLike<T>, message: string) {
   return Promise.race([
@@ -122,7 +146,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       catalog: catalog.map((r: any) => ({ id:r.id, barbershopId:r.barbershop_id, type:r.type, name:r.name, category:r.category??'', price:num(r.price), cost:num(r.cost), durationMin:r.duration_min??undefined, stock:r.stock??undefined, minStock:r.min_stock??undefined, commission:num(r.commission), active:r.active })),
       appointments: appointments.map((r: any) => ({ id:r.id, barbershopId:r.barbershop_id, clientId:r.client_id??'', clientName:r.client_name, employeeId:r.employee_id??'', employeeName:r.employee_name, serviceId:r.service_id??'', serviceName:r.service_name, date:r.date, start:String(r.start).slice(0,5), durationMin:num(r.duration_min), status:r.status, price:num(r.price) })),
       orders: orders.map((r: any) => ({ id:r.id, barbershopId:r.barbershop_id, number:num(r.number), clientId:r.client_id??undefined, clientName:r.client_name, employeeId:r.employee_id??'', employeeName:r.employee_name, items:orderItems.filter((i:any)=>i.order_id===r.id).map((i:any)=>({ id:i.id, refId:i.ref_id??'', type:i.type, name:i.name, quantity:num(i.quantity), unitPrice:num(i.unit_price) })), discount:num(r.discount), surcharge:num(r.surcharge), status:r.status, method:r.method??undefined, total:num(r.total), createdAt:r.created_at })),
-      plans: plans.map((r:any)=>({ id:r.id, barbershopId:r.barbershop_id, name:r.name, price:num(r.price), type:r.type, credits:r.credits??undefined, description:r.description??'', active:r.active })),
+      plans: plans.map((r:any)=>({ id:r.id, barbershopId:r.barbershop_id, name:r.name, price:num(r.price), type:r.type, credits:r.credits??undefined, description:r.description??'', active:r.active, rules:normalizePlanRules(r.rules) })),
       subscriptions: subscriptions.map((r:any)=>({ id:r.id, barbershopId:r.barbershop_id, planId:r.plan_id??'', planName:r.plan_name, clientId:r.client_id??'', clientName:r.client_name, price:num(r.price), startDate:r.start_date, dueDate:r.due_date, status:r.status, creditsUsed:r.credits_used??undefined, creditsTotal:r.credits_total??undefined })),
       commissions: commissions.map((r:any)=>({ id:r.id, barbershopId:r.barbershop_id, employeeId:r.employee_id??'', employeeName:r.employee_name, origin:r.origin, reference:r.reference, base:num(r.base), rate:num(r.rate), amount:num(r.amount), status:r.status, date:r.date })),
       financialEntries: financial.map((r:any)=>({ id:r.id, barbershopId:r.barbershop_id, type:r.type, category:r.category, description:r.description, amount:num(r.amount), method:r.method??undefined, date:r.date })),

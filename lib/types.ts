@@ -151,6 +151,21 @@ export interface Plan {
   credits?: number
   description: string
   active: boolean
+  rules?: PlanRules
+}
+
+export type PlanCycle = 'mensal' | 'trimestral' | 'semestral' | 'anual'
+
+export interface PlanIncludedService {
+  serviceId: string
+  limit?: number
+}
+
+export interface PlanRules {
+  cycle: PlanCycle
+  cycleDays: number
+  globalServiceLimit?: number
+  includedServices: PlanIncludedService[]
 }
 
 export interface Subscription {
