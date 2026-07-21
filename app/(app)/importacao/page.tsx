@@ -59,6 +59,7 @@ export default function ImportacaoPage() {
   const mergeTags = (current: ClientTag[], imported: ClientTag[]) => Array.from(new Set([...current, ...imported]))
   const rowType = (row: Record<string, string>) => row.tipo || (row.id_comanda ? 'comanda' : row.plano ? 'assinatura' : row.nome && row.preco ? 'produto' : '')
   const stockValue = (row: Record<string, string>) => row.estoque || row['estoque / duracao'] || row['estoque/duracao'] || row.duracao || ''
+  const hasPlanIndicator = (value: unknown) => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes('plano')
   const subscriptionStatus = (value: unknown) => String(value ?? '').toUpperCase().includes('VENCIDO') ? 'vencido' : 'ativo'
   const orderStatus = (value: unknown) => {
     const text = String(value ?? '').toLowerCase()
@@ -119,7 +120,7 @@ export default function ImportacaoPage() {
     const importedClients=rows.filter(r=>r.tipo==='cliente').map(r=>({barbershop_id:barbershop.id,name:r.nome,phone:r.telefone||null,email:r.email||null,birth_date:toDate(r.aniversario||r.data_nascimento),address:r.endereco||null,notes:r.observacoes||r.notas||null,tags:toTags(r.tags),visits:toNumber(r.visitas)}))
     const importedCatalog=rows.filter(r=>rowType(r)==='produto'||rowType(r)==='servico').map(r=>({barbershop_id:barbershop.id,type:rowType(r),name:r.nome,category:r.categoria||null,price:toNumber(r.preco),cost:toNumber(r.custo),commission:toNumber(r.comissao),duration_min:rowType(r)==='servico'?toInteger(stockValue(r),40):null,stock:rowType(r)==='produto'?toInteger(stockValue(r)):null,active:true}))
     const importedSubscriptions=rows.filter(r=>rowType(r)==='assinatura').map(r=>({client_name:r.nome,plan_name:r.plano,start_date:toDate(r.inicio),due_date:toDate(r.expira_em||r.vencimento),status:subscriptionStatus(r.status),seller:r.vendedor||'',method:r.metodo||''}))
-    const importedOrders=rows.filter(r=>rowType(r)==='comanda').map(r=>({number:toInteger(r.posicao_geral_estimada),client_name:r.cliente || 'Cliente importado',employee_name:String(r.responsavel||'').replace(/\s*Barbeiro$/i,'') || 'Não atribuído',status:orderStatus(r.status),method:paymentMethod(r.pagamento),total:toNumber(r.total),created_at:toDateTime(r.data),quantity:toInteger(r.quantidade_itens,1),source_id:r.id_comanda,plan_client:Boolean(r.cliente_indicador_plano),notes:r.observacao||''}))
+    const importedOrders=rows.filter(r=>rowType(r)==='comanda').map(r=>({number:toInteger(r.posicao_geral_estimada),client_name:r.cliente || 'Cliente importado',employee_name:String(r.responsavel||'').replace(/\s*Barbeiro$/i,'') || 'Não atribuído',status:orderStatus(r.status),method:paymentMethod(r.pagamento),total:toNumber(r.total),created_at:toDateTime(r.data),quantity:toInteger(r.quantidade_itens,1),source_id:r.id_comanda,plan_client:hasPlanIndicator(r.cliente_indicador_plano),notes:r.observacao||''}))
     const staff=rows.filter(r=>r.tipo==='funcionario').map(r=>({barbershop_id:barbershop.id,name:r.nome,phone:r.telefone||null,email:r.email||null,role:r.categoria||'barber',active:true}))
     const clientsToInsert = []
     const clientsToUpdate = new Map<string, Record<string, unknown>>()
@@ -244,7 +245,7 @@ export default function ImportacaoPage() {
     }
     if (importedOrders.length && !error) {
       setMessage(`Importando ${importedOrders.length} comandas...`)
-      const clientByName = new Map(existingClients.map((client) => [normalizeName(client.name), { id: client.id, name: client.name }]))
+      const clientByName = new Map(existingClients.map((client) => [normalizeName(client.name), { id: client.id, name: client.name, tags: client.tags }]))
       const employeeByName = new Map(employees.map((employee) => [normalizeEmployeeName(employee.name), { id: employee.id, name: employee.name }]))
 
       for (let i = 0; i < importedOrders.length && !error; i += 25) {
@@ -259,7 +260,13 @@ export default function ImportacaoPage() {
               .select('id, name')
               .single()
             if (clientResult.error || !clientResult.data) { error = clientResult.error?.message ?? 'Não foi possível criar cliente da comanda.'; break }
-            client = { id: clientResult.data.id, name: clientResult.data.name }
+            client = { id: clientResult.data.id, name: clientResult.data.name, tags: item.plan_client ? ['recorrente'] as ClientTag[] : [] }
+            clientByName.set(normalizeName(item.client_name), client)
+          } else if (item.plan_client && !client.tags.includes('recorrente')) {
+            const nextTags = [...client.tags, 'recorrente' as ClientTag]
+            const tagResult = await supabase.from('clients').update({ tags: nextTags }).eq('id', client.id)
+            if (tagResult.error) { error = tagResult.error.message; break }
+            client = { ...client, tags: nextTags }
             clientByName.set(normalizeName(item.client_name), client)
           }
 

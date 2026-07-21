@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { CalendarDays, CreditCard, Plus, Printer, Receipt, Trash2, Upload } from 'lucide-react'
+import { CalendarDays, CreditCard, Crown, Plus, Printer, Receipt, Trash2, Upload } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { PageHeader } from '@/components/page-header'
 import { StatusBadge } from '@/components/status-badge'
@@ -38,6 +38,15 @@ function toDateKey(value: string | null | undefined) {
 function toMonthKey(value: string | null | undefined) {
   const key = toDateKey(value)
   return key ? key.slice(0, 7) : ''
+}
+
+function normalizeName(value: string | null | undefined) {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
 }
 
 function todayKey() {
@@ -79,7 +88,7 @@ function formatOrderDateTime(value: string) {
 }
 
 export default function ComandasPage() {
-  const { orders: databaseOrders, deleteRecord } = useAppData()
+  const { clients, orders: databaseOrders, subscriptions, deleteRecord } = useAppData()
   const [orders, setOrders] = useState(() => sortOrdersByDate(databaseOrders))
   const [selectedMonth, setSelectedMonth] = useState(() => getLatestOrderMonth(databaseOrders))
 
@@ -96,6 +105,19 @@ export default function ComandasPage() {
     () => orders.filter((order) => toMonthKey(order.createdAt) === selectedMonth),
     [orders, selectedMonth],
   )
+  const planClients = useMemo(() => {
+    const names = new Set<string>()
+    for (const client of clients) {
+      if (client.tags.includes('recorrente')) names.add(normalizeName(client.name))
+    }
+    for (const subscription of subscriptions) {
+      if (['ativo', 'vencendo'].includes(subscription.status)) {
+        if (subscription.clientId) names.add(subscription.clientId)
+        names.add(normalizeName(subscription.clientName))
+      }
+    }
+    return names
+  }, [clients, subscriptions])
 
   const metrics = useMemo(() => {
     const paid = monthOrders.filter((o) => o.status === 'paga')
@@ -201,7 +223,17 @@ export default function ComandasPage() {
                     {formatOrderDateTime(order.createdAt)}
                   </span>
                 </TableCell>
-                <TableCell className="font-medium text-foreground">{order.clientName}</TableCell>
+                <TableCell className="font-medium text-foreground">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span>{order.clientName}</span>
+                    {planClients.has(order.clientId ?? '') || planClients.has(normalizeName(order.clientName)) ? (
+                      <Badge className="border-blue-200 bg-blue-100 text-blue-700">
+                        <Crown className="size-3" />
+                        Plano
+                      </Badge>
+                    ) : null}
+                  </div>
+                </TableCell>
                 <TableCell>
                   <div className="flex max-w-72 flex-wrap gap-1">
                     {order.items.map((item) => (
