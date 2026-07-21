@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/table'
 import { useAppData } from '@/components/data/app-data-provider'
 import { formatCurrency, formatDate } from '@/lib/format'
+import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import type { Order } from '@/lib/types'
 
 const METHOD_LABEL: Record<string, string> = {
@@ -88,7 +89,7 @@ function formatOrderDateTime(value: string) {
 }
 
 export default function ComandasPage() {
-  const { clients, orders: databaseOrders, subscriptions, deleteRecord } = useAppData()
+  const { barbershop, clients, orders: databaseOrders, subscriptions, deleteRecord } = useAppData()
   const [orders, setOrders] = useState(() => sortOrdersByDate(databaseOrders))
   const [selectedMonth, setSelectedMonth] = useState(() => getLatestOrderMonth(databaseOrders))
 
@@ -131,6 +132,17 @@ export default function ComandasPage() {
 
   async function deleteOrder(id: string) {
     if (!window.confirm('Excluir esta comanda?')) return
+    const order = orders.find((item) => item.id === id)
+    if (order) {
+      const supabase = createBrowserSupabaseClient()
+      const financeResult = await supabase
+        .from('financial_entries')
+        .delete()
+        .eq('barbershop_id', barbershop.id)
+        .eq('category', 'Comandas')
+        .eq('description', `Comanda #${order.number}`)
+      if (financeResult.error) { window.alert(financeResult.error.message); return }
+    }
     const result = await deleteRecord('orders', id)
     if (result.error) { window.alert(result.error); return }
     setOrders((current) => current.filter((order) => order.id !== id))

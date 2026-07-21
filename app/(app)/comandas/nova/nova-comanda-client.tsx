@@ -43,6 +43,14 @@ const initialQuantities = (items: CatalogItem[]) =>
     return quantities
   }, {})
 
+function todayKey() {
+  const today = new Date()
+  const year = today.getFullYear()
+  const month = String(today.getMonth() + 1).padStart(2, '0')
+  const day = String(today.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 export function NovaComandaClient({
   barbershopId,
   clients,
@@ -135,7 +143,7 @@ export function NovaComandaClient({
       if (itemResult.error) { await deleteRecord('orders', orderResult.data.id); setSaveError(itemResult.error); return }
     }
     if (payment !== 'pendente') {
-      const financialResult = await insertRecord('financial_entries', { barbershop_id: barbershopId, type:'entrada', category:'Comandas', description:`Comanda #${nextOrderNumber}`, amount:subtotal, method:payment, date:new Date().toISOString().slice(0,10) })
+      const financialResult = await insertRecord('financial_entries', { barbershop_id: barbershopId, type:'entrada', category:'Comandas', description:`Comanda #${nextOrderNumber}`, amount:subtotal, method:payment, date:todayKey() })
       if (financialResult.error) { setSaveError(`Comanda salva, mas o financeiro falhou: ${financialResult.error}`); return }
     }
     router.push('/comandas')

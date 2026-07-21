@@ -128,7 +128,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         supabase.from('plans').select('*').eq('barbershop_id', shopId).order('name'),
         supabase.from('subscriptions').select('*').eq('barbershop_id', shopId).order('due_date'),
         supabase.from('commissions').select('*').eq('barbershop_id', shopId).order('date', { ascending: false }),
-        supabase.from('financial_entries').select('*').eq('barbershop_id', shopId).order('date', { ascending: false }),
+        fetchAllRows((from, to) => supabase.from('financial_entries').select('*').eq('barbershop_id', shopId).order('date', { ascending: false }).range(from, to)),
         supabase.from('import_records').select('*').eq('barbershop_id', shopId).order('created_at', { ascending: false }),
       ]),
       'Os dados da plataforma demoraram demais para carregar. Atualize a página e tente novamente.',

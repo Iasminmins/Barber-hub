@@ -21,7 +21,7 @@ import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import type { ClientTag } from '@/lib/types'
 
 export default function ImportacaoPage() {
-  const { barbershop, member, clients: existingClients, catalog, employees, orders, plans, subscriptions, imports: databaseImports, insertMany, insertRecord } = useAppData()
+  const { barbershop, member, clients: existingClients, catalog, employees, financialEntries, orders, plans, subscriptions, imports: databaseImports, insertMany, insertRecord } = useAppData()
   const fileRef = useRef<HTMLInputElement>(null)
   const [message, setMessage] = useState('')
   const currentPlan = getSaasPlan(barbershop.plan)
@@ -60,6 +60,7 @@ export default function ImportacaoPage() {
   const rowType = (row: Record<string, string>) => row.tipo || (row.id_comanda ? 'comanda' : row.plano ? 'assinatura' : row.nome && row.preco ? 'produto' : '')
   const stockValue = (row: Record<string, string>) => row.estoque || row['estoque / duracao'] || row['estoque/duracao'] || row.duracao || ''
   const hasPlanIndicator = (value: unknown) => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes('plano')
+  const orderFinanceDescription = (number: number) => `Comanda #${number}`
   const subscriptionStatus = (value: unknown) => String(value ?? '').toUpperCase().includes('VENCIDO') ? 'vencido' : 'ativo'
   const orderStatus = (value: unknown) => {
     const text = String(value ?? '').toLowerCase()
@@ -247,6 +248,15 @@ export default function ImportacaoPage() {
       setMessage(`Importando ${importedOrders.length} comandas...`)
       const clientByName = new Map(existingClients.map((client) => [normalizeName(client.name), { id: client.id, name: client.name, tags: client.tags }]))
       const employeeByName = new Map(employees.map((employee) => [normalizeEmployeeName(employee.name), { id: employee.id, name: employee.name }]))
+      const financeByOrderNumber = new Map(
+        financialEntries
+          .filter((entry) => entry.category === 'Comandas')
+          .map((entry) => {
+            const match = entry.description.match(/^Comanda #(\d+)$/)
+            return match ? [Number(match[1]), entry] as const : null
+          })
+          .filter(Boolean) as Array<readonly [number, typeof financialEntries[number]]>,
+      )
 
       for (let i = 0; i < importedOrders.length && !error; i += 25) {
         const batch = importedOrders.slice(i, i + 25)
@@ -277,6 +287,26 @@ export default function ImportacaoPage() {
             ? await supabase.from('orders').update(orderValues).eq('id', current.id).select('id').single()
             : await supabase.from('orders').insert(orderValues).select('id').single()
           if (orderResult.error || !orderResult.data) { error = orderResult.error?.message ?? 'Não foi possível importar comanda.'; break }
+
+          const financeValues = {
+            barbershop_id: barbershop.id,
+            type: 'entrada',
+            category: 'Comandas',
+            description: orderFinanceDescription(item.number),
+            amount: item.total,
+            method: item.method,
+            date: String(item.created_at).slice(0, 10),
+          }
+          const currentFinance = financeByOrderNumber.get(item.number)
+          if (item.status === 'paga' && item.total > 0) {
+            const financeResult = currentFinance
+              ? await supabase.from('financial_entries').update(financeValues).eq('id', currentFinance.id)
+              : await supabase.from('financial_entries').insert(financeValues)
+            if (financeResult.error) { error = financeResult.error.message; break }
+          } else if (currentFinance) {
+            const financeResult = await supabase.from('financial_entries').delete().eq('id', currentFinance.id)
+            if (financeResult.error) { error = financeResult.error.message; break }
+          }
 
           if (current) {
             const deleteItems = await supabase.from('order_items').delete().eq('order_id', current.id)
