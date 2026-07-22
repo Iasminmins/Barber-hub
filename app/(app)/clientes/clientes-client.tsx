@@ -187,11 +187,11 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
         </Link>
       </PageHeader>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
-        <div>
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px] 2xl:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="min-w-0">
           <Card className="mb-4 p-3">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <div className="relative flex-1">
+            <div className="grid gap-3">
+              <div className="relative min-w-0">
                 <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar por nome, telefone ou e-mail" className="pl-9" />
               </div>
@@ -212,7 +212,7 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
           </Card>
 
           <Card className="overflow-hidden">
-            <Table>
+            <Table className="min-w-[820px]">
               <TableHeader>
                 <TableRow>
                   <TableHead>Cliente</TableHead>
@@ -241,7 +241,7 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell className="text-muted-foreground">{c.phone}</TableCell>
+                    <TableCell className="text-muted-foreground">{c.phone || "-"}</TableCell>
                     <TableCell className="text-right tabular-nums">{stats.visits}</TableCell>
                     <TableCell className="text-right font-medium tabular-nums">{formatCurrency(stats.totalSpent)}</TableCell>
                     <TableCell className="text-muted-foreground">{stats.lastVisit ? formatDate(stats.lastVisit) : "-"}</TableCell>
@@ -265,14 +265,14 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
           </Card>
         </div>
 
-        <div className="lg:sticky lg:top-6 lg:self-start">
+        <div className="min-w-0 xl:sticky xl:top-6 xl:self-start">
           {selected ? (
             <Card className="p-5">
               <div className="mb-4 flex items-start justify-between">
                 <div className="flex items-center gap-3">
                   <Avatar name={selected.name} className="size-12 text-base" />
                   <div>
-                    <h3 className="font-semibold text-foreground">{selected.name}</h3>
+                    <h3 className="break-words font-semibold text-foreground">{selected.name}</h3>
                     <p className="text-sm text-muted-foreground">Cliente desde {formatDate(selected.createdAt)}</p>
                   </div>
                 </div>
@@ -291,10 +291,10 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
               </div>
 
               <div className="space-y-2 text-sm">
-                <div className="flex items-center gap-2 text-muted-foreground"><Phone className="size-4" />{selected.phone}</div>
+                <div className="flex items-center gap-2 text-muted-foreground"><Phone className="size-4 shrink-0" />{selected.phone || "Sem telefone"}</div>
                 {selected.email && <div className="flex items-center gap-2 text-muted-foreground"><Mail className="size-4" />{selected.email}</div>}
-                <div className="flex items-center gap-2 text-muted-foreground"><Cake className="size-4" />{formatDate(selected.birthDate)}</div>
-                <div className="flex items-center gap-2 text-muted-foreground"><Scissors className="size-4" />Prefere {selected.preferredBarber}</div>
+                <div className="flex items-center gap-2 text-muted-foreground"><Cake className="size-4 shrink-0" />{selected.birthDate ? formatDate(selected.birthDate) : "-"}</div>
+                <div className="flex items-center gap-2 text-muted-foreground"><Scissors className="size-4 shrink-0" />{selected.preferredBarber ? `Prefere ${selected.preferredBarber}` : "Sem preferência"}</div>
               </div>
 
               <div className="my-4 grid grid-cols-2 gap-3">
@@ -305,11 +305,11 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
               <div className="mb-2 text-sm font-medium text-foreground">Observações</div>
               <p className="mb-4 text-sm text-muted-foreground">{selected.notes || "Sem observações registradas."}</p>
 
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Button variant="outline" size="icon" aria-label={`Editar ${selected.name}`} onClick={() => { setEditStatus(""); setEditing({ id:selected.id, name:selected.name, phone:selected.phone, email:selected.email, birthDate:selected.birthDate, preferredBarber:selected.preferredBarber, address:selected.address, notes:selected.notes, tags:[...selected.tags] }) }}><Pencil className="size-4" /></Button>
-                <Button variant="outline" className="flex-1" onClick={() => setHistoryOpen(true)}>Histórico</Button>
+                <Button variant="outline" className="min-w-24 flex-1" onClick={() => setHistoryOpen(true)}>Histórico</Button>
                 {normalizePhone(selected.phone) ? <a className={buttonVariants({ variant: "outline", size: "icon" })} aria-label={`WhatsApp ${selected.name}`} href={whatsappUrl(selected.phone, selected.name)} target="_blank" rel="noreferrer"><MessageCircle className="size-4" /></a> : null}
-                <Button variant="gold" className="flex-1" onClick={() => router.push(`/agenda/novo?cliente=${encodeURIComponent(selected.id)}`)}>Agendar</Button>
+                <Button variant="gold" className="min-w-24 flex-1" onClick={() => router.push(`/agenda/novo?cliente=${encodeURIComponent(selected.id)}`)}>Agendar</Button>
                 <Button variant="destructive" size="icon" aria-label="Excluir cliente" onClick={() => deleteClient(selected.id)}>
                   <Trash2 className="size-4" />
                 </Button>
