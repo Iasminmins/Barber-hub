@@ -28,6 +28,7 @@ import type { CatalogItem, FinancialEntry, Plan, PlanCycle, PlanRules, Subscript
 import { useAppData } from '@/components/data/app-data-provider'
 
 type View = 'assinaturas' | 'planos' | 'financeiro'
+type SubscriptionFilter = 'ativas' | 'vencendo' | 'vencidas' | 'todas'
 type SubscriptionDraft = { id:string; clientId:string; planId:string; price:string; startDate:string; dueDate:string; status:SubscriptionStatus; creditsUsed:string; creditsTotal:string }
 
 type PlanDraft = {
@@ -122,6 +123,21 @@ function isSubscriptionRevenue(entry: FinancialEntry) {
   return entry.type === 'entrada' && (text.includes('assinatura') || text.includes('plano'))
 }
 
+function derivedSubscriptionStatus(subscription: Subscription): SubscriptionStatus {
+  if (subscription.status === 'cancelado') return 'cancelado'
+  const due = daysUntil(subscription.dueDate)
+  if (due < 0) return 'vencido'
+  if (due <= 7) return 'vencendo'
+  return 'ativo'
+}
+
+function statusPriority(status: SubscriptionStatus) {
+  if (status === 'vencendo') return 0
+  if (status === 'ativo') return 1
+  if (status === 'vencido') return 2
+  return 3
+}
+
 export function AssinaturasClient({
   catalog,
   financialEntries,
@@ -139,12 +155,44 @@ export function AssinaturasClient({
   const [subscriptionRecords, setSubscriptionRecords] = React.useState(subscriptions)
   const [editingSubscription, setEditingSubscription] = React.useState<SubscriptionDraft | null>(null)
   const [subscriptionStatus, setSubscriptionStatus] = React.useState('')
+  const [subscriptionFilter, setSubscriptionFilter] = React.useState<SubscriptionFilter>('ativas')
+  const [subscriptionSearch, setSubscriptionSearch] = React.useState('')
   const [saleSearch, setSaleSearch] = React.useState('')
   const [draft, setDraft] = React.useState<PlanDraft>(emptyDraft)
   const [planDialogOpen, setPlanDialogOpen] = React.useState(false)
   const [planDraftTab, setPlanDraftTab] = React.useState<'basicos' | 'regras'>('basicos')
-  const active = subscriptionRecords.filter((s) => s.status === 'ativo' || s.status === 'vencendo')
-  const overdue = subscriptionRecords.filter((s) => s.status === 'vencido')
+  const enrichedSubscriptions = React.useMemo(
+    () => subscriptionRecords
+      .map((subscription) => ({
+        ...subscription,
+        displayStatus: derivedSubscriptionStatus(subscription),
+      }))
+      .sort((a, b) => {
+        const statusComparison = statusPriority(a.displayStatus) - statusPriority(b.displayStatus)
+        if (statusComparison !== 0) return statusComparison
+        return a.displayStatus === 'vencido'
+          ? b.dueDate.localeCompare(a.dueDate)
+          : a.dueDate.localeCompare(b.dueDate)
+      }),
+    [subscriptionRecords],
+  )
+  const active = enrichedSubscriptions.filter((s) => s.displayStatus === 'ativo' || s.displayStatus === 'vencendo')
+  const expiring = enrichedSubscriptions.filter((s) => s.displayStatus === 'vencendo')
+  const overdue = enrichedSubscriptions.filter((s) => s.displayStatus === 'vencido')
+  const filteredSubscriptions = React.useMemo(() => {
+    const query = subscriptionSearch.trim().toLowerCase()
+    return enrichedSubscriptions
+      .filter((subscription) => {
+        if (subscriptionFilter === 'ativas') return subscription.displayStatus === 'ativo' || subscription.displayStatus === 'vencendo'
+        if (subscriptionFilter === 'vencendo') return subscription.displayStatus === 'vencendo'
+        if (subscriptionFilter === 'vencidas') return subscription.displayStatus === 'vencido'
+        return true
+      })
+      .filter((subscription) => {
+        if (!query) return true
+        return `${subscription.clientName} ${subscription.planName}`.toLowerCase().includes(query)
+      })
+  }, [enrichedSubscriptions, subscriptionFilter, subscriptionSearch])
   const services = catalog.filter((item) => item.type === 'servico' && item.active)
   const mrr = active.reduce((sum, sub) => sum + sub.price, 0)
   const subscriptionSales = React.useMemo(
@@ -299,7 +347,7 @@ export function AssinaturasClient({
             <Users className="size-5 text-primary" />
           </div>
           <p className="mt-10 text-3xl font-bold tabular-nums text-foreground">{active.length}</p>
-          <p className="text-sm text-muted-foreground">{overdue.length} vencidas</p>
+          <p className="text-sm text-muted-foreground">{expiring.length} vencendo · {overdue.length} vencidas</p>
         </Card>
         <Card className="min-h-40 border-pink-100 bg-pink-50/80 p-6">
           <div className="flex items-start justify-between gap-3">
@@ -313,6 +361,36 @@ export function AssinaturasClient({
 
       {view === 'assinaturas' ? (
         <Card className="overflow-hidden">
+          <div className="flex flex-col gap-3 border-b border-border p-4 xl:flex-row xl:items-center xl:justify-between">
+            <div className="relative min-w-0 xl:max-w-sm xl:flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={subscriptionSearch}
+                onChange={(event) => setSubscriptionSearch(event.target.value)}
+                placeholder="Buscar cliente ou plano"
+                className="pl-9"
+              />
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {[
+                ['ativas', `Ativas (${active.length})`],
+                ['vencendo', `Vencendo (${expiring.length})`],
+                ['vencidas', `Vencidas (${overdue.length})`],
+                ['todas', `Todas (${enrichedSubscriptions.length})`],
+              ].map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setSubscriptionFilter(key as SubscriptionFilter)}
+                  className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                    subscriptionFilter === key ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
           <Table>
             <TableHeader>
               <TableRow>
@@ -326,7 +404,7 @@ export function AssinaturasClient({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {subscriptionRecords.map((sub) => {
+              {filteredSubscriptions.map((sub) => {
                 const due = daysUntil(sub.dueDate)
                 const hasCredits = sub.creditsTotal && sub.creditsTotal > 0
                 return (
@@ -358,12 +436,19 @@ export function AssinaturasClient({
                       )}
                     </TableCell>
                     <TableCell>
-                      <StatusBadge status={sub.status} />
+                      <StatusBadge status={sub.displayStatus} />
                     </TableCell>
                     <TableCell className="text-right"><Button variant="ghost" size="icon-sm" aria-label={`Editar assinatura de ${sub.clientName}`} onClick={()=>{setSubscriptionStatus('');setEditingSubscription({id:sub.id,clientId:sub.clientId,planId:sub.planId,price:String(sub.price).replace('.',','),startDate:sub.startDate,dueDate:sub.dueDate,status:sub.status,creditsUsed:String(sub.creditsUsed??''),creditsTotal:String(sub.creditsTotal??'')})}}><Pencil className="size-4"/></Button></TableCell>
                   </TableRow>
                 )
               })}
+              {filteredSubscriptions.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="h-28 text-center text-sm text-muted-foreground">
+                    Nenhuma assinatura encontrada neste filtro.
+                  </TableCell>
+                </TableRow>
+              ) : null}
             </TableBody>
           </Table>
         </Card>
