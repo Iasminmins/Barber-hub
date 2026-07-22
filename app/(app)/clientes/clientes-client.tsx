@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useMemo, useState } from "react"
-import { Cake, CalendarDays, Mail, Pencil, Phone, Plus, Save, Scissors, Search, Star, Trash2, X } from "lucide-react"
+import { AlertTriangle, Cake, CalendarDays, Mail, MessageCircle, Pencil, Phone, Plus, Save, Scissors, Search, Star, Trash2, X } from "lucide-react"
 import type { Client, ClientTag } from "@/lib/types"
 import { formatCurrency, formatDate } from "@/lib/format"
 import { Input } from "@/components/ui/input"
@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/table"
 import { useAppData } from '@/components/data/app-data-provider'
 
-type Filter = "todos" | "vip" | "recorrente" | "aniversariante" | "inadimplente" | "inativo"
+type Filter = "todos" | "vip" | "recorrente" | "aniversariante" | "inadimplente" | "inativo" | "sem_telefone" | "duplicados" | "suspeitos"
 type ClientDraft = { id:string; name:string; phone:string; email:string; birthDate:string; preferredBarber:string; address:string; notes:string; tags:ClientTag[] }
 
 const TAG_LABEL: Record<ClientTag, string> = {
@@ -45,9 +45,34 @@ function isBirthdayThisMonth(birthDate: string) {
   return date.getMonth() === new Date().getMonth()
 }
 
+function normalizeName(value: string | null | undefined) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+}
+
+function normalizePhone(value: string | null | undefined) {
+  return String(value ?? "").replace(/\D/g, "")
+}
+
+function orderDateKey(value: string) {
+  return value.slice(0, 10)
+}
+
+function whatsappUrl(phone: string, name: string) {
+  const digits = normalizePhone(phone)
+  if (!digits) return ""
+  const brNumber = digits.length <= 11 ? `55${digits}` : digits
+  const text = encodeURIComponent(`Olá, ${name}! Tudo bem? Aqui é da Duke Barber.`)
+  return `https://wa.me/${brNumber}?text=${text}`
+}
+
 export function ClientesClient({ clients }: { clients: Client[] }) {
   const router = useRouter()
-  const { appointments, employees, deleteRecord, updateRecord } = useAppData()
+  const { appointments, catalog, employees, orders, deleteRecord, updateRecord } = useAppData()
   const [records, setRecords] = useState(clients)
   const [query, setQuery] = useState("")
   const [filter, setFilter] = useState<Filter>("todos")
@@ -55,6 +80,41 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
   const [historyOpen, setHistoryOpen] = useState(false)
   const [editing, setEditing] = useState<ClientDraft | null>(null)
   const [editStatus, setEditStatus] = useState("")
+
+  const duplicateKeys = useMemo(() => {
+    const keys = records.map((client) => normalizePhone(client.phone) || normalizeName(client.name)).filter(Boolean)
+    const counts = new Map<string, number>()
+    for (const key of keys) counts.set(key, (counts.get(key) ?? 0) + 1)
+    return new Set([...counts.entries()].filter(([, count]) => count > 1).map(([key]) => key))
+  }, [records])
+  const productNames = useMemo(() => new Set(catalog.map((item) => normalizeName(item.name))), [catalog])
+  const clientStats = useMemo(() => {
+    const stats = new Map<string, { visits: number; totalSpent: number; lastVisit: string }>()
+    for (const order of orders) {
+      if (order.status !== "paga") continue
+      const keys = [order.clientId, normalizeName(order.clientName)].filter(Boolean) as string[]
+      for (const key of keys) {
+        const current = stats.get(key) ?? { visits: 0, totalSpent: 0, lastVisit: "" }
+        current.visits += 1
+        current.totalSpent += order.total
+        const date = orderDateKey(order.createdAt)
+        if (date > current.lastVisit) current.lastVisit = date
+        stats.set(key, current)
+      }
+    }
+    return stats
+  }, [orders])
+  const getClientStats = (client: Client) => {
+    const byId = clientStats.get(client.id)
+    const byName = clientStats.get(normalizeName(client.name))
+    return {
+      visits: Math.max(client.visits, byId?.visits ?? 0, byName?.visits ?? 0),
+      totalSpent: Math.max(client.totalSpent, byId?.totalSpent ?? 0, byName?.totalSpent ?? 0),
+      lastVisit: [client.lastVisit, byId?.lastVisit, byName?.lastVisit].filter(Boolean).sort().at(-1) ?? "",
+    }
+  }
+  const isDuplicateClient = (client: Client) => duplicateKeys.has(normalizePhone(client.phone) || normalizeName(client.name))
+  const isSuspiciousClient = (client: Client) => productNames.has(normalizeName(client.name))
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -66,17 +126,26 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
         c.email.toLowerCase().includes(q)
       const matchesFilter =
         filter === "todos" ||
-        (filter === "aniversariante" ? c.tags.includes("aniversariante") || isBirthdayThisMonth(c.birthDate) : c.tags.includes(filter as ClientTag))
+        (filter === "aniversariante" ? c.tags.includes("aniversariante") || isBirthdayThisMonth(c.birthDate) : c.tags.includes(filter as ClientTag)) ||
+        (filter === "sem_telefone" && !normalizePhone(c.phone)) ||
+        (filter === "duplicados" && duplicateKeys.has(normalizePhone(c.phone) || normalizeName(c.name))) ||
+        (filter === "suspeitos" && productNames.has(normalizeName(c.name)))
       return matchesQuery && matchesFilter
     })
-  }, [records, query, filter])
+  }, [records, query, filter, duplicateKeys, productNames])
 
   const selected = records.find((c) => c.id === selectedId) ?? null
+  const selectedStats = selected ? getClientStats(selected) : null
   const selectedHistory = useMemo(
-    () => appointments
+    () => [
+      ...orders
+        .filter((order) => selectedId ? order.clientId === selectedId || (selected && normalizeName(order.clientName) === normalizeName(selected.name)) : false)
+        .map((order) => ({ id: order.id, date: orderDateKey(order.createdAt), time: String(order.createdAt).slice(11, 16), title: `Comanda #${order.number}`, subtitle: order.employeeName, amount: order.total, status: order.status })),
+      ...appointments
       .filter((appointment) => appointment.clientId === selectedId)
-      .sort((a, b) => `${b.date} ${b.start}`.localeCompare(`${a.date} ${a.start}`)),
-    [appointments, selectedId],
+        .map((appointment) => ({ id: appointment.id, date: appointment.date, time: appointment.start, title: appointment.serviceName, subtitle: appointment.employeeName, amount: appointment.price, status: appointment.status })),
+    ].sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`)),
+    [appointments, orders, selected, selectedId],
   )
 
   async function deleteClient(id: string) {
@@ -104,6 +173,9 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
     { key: "aniversariante", label: "Aniversariantes" },
     { key: "inadimplente", label: "Inadimplentes" },
     { key: "inativo", label: "Inativos" },
+    { key: "sem_telefone", label: "Sem telefone" },
+    { key: "duplicados", label: "Duplicados" },
+    { key: "suspeitos", label: "Suspeitos" },
   ]
 
   return (
@@ -152,7 +224,9 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((c) => (
+                {filtered.map((c) => {
+                  const stats = getClientStats(c)
+                  return (
                   <TableRow key={c.id} className={selectedId === c.id ? "bg-accent/40" : ""}>
                     <TableCell onClick={() => setSelectedId(c.id)} className="cursor-pointer">
                       <div className="flex items-center gap-3">
@@ -161,22 +235,24 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
                           <div className="flex items-center gap-1.5 font-medium text-foreground">
                             <span className="truncate">{c.name}</span>
                             {c.tags.includes("vip") && <Star className="size-3.5 shrink-0 fill-[var(--gold)] text-[var(--gold)]" />}
+                            {isDuplicateClient(c) || isSuspiciousClient(c) || !normalizePhone(c.phone) ? <AlertTriangle className="size-3.5 shrink-0 text-warning-foreground" /> : null}
                           </div>
                           <div className="text-xs text-muted-foreground">{c.favoriteService}</div>
                         </div>
                       </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground">{c.phone}</TableCell>
-                    <TableCell className="text-right tabular-nums">{c.visits}</TableCell>
-                    <TableCell className="text-right font-medium tabular-nums">{formatCurrency(c.totalSpent)}</TableCell>
-                    <TableCell className="text-muted-foreground">{c.lastVisit ? formatDate(c.lastVisit) : "-"}</TableCell>
+                    <TableCell className="text-right tabular-nums">{stats.visits}</TableCell>
+                    <TableCell className="text-right font-medium tabular-nums">{formatCurrency(stats.totalSpent)}</TableCell>
+                    <TableCell className="text-muted-foreground">{stats.lastVisit ? formatDate(stats.lastVisit) : "-"}</TableCell>
                     <TableCell className="text-right">
                       <Button variant="ghost" size="icon-sm" aria-label="Excluir cliente" onClick={() => deleteClient(c.id)}>
                         <Trash2 className="size-4" />
                       </Button>
                     </TableCell>
                   </TableRow>
-                ))}
+                  )
+                })}
                 {filtered.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
@@ -209,6 +285,9 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
                 {selected.tags.map((t) => (
                   <Badge key={t} variant={t === "vip" ? "gold" : "secondary"}>{TAG_LABEL[t]}</Badge>
                 ))}
+                {!normalizePhone(selected.phone) ? <Badge variant="warning">Sem telefone</Badge> : null}
+                {isDuplicateClient(selected) ? <Badge variant="warning">Possível duplicado</Badge> : null}
+                {isSuspiciousClient(selected) ? <Badge variant="destructive">Nome parece produto</Badge> : null}
               </div>
 
               <div className="space-y-2 text-sm">
@@ -219,8 +298,8 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
               </div>
 
               <div className="my-4 grid grid-cols-2 gap-3">
-                <div className="rounded-lg bg-muted p-3"><div className="text-xs text-muted-foreground">Visitas</div><div className="text-lg font-semibold text-foreground tabular-nums">{selected.visits}</div></div>
-                <div className="rounded-lg bg-muted p-3"><div className="text-xs text-muted-foreground">Total gasto</div><div className="text-lg font-semibold text-foreground tabular-nums">{formatCurrency(selected.totalSpent)}</div></div>
+                <div className="rounded-lg bg-muted p-3"><div className="text-xs text-muted-foreground">Visitas</div><div className="text-lg font-semibold text-foreground tabular-nums">{selectedStats?.visits ?? selected.visits}</div></div>
+                <div className="rounded-lg bg-muted p-3"><div className="text-xs text-muted-foreground">Total gasto</div><div className="text-lg font-semibold text-foreground tabular-nums">{formatCurrency(selectedStats?.totalSpent ?? selected.totalSpent)}</div></div>
               </div>
 
               <div className="mb-2 text-sm font-medium text-foreground">Observações</div>
@@ -229,6 +308,7 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
               <div className="flex gap-2">
                 <Button variant="outline" size="icon" aria-label={`Editar ${selected.name}`} onClick={() => { setEditStatus(""); setEditing({ id:selected.id, name:selected.name, phone:selected.phone, email:selected.email, birthDate:selected.birthDate, preferredBarber:selected.preferredBarber, address:selected.address, notes:selected.notes, tags:[...selected.tags] }) }}><Pencil className="size-4" /></Button>
                 <Button variant="outline" className="flex-1" onClick={() => setHistoryOpen(true)}>Histórico</Button>
+                {normalizePhone(selected.phone) ? <a className={buttonVariants({ variant: "outline", size: "icon" })} aria-label={`WhatsApp ${selected.name}`} href={whatsappUrl(selected.phone, selected.name)} target="_blank" rel="noreferrer"><MessageCircle className="size-4" /></a> : null}
                 <Button variant="gold" className="flex-1" onClick={() => router.push(`/agenda/novo?cliente=${encodeURIComponent(selected.id)}`)}>Agendar</Button>
                 <Button variant="destructive" size="icon" aria-label="Excluir cliente" onClick={() => deleteClient(selected.id)}>
                   <Trash2 className="size-4" />
@@ -257,14 +337,14 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
                     <CalendarDays className="size-4" />
                   </span>
                   <div>
-                    <p className="font-medium text-foreground">{appointment.serviceName}</p>
+                    <p className="font-medium text-foreground">{appointment.title}</p>
                     <p className="text-sm text-muted-foreground">
-                      {formatDate(appointment.date)} às {appointment.start} · {appointment.employeeName}
+                      {formatDate(appointment.date)} às {appointment.time || "--:--"} · {appointment.subtitle}
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center justify-between gap-3 sm:justify-end">
-                  <span className="font-medium tabular-nums text-foreground">{formatCurrency(appointment.price)}</span>
+                  <span className="font-medium tabular-nums text-foreground">{formatCurrency(appointment.amount)}</span>
                   <StatusBadge status={appointment.status} />
                 </div>
               </div>
