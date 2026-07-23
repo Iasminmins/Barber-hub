@@ -21,9 +21,12 @@ import { BrandMark } from '@/components/brand-mark'
 import { Avatar } from '@/components/ui/avatar'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogHeader } from '@/components/ui/dialog'
+import { Textarea } from '@/components/ui/textarea'
 import { useAppData } from '@/components/data/app-data-provider'
 import { daysUntil, formatCurrency } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { birthdayMessage, normalizeWhatsAppPhone, renewalMessage, whatsappUrl } from '@/lib/whatsapp'
 
 type NotificationTab = 'aniversarios' | 'estoque' | 'comandas' | 'planos'
 
@@ -32,6 +35,10 @@ interface NotificationItem {
   title: string
   description: string
   tone: 'purple' | 'red' | 'green' | 'gold'
+  clientId?: string
+  phone?: string
+  planName?: string
+  dueInDays?: number
 }
 
 const tabConfig: Record<
@@ -61,20 +68,29 @@ function formatBirthdayDescription(birthDate: string) {
   }).format(date)}`
 }
 
-function isBirthdayThisMonth(birthDate: string) {
+function isBirthdayToday(birthDate: string) {
   if (!birthDate) return false
   const date = new Date(`${birthDate}T00:00:00`)
   if (Number.isNaN(date.getTime())) return false
-  return date.getMonth() === new Date().getMonth()
+  const today = new Date()
+  return date.getMonth() === today.getMonth() && date.getDate() === today.getDate()
 }
 
 function buildNotifications(clients: ReturnType<typeof useAppData>['clients'], catalog: ReturnType<typeof useAppData>['catalog'], orders: ReturnType<typeof useAppData>['orders'], subscriptions: ReturnType<typeof useAppData>['subscriptions']): Record<NotificationTab, NotificationItem[]> {
   const lowStock = catalog.filter((item) => item.type === 'produto' && (item.stock ?? 0) <= (item.minStock ?? 0))
-  const expiringSubscriptions = subscriptions.filter((item) => daysUntil(item.dueDate) <= 7)
+  const expiringSubscriptions = subscriptions
+    .map((subscription) => ({ subscription, due: daysUntil(subscription.dueDate) }))
+    .filter(({ due }) => due >= -30 && due <= 7)
+    .sort((a, b) => {
+      const aExpired = a.due < 0
+      const bExpired = b.due < 0
+      if (aExpired !== bExpired) return aExpired ? 1 : -1
+      return aExpired ? b.due - a.due : a.due - b.due
+    })
 
   return {
     aniversarios: clients
-      .filter((client) => client.tags.includes('aniversariante') || isBirthdayThisMonth(client.birthDate))
+      .filter((client) => isBirthdayToday(client.birthDate))
       .flatMap((client) => {
         const description = formatBirthdayDescription(client.birthDate)
         return description ? [{
@@ -82,6 +98,8 @@ function buildNotifications(clients: ReturnType<typeof useAppData>['clients'], c
           title: client.name,
           description,
           tone: 'purple' as const,
+          clientId: client.id,
+          phone: client.phone,
         }] : []
       }),
     estoque: lowStock.map((item) => ({
@@ -98,15 +116,22 @@ function buildNotifications(clients: ReturnType<typeof useAppData>['clients'], c
         description: `${order.clientName} - ${formatCurrency(order.total)} - ${order.status}`,
         tone: order.status === 'pendente' ? 'gold' : 'green',
       })),
-    planos: expiringSubscriptions.map((subscription) => {
-      const due = daysUntil(subscription.dueDate)
+    planos: expiringSubscriptions.map(({ subscription, due }) => {
+      const client = clients.find((item) =>
+        item.id === subscription.clientId ||
+        item.name.trim().toLocaleLowerCase('pt-BR') === subscription.clientName.trim().toLocaleLowerCase('pt-BR'),
+      )
       return {
         id: `plan-${subscription.id}`,
         title: subscription.clientName,
         description: `${subscription.planName} - ${
-          due < 0 ? `venceu há ${Math.abs(due)}d` : `vence em ${due}d`
+          due === 0 ? 'vence hoje' : due < 0 ? `venceu há ${Math.abs(due)}d` : `vence em ${due}d`
         }`,
         tone: due < 0 ? 'red' : 'purple',
+        clientId: subscription.clientId,
+        phone: client?.phone ?? '',
+        planName: subscription.planName,
+        dueInDays: due,
       }
     }),
   }
@@ -119,13 +144,68 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
   const [active, setActive] = React.useState(barbershop)
   const [open, setOpen] = React.useState(false)
   const [notificationsOpen, setNotificationsOpen] = React.useState(false)
-  const [activeTab, setActiveTab] = React.useState<NotificationTab>('planos')
+  const [activeTab, setActiveTab] = React.useState<NotificationTab>('aniversarios')
+  const [birthdayEditor, setBirthdayEditor] = React.useState<NotificationItem | null>(null)
+  const [birthdayText, setBirthdayText] = React.useState('')
+  const [renewalEditor, setRenewalEditor] = React.useState<NotificationItem | null>(null)
+  const [renewalText, setRenewalText] = React.useState('')
+  const [preparedBirthdayIds, setPreparedBirthdayIds] = React.useState<Set<string>>(new Set())
   const barbershopRef = React.useRef<HTMLDivElement>(null)
   const notificationRef = React.useRef<HTMLDivElement>(null)
 
   React.useEffect(() => {
     setActive(barbershop)
   }, [barbershop])
+
+  const preparedStorageKey = React.useMemo(() => {
+    const date = new Date()
+    const day = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+    return `barberhub:birthday-messages:${barbershop.id}:${day}`
+  }, [barbershop.id])
+
+  React.useEffect(() => {
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(preparedStorageKey) ?? '[]')
+      setPreparedBirthdayIds(new Set(Array.isArray(saved) ? saved : []))
+    } catch {
+      setPreparedBirthdayIds(new Set())
+    }
+  }, [preparedStorageKey])
+
+  function editBirthdayMessage(item: NotificationItem) {
+    setBirthdayEditor(item)
+    setBirthdayText(birthdayMessage(item.title, barbershop.name || 'Duke Barber'))
+  }
+
+  function prepareBirthdayMessage() {
+    if (!birthdayEditor?.clientId || !birthdayEditor.phone) return
+    const url = whatsappUrl(birthdayEditor.phone, birthdayText.trim())
+    if (!url) return
+
+    const next = new Set(preparedBirthdayIds).add(birthdayEditor.clientId)
+    setPreparedBirthdayIds(next)
+    window.localStorage.setItem(preparedStorageKey, JSON.stringify([...next]))
+    window.open(url, '_blank', 'noopener,noreferrer')
+    setBirthdayEditor(null)
+  }
+
+  function editRenewalMessage(item: NotificationItem) {
+    setRenewalEditor(item)
+    setRenewalText(renewalMessage(
+      item.title,
+      item.planName ?? 'da barbearia',
+      item.dueInDays ?? 0,
+      barbershop.name || 'Duke Barber',
+    ))
+  }
+
+  function prepareRenewalMessage() {
+    if (!renewalEditor?.phone) return
+    const url = whatsappUrl(renewalEditor.phone, renewalText.trim())
+    if (!url) return
+    window.open(url, '_blank', 'noopener,noreferrer')
+    setRenewalEditor(null)
+  }
 
   React.useEffect(() => {
     const onClick = (e: MouseEvent) => {
@@ -281,7 +361,12 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
                   activeNotifications.map((item) => (
                     <div
                       key={item.id}
-                      className="flex items-center gap-3 rounded-lg border border-border bg-background p-3 transition-colors hover:bg-muted/50"
+                      className={cn(
+                        'flex items-center gap-3 rounded-lg border p-3 transition-colors',
+                        item.clientId && preparedBirthdayIds.has(item.clientId)
+                          ? 'border-emerald-200 bg-emerald-50/70'
+                          : 'border-border bg-background hover:bg-muted/50',
+                      )}
                     >
                       <span className={cn('flex size-10 shrink-0 items-center justify-center rounded-md', toneClass[item.tone])}>
                         {activeTab === 'planos' ? (
@@ -297,10 +382,38 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
                       <div className="min-w-0 flex-1">
                         <p className="truncate font-semibold text-foreground">{item.title}</p>
                         <p className="truncate text-sm text-muted-foreground">{item.description}</p>
+                        {activeTab === 'aniversarios' || activeTab === 'planos' ? (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {item.phone || 'Telefone não cadastrado'}
+                          </p>
+                        ) : null}
+                        {activeTab === 'aniversarios' && item.clientId && preparedBirthdayIds.has(item.clientId) ? (
+                          <span className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-emerald-700">
+                            <Check className="size-3.5" /> Mensagem preparada
+                          </span>
+                        ) : null}
                       </div>
-                      <Button variant="ghost" size="icon-sm" aria-label="Abrir conversa">
-                        <MessageSquare className="size-4 text-success" />
-                      </Button>
+                      {activeTab === 'aniversarios' ? (
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`Preparar mensagem para ${item.title}`}
+                          disabled={!normalizeWhatsAppPhone(item.phone ?? '')}
+                          onClick={() => editBirthdayMessage(item)}
+                        >
+                          <MessageSquare className="size-4 text-success" />
+                        </Button>
+                      ) : activeTab === 'planos' ? (
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`Preparar renovação para ${item.title}`}
+                          disabled={!normalizeWhatsAppPhone(item.phone ?? '')}
+                          onClick={() => editRenewalMessage(item)}
+                        >
+                          <MessageSquare className="size-4 text-emerald-600" />
+                        </Button>
+                      ) : null}
                     </div>
                   ))
                 ) : (
@@ -330,6 +443,56 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
           <span className="hidden sm:inline">Sair</span>
         </button>
       </div>
+
+      <Dialog open={Boolean(birthdayEditor)} onClose={() => setBirthdayEditor(null)} className="sm:max-w-xl">
+        <DialogHeader
+          title={`Mensagem para ${birthdayEditor?.title ?? ''}`}
+          description={`Revise o texto antes de abrir o WhatsApp · ${birthdayEditor?.phone ?? ''}`}
+        />
+        <Textarea
+          value={birthdayText}
+          onChange={(event) => setBirthdayText(event.target.value)}
+          rows={7}
+          className="min-h-44 resize-y leading-relaxed"
+          aria-label="Mensagem de aniversário"
+        />
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="outline" onClick={() => setBirthdayEditor(null)}>Cancelar</Button>
+          <Button
+            variant="gold"
+            disabled={!birthdayText.trim() || !normalizeWhatsAppPhone(birthdayEditor?.phone ?? '')}
+            onClick={prepareBirthdayMessage}
+          >
+            <MessageSquare className="size-4" />
+            Abrir no WhatsApp
+          </Button>
+        </div>
+      </Dialog>
+
+      <Dialog open={Boolean(renewalEditor)} onClose={() => setRenewalEditor(null)} className="sm:max-w-xl">
+        <DialogHeader
+          title={`Renovação de ${renewalEditor?.title ?? ''}`}
+          description={`Revise o texto antes de abrir o WhatsApp · ${renewalEditor?.phone ?? ''}`}
+        />
+        <Textarea
+          value={renewalText}
+          onChange={(event) => setRenewalText(event.target.value)}
+          rows={7}
+          className="min-h-44 resize-y leading-relaxed"
+          aria-label="Mensagem de renovação"
+        />
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="outline" onClick={() => setRenewalEditor(null)}>Cancelar</Button>
+          <Button
+            className="bg-emerald-600 text-white hover:bg-emerald-700"
+            disabled={!renewalText.trim() || !normalizeWhatsAppPhone(renewalEditor?.phone ?? '')}
+            onClick={prepareRenewalMessage}
+          >
+            <MessageSquare className="size-4" />
+            Abrir no WhatsApp
+          </Button>
+        </div>
+      </Dialog>
     </header>
   )
 }

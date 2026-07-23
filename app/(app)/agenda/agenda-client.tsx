@@ -2,13 +2,15 @@
 
 import * as React from 'react'
 import Link from 'next/link'
-import { ChevronLeft, ChevronRight, Plus, CalendarDays, Ban, Coffee } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, CalendarDays, Ban, Coffee, Copy, ExternalLink, MessageCircle, Share2 } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { StatusBadge } from '@/components/status-badge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Tabs } from '@/components/ui/tabs'
 import { Avatar } from '@/components/ui/avatar'
+import { Dialog, DialogHeader } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { formatCurrency } from '@/lib/format'
 import type { Appointment, Employee } from '@/lib/types'
@@ -54,14 +56,31 @@ function getWeekRange(value: string) {
 export function AgendaClient({
   appointments,
   employees,
+  publicSlug,
+  barbershopName,
 }: {
   appointments: Appointment[]
   employees: Employee[]
+  publicSlug: string
+  barbershopName: string
 }) {
   const [view, setView] = React.useState('dia')
   const [barberFilter, setBarberFilter] = React.useState<string>('todos')
   const [selectedDate, setSelectedDate] = React.useState(() => toDateKey(new Date()))
+  const [shareOpen, setShareOpen] = React.useState(false)
+  const [publicBookingUrl, setPublicBookingUrl] = React.useState('')
+  const [copied, setCopied] = React.useState(false)
   const agendaAppointments = appointments
+
+  React.useEffect(() => {
+    setPublicBookingUrl(`${window.location.origin}/agendar/${publicSlug}`)
+  }, [publicSlug])
+
+  async function copyBookingLink() {
+    await navigator.clipboard.writeText(publicBookingUrl)
+    setCopied(true)
+    window.setTimeout(() => setCopied(false), 2000)
+  }
 
   const barbers = employees.filter((e) => e.active && isBarberRole(e.role))
   const columns = barberFilter === 'todos' ? barbers : barbers.filter((b) => b.id === barberFilter)
@@ -107,6 +126,10 @@ export function AgendaClient({
   return (
     <div>
       <PageHeader title="Agenda" description="Gerencie os agendamentos por dia, semana ou barbeiro.">
+        <Button variant="outline" size="sm" onClick={() => setShareOpen(true)}>
+          <Share2 className="size-4" />
+          Link de agendamento
+        </Button>
         <Button variant="outline" size="sm">
           <Ban className="size-4" />
           Bloquear horário
@@ -259,6 +282,35 @@ export function AgendaClient({
           </div>
         </Card>
       )}
+
+      <Dialog open={shareOpen} onClose={() => setShareOpen(false)} className="sm:max-w-xl">
+        <DialogHeader
+          title="Link de agendamento online"
+          description="Envie este link para o cliente escolher serviço, dia e horário sem acessar o painel."
+        />
+        <div className="flex gap-2">
+          <Input value={publicBookingUrl} readOnly aria-label="Link público de agendamento" />
+          <Button variant="outline" size="icon" onClick={copyBookingLink} aria-label="Copiar link">
+            <Copy className="size-4" />
+          </Button>
+        </div>
+        {copied ? <p className="mt-2 text-sm font-medium text-emerald-700">Link copiado!</p> : null}
+        <div className="mt-5 flex flex-wrap justify-end gap-2">
+          <a href={publicBookingUrl} target="_blank" rel="noreferrer" className={buttonVariants({ variant: 'outline' })}>
+            <ExternalLink className="size-4" />
+            Visualizar página
+          </a>
+          <a
+            href={`https://wa.me/?text=${encodeURIComponent(`Olá! Agende seu horário na ${barbershopName} por aqui: ${publicBookingUrl}`)}`}
+            target="_blank"
+            rel="noreferrer"
+            className={buttonVariants({ variant: 'default' })}
+          >
+            <MessageCircle className="size-4" />
+            Enviar pelo WhatsApp
+          </a>
+        </div>
+      </Dialog>
     </div>
   )
 }
