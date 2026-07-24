@@ -138,7 +138,7 @@ function buildNotifications(clients: ReturnType<typeof useAppData>['clients'], c
 }
 
 export function Topbar({ onMenu }: { onMenu: () => void }) {
-  const { barbershop, catalog, clients, orders, subscriptions } = useAppData()
+  const { barbershop, catalog, clients, member, orders, subscriptions } = useAppData()
   const barbershops = [barbershop]
   const notifications = React.useMemo(() => buildNotifications(clients, catalog, orders, subscriptions), [catalog, clients, orders, subscriptions])
   const [active, setActive] = React.useState(barbershop)
@@ -429,10 +429,12 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
         </div>
 
         <div className="hidden items-center gap-2 rounded-lg border border-border bg-background py-1 pl-1 pr-2.5 sm:flex">
-          <Avatar name="Conta" className="size-7" />
+          <Avatar name={member.name || 'Conta'} className="size-7" />
           <span className="hidden leading-tight sm:block">
-            <span className="block text-xs font-semibold text-foreground">Minha conta</span>
-            <span className="block text-[11px] text-muted-foreground">Proprietário</span>
+            <span className="block max-w-28 truncate text-xs font-semibold text-foreground">{member.name || 'Minha conta'}</span>
+            <span className="block text-[11px] text-muted-foreground">
+              {member.role === 'owner' ? 'Proprietário' : member.role === 'barber' ? 'Barbeiro' : member.role === 'manager' ? 'Gerente' : 'Recepção'}
+            </span>
           </span>
         </div>
 

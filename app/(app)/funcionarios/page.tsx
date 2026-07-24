@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Mail, Pencil, Phone, Plus, Save, Scissors, Trash2, Trophy } from 'lucide-react'
+import { KeyRound, Mail, Pencil, Phone, Plus, Save, Scissors, Trash2, Trophy, UserCheck, UserX } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Avatar } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -23,24 +23,43 @@ import {
 import { useAppData } from '@/components/data/app-data-provider'
 import { formatCurrency, formatPercent } from '@/lib/format'
 import { isBarberRole } from '@/lib/employees'
+import type { Employee } from '@/lib/types'
 
 export default function FuncionariosPage() {
   const appData = useAppData()
   const [employees, setEmployees] = useState(() => appData.employees)
   const [saved, setSaved] = useState(false)
   const [editing, setEditing] = useState<null | { id:string; name:string; role:string; phone:string; email:string; active:string; service:string; product:string; subscription:string }>(null)
+  const [accessEditing, setAccessEditing] = useState<Employee | null>(null)
+  const [accessEmail, setAccessEmail] = useState('')
+  const [accessStatus, setAccessStatus] = useState('')
+  const [accessLoading, setAccessLoading] = useState(false)
   const [editStatus, setEditStatus] = useState('')
   const commissions = appData.commissions
+  const employeeValues = useMemo(() => new Map(employees.map((employee) => {
+    const paidOrders = appData.orders.filter((order) => order.status === 'paga' && order.employeeId === employee.id)
+    const revenue = paidOrders.reduce((sum, order) => sum + order.total, 0)
+    const services = paidOrders.reduce(
+      (sum, order) => sum + order.items.filter((item) => item.type === 'servico').reduce((itemSum, item) => itemSum + item.quantity, 0),
+      0,
+    )
+    const orderCommission = paidOrders.reduce((sum, order) => sum + order.items.reduce(
+      (itemSum, item) => itemSum + item.quantity * item.unitPrice * (item.type === 'servico' ? employee.serviceCommission : employee.productCommission) / 100,
+      0,
+    ), 0)
+    const subscriptionCommission = commissions
+      .filter((item) => item.employeeId === employee.id && item.origin === 'assinatura')
+      .reduce((sum, item) => sum + item.amount, 0)
+    return [employee.id, { revenue, services, commission: orderCommission + subscriptionCommission }]
+  })), [appData.orders, commissions, employees])
   const ranking = employees.map((employee) => ({
     id: employee.id,
     name: employee.name,
     color: employee.avatarColor,
-    services: commissions.filter((item) => item.employeeId === employee.id && item.origin === 'servico').length,
-    revenue: commissions.filter((item) => item.employeeId === employee.id).reduce((sum, item) => sum + item.base, 0),
+    services: employeeValues.get(employee.id)?.services ?? 0,
+    revenue: employeeValues.get(employee.id)?.revenue ?? 0,
   })).sort((a, b) => b.revenue - a.revenue)
-  const pending = commissions
-    .filter((c) => c.status === 'pendente')
-    .reduce((sum, commission) => sum + commission.amount, 0)
+  const pending = [...employeeValues.values()].reduce((sum, item) => sum + item.commission, 0)
 
   const activeEmployees = useMemo(() => employees.filter((e) => e.active), [employees])
 
@@ -63,6 +82,38 @@ export default function FuncionariosPage() {
     if (result.error) { setEditStatus(result.error); return }
     setEmployees((current) => current.map((employee) => employee.id === editing.id ? { ...employee, name:editing.name.trim(), role:editing.role, phone:editing.phone.trim(), email:editing.email.trim(), active:editing.active==='true', serviceCommission:service, productCommission:product, subscriptionCommission:subscription } : employee))
     setEditing(null); setSaved(true)
+  }
+
+  function openAccess(employee: Employee) {
+    setAccessStatus('')
+    setAccessEmail(employee.email)
+    setAccessEditing(employee)
+  }
+
+  async function updateAccess(enabled: boolean) {
+    if (!accessEditing) return
+    setAccessLoading(true)
+    setAccessStatus('')
+    const { createBrowserSupabaseClient } = await import('@/lib/supabase/client')
+    const { data: sessionData } = await createBrowserSupabaseClient().auth.getSession()
+    const response = await fetch('/api/staff-access', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${sessionData.session?.access_token ?? ''}`,
+      },
+      body: JSON.stringify({ employeeId: accessEditing.id, email: accessEmail, enabled }),
+    })
+    const payload = await response.json()
+    setAccessLoading(false)
+    if (!response.ok) {
+      setAccessStatus(payload.error ?? 'Não foi possível atualizar o acesso.')
+      return
+    }
+    setAccessStatus(enabled
+      ? payload.invited ? 'Convite enviado. O barbeiro deve criar a senha pelo e-mail.' : 'Acesso ativado.'
+      : 'Acesso desativado.')
+    await appData.refresh()
   }
 
   return (
@@ -94,7 +145,7 @@ export default function FuncionariosPage() {
           </p>
         </Card>
         <Card className="p-4">
-          <p className="text-sm text-muted-foreground">Comissões pendentes</p>
+          <p className="text-sm text-muted-foreground">Comissões estimadas</p>
           <p className="mt-1 text-2xl font-bold text-foreground">{formatCurrency(pending)}</p>
         </Card>
         <Card className="p-4">
@@ -113,6 +164,9 @@ export default function FuncionariosPage() {
                 <TableHead className="text-right">Serviços</TableHead>
                 <TableHead className="text-right">Produtos</TableHead>
                 <TableHead className="text-right">Assinaturas</TableHead>
+                <TableHead className="text-right">Faturamento</TableHead>
+                <TableHead className="text-right">Comissão</TableHead>
+                <TableHead>Acesso</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
@@ -138,12 +192,20 @@ export default function FuncionariosPage() {
                   <TableCell className="text-right tabular-nums">{formatPercent(employee.serviceCommission)}</TableCell>
                   <TableCell className="text-right tabular-nums">{formatPercent(employee.productCommission)}</TableCell>
                   <TableCell className="text-right tabular-nums">{formatPercent(employee.subscriptionCommission)}</TableCell>
+                  <TableCell className="text-right font-semibold tabular-nums">{formatCurrency(employeeValues.get(employee.id)?.revenue ?? 0)}</TableCell>
+                  <TableCell className="text-right font-semibold tabular-nums text-emerald-700">{formatCurrency(employeeValues.get(employee.id)?.commission ?? 0)}</TableCell>
+                  <TableCell>
+                    {appData.staffMembers.some((member) => member.employeeId === employee.id && member.active)
+                      ? <Badge variant="success">Liberado</Badge>
+                      : <Badge variant="secondary">Sem acesso</Badge>}
+                  </TableCell>
                   <TableCell>
                     <Badge variant={employee.active ? 'success' : 'secondary'}>{employee.active ? 'Ativo' : 'Inativo'}</Badge>
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="inline-flex gap-1">
                       <Button variant="ghost" size="icon-sm" aria-label={`Editar ${employee.name}`} onClick={() => { setEditStatus(''); setEditing({ id:employee.id, name:employee.name, role:employee.role, phone:employee.phone, email:employee.email, active:String(employee.active), service:String(employee.serviceCommission), product:String(employee.productCommission), subscription:String(employee.subscriptionCommission) }) }}><Pencil className="size-4" /></Button>
+                      {appData.member.role === 'owner' && isBarberRole(employee.role) ? <Button variant="ghost" size="icon-sm" aria-label={`Gerenciar acesso de ${employee.name}`} onClick={() => openAccess(employee)}><KeyRound className="size-4" /></Button> : null}
                       <Button variant="ghost" size="icon-sm" aria-label={`Excluir ${employee.name}`} onClick={() => deleteEmployee(employee.id)}><Trash2 className="size-4" /></Button>
                     </div>
                   </TableCell>
@@ -189,6 +251,29 @@ export default function FuncionariosPage() {
           <Field label="Comissão em produtos (%)"><Input type="number" min="0" max="100" value={editing.product} onChange={e=>setEditing({...editing,product:e.target.value})}/></Field>
           <Field label="Comissão em assinaturas (%)"><Input type="number" min="0" max="100" value={editing.subscription} onChange={e=>setEditing({...editing,subscription:e.target.value})}/></Field>
         </div>{editStatus?<p className="mt-4 text-sm text-destructive">{editStatus}</p>:null}<div className="mt-5 flex justify-end gap-2"><Button variant="outline" onClick={()=>setEditing(null)}>Cancelar</Button><Button variant="gold" onClick={saveEmployee}><Save className="size-4"/>Salvar alterações</Button></div></>:null}
+      </Dialog>
+      <Dialog open={Boolean(accessEditing)} onClose={() => setAccessEditing(null)} className="sm:max-w-lg">
+        {accessEditing ? <>
+          <DialogHeader
+            title={`Acesso de ${accessEditing.name}`}
+            description="O barbeiro verá somente a própria agenda, faturamento e comissão. A conta do proprietário não será alterada."
+          />
+          <Field label="E-mail para acesso">
+            <Input type="email" value={accessEmail} onChange={(event) => setAccessEmail(event.target.value)} placeholder="barbeiro@email.com" />
+          </Field>
+          {accessStatus ? <p className="mt-3 rounded-md bg-muted p-3 text-sm">{accessStatus}</p> : null}
+          <div className="mt-5 flex flex-wrap justify-end gap-2">
+            {appData.staffMembers.some((member) => member.employeeId === accessEditing.id && member.active) ? (
+              <Button variant="destructive" disabled={accessLoading} onClick={() => updateAccess(false)}>
+                <UserX className="size-4" /> Desativar acesso
+              </Button>
+            ) : (
+              <Button variant="gold" disabled={accessLoading || !accessEmail.trim()} onClick={() => updateAccess(true)}>
+                <UserCheck className="size-4" /> {accessLoading ? 'Enviando...' : 'Criar acesso e convidar'}
+              </Button>
+            )}
+          </div>
+        </> : null}
       </Dialog>
     </div>
   )

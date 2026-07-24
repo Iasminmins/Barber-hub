@@ -8,6 +8,7 @@ import type { Appointment, Barbershop, CatalogItem, Client, Commission, Employee
 type AppData = {
   barbershop: Barbershop
   member: Member
+  staffMembers: Member[]
   employees: Employee[]
   clients: Client[]
   catalog: CatalogItem[]
@@ -89,7 +90,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     const { data: memberships, error: memberError } = await withTimeout(
       supabase
         .from('members')
-        .select('id, barbershop_id, name, email, role, active')
+        .select('id, barbershop_id, employee_id, name, email, role, active')
         .eq('user_id', user.id)
         .eq('active', true)
         .limit(1),
@@ -119,6 +120,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
     const results = await withTimeout(
       Promise.all([
+        supabase.from('members').select('id, barbershop_id, employee_id, name, email, role, active').eq('barbershop_id', shopId).order('name'),
         supabase.from('employees').select('*').eq('barbershop_id', shopId).order('name'),
         fetchAllRows((from, to) => supabase.from('clients').select('*').eq('barbershop_id', shopId).order('name').range(from, to)),
         supabase.from('catalog_items').select('*').eq('barbershop_id', shopId).order('name'),
@@ -135,7 +137,12 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     )
     const failed = results.find((result) => result.error)
     if (failed?.error) { setError(failed.error.message); return }
-    const [employees, clients, catalog, appointments, orders, orderItems, plans, subscriptions, commissions, financial, imports] = results.map((result) => result.data ?? [])
+    const [staffMembers, employees, clients, catalog, appointments, orders, orderItems, plans, subscriptions, commissions, financial, imports] = results.map((result) => result.data ?? [])
+    const currentMembership = memberships[0]
+    const linkedEmployeeId = currentMembership.employee_id ?? ''
+    const visibleEmployees = currentMembership.role === 'barber'
+      ? employees.filter((employee: any) => employee.id === linkedEmployeeId)
+      : employees
 
     setValue({
       barbershop: {
@@ -153,8 +160,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         paymentMethods: normalizePaymentMethods(shop.payment_methods),
         agendaSettings: normalizeAgendaSettings(shop.agenda_settings),
       },
-      member: { id: memberships[0].id, barbershopId: shopId, name: memberships[0].name, email: memberships[0].email, role: memberships[0].role, active: memberships[0].active },
-      employees: employees.map((r: any) => ({ id:r.id, barbershopId:r.barbershop_id, name:r.name, role:r.role, phone:r.phone??'', email:r.email??'', active:r.active, serviceCommission:num(r.service_commission), productCommission:num(r.product_commission), subscriptionCommission:num(r.subscription_commission), avatarColor:r.avatar_color??undefined })),
+      member: { id: currentMembership.id, barbershopId: shopId, employeeId: linkedEmployeeId || undefined, name: currentMembership.name, email: currentMembership.email, role: currentMembership.role, active: currentMembership.active },
+      staffMembers: staffMembers.map((r: any) => ({ id:r.id, barbershopId:r.barbershop_id, employeeId:r.employee_id??undefined, name:r.name, email:r.email, role:r.role, active:r.active })),
+      employees: visibleEmployees.map((r: any) => ({ id:r.id, barbershopId:r.barbershop_id, name:r.name, role:r.role, phone:r.phone??'', email:r.email??'', active:r.active, serviceCommission:num(r.service_commission), productCommission:num(r.product_commission), subscriptionCommission:num(r.subscription_commission), avatarColor:r.avatar_color??undefined })),
       clients: clients.map((r: any) => ({ id:r.id, barbershopId:r.barbershop_id, name:r.name, phone:r.phone??'', email:r.email??'', birthDate:r.birth_date??'', address:r.address??'', notes:r.notes??'', tags:r.tags??[], totalSpent:num(r.total_spent), visits:num(r.visits), lastVisit:r.last_visit??'', favoriteService:r.favorite_service??'', preferredBarber:r.preferred_barber??'', createdAt:r.created_at })),
       catalog: catalog.map((r: any) => ({ id:r.id, barbershopId:r.barbershop_id, type:r.type, name:r.name, category:r.category??'', price:num(r.price), cost:num(r.cost), durationMin:r.duration_min??undefined, stock:r.stock??undefined, minStock:r.min_stock??undefined, commission:num(r.commission), active:r.active })),
       appointments: appointments.map((r: any) => ({ id:r.id, barbershopId:r.barbershop_id, clientId:r.client_id??'', clientName:r.client_name, employeeId:r.employee_id??'', employeeName:r.employee_name, serviceId:r.service_id??'', serviceName:r.service_name, date:r.date, start:String(r.start).slice(0,5), durationMin:num(r.duration_min), status:r.status, price:num(r.price) })),

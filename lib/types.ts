@@ -35,6 +35,7 @@ export interface Member {
   email: string
   role: Role
   active: boolean
+  employeeId?: string
 }
 
 export interface Employee {

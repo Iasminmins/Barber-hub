@@ -1,26 +1,5 @@
-<svg width="180" height="180" viewBox="0 0 180 180" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <style>
-    @media (prefers-color-scheme: light) {
-      .background { fill: black; }
-      .foreground { fill: white; }
-    }
-    @media (prefers-color-scheme: dark) {
-      .background { fill: white; }
-      .foreground { fill: black; }
-    }
-  </style>
-  <g clip-path="url(#clip0_7960_43945)">
-    <rect class="background" width="180" height="180" rx="37" />
-    <g style="transform: scale(95%); transform-origin: center">
-      <path class="foreground"
-        d="M101.141 53H136.632C151.023 53 162.689 64.6662 162.689 79.0573V112.904H148.112V79.0573C148.112 78.7105 148.098 78.3662 148.072 78.0251L112.581 112.898C112.701 112.902 112.821 112.904 112.941 112.904H148.112V126.672H112.941C98.5504 126.672 86.5638 114.891 86.5638 100.5V66.7434H101.141V100.5C101.141 101.15 101.191 101.792 101.289 102.422L137.56 66.7816C137.255 66.7563 136.945 66.7434 136.632 66.7434H101.141V53Z" />
-      <path class="foreground"
-        d="M65.2926 124.136L14 66.7372H34.6355L64.7495 100.436V66.7372H80.1365V118.47C80.1365 126.278 70.4953 129.958 65.2926 124.136Z" />
-    </g>
-  </g>
-  <defs>
-    <clipPath id="clip0_7960_43945">
-      <rect width="180" height="180" fill="white" />
-    </clipPath>
-  </defs>
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="64" height="64" rx="15" fill="#1E3A32"/>
+  <path d="M17 18.5C17 16.57 18.57 15 20.5 15H31C36.52 15 41 19.03 41 24C41 26.7 39.68 29.12 37.6 30.78C40.83 32.32 43 35.36 43 38.85C43 44.45 38.08 49 32 49H20.5C18.57 49 17 47.43 17 45.5V18.5ZM24 21V28H30.5C32.43 28 34 26.43 34 24.5C34 22.57 32.43 21 30.5 21H24ZM24 34V43H31.5C33.99 43 36 40.99 36 38.5C36 36.01 33.99 34 31.5 34H24Z" fill="#F4CF63"/>
+  <path d="M47 16L49 20L53 22L49 24L47 28L45 24L41 22L45 20L47 16Z" fill="#FFF8E1"/>
 </svg>

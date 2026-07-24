@@ -247,7 +247,12 @@ export function PublicBookingClient({ slug }: { slug: string }) {
               </div>
               <div>
                 <Label className="mb-2 block">3. Escolha o horário</Label>
-                <div className="flex min-h-10 flex-wrap gap-2">
+                <div className="flex min-h-11 flex-wrap items-center gap-2 rounded-lg border border-dashed border-border bg-muted/25 p-2">
+                  {!serviceId || !date ? (
+                    <span className="text-sm text-muted-foreground">
+                      Escolha primeiro o serviço e o dia para ver os horários.
+                    </span>
+                  ) : null}
                   {loadingSlots ? <span className="text-sm text-muted-foreground">Buscando horários...</span> : null}
                   {!loadingSlots && date && serviceId && slots.length === 0 ? <span className="text-sm text-muted-foreground">Nenhum horário disponível neste dia.</span> : null}
                   {slots.map((slot) => (

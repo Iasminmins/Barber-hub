@@ -7,6 +7,11 @@ export const metadata: Metadata = {
   description:
     'Plataforma completa para gestão de barbearias: agenda, comandas, clientes, assinaturas, financeiro e muito mais.',
   generator: 'v0.app',
+  icons: {
+    icon: [{ url: '/icon.svg?v=2', type: 'image/svg+xml' }],
+    apple: '/apple-icon.png',
+    shortcut: '/icon.svg?v=2',
+  },
 }
 
 export const viewport: Viewport = {

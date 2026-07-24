@@ -4,7 +4,7 @@ import { DashboardClient } from './dashboard-client'
 import { useAppData } from '@/components/data/app-data-provider'
 
 export default function DashboardPage() {
-  const { appointments, catalog, clients, commissions, employees, financialEntries, orders, subscriptions } = useAppData()
+  const { appointments, catalog, clients, commissions, employees, financialEntries, member, orders, subscriptions } = useAppData()
   return (
     <DashboardClient
       appointments={appointments}
@@ -15,6 +15,7 @@ export default function DashboardPage() {
       financialEntries={financialEntries}
       orders={orders}
       subscriptions={subscriptions}
+      isBarber={member.role === 'barber'}
     />
   )
 }

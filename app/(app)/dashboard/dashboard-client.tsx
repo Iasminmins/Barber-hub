@@ -174,6 +174,7 @@ export function DashboardClient({
   employees,
   orders,
   subscriptions,
+  isBarber = false,
 }: {
   appointments: Appointment[]
   catalog: CatalogItem[]
@@ -183,6 +184,7 @@ export function DashboardClient({
   financialEntries: FinancialEntry[]
   orders: Order[]
   subscriptions: Subscription[]
+  isBarber?: boolean
 }) {
   const dashboardOrders = orders
   const dashboardAppointments = appointments
@@ -229,8 +231,8 @@ export function DashboardClient({
   return (
     <div>
       <PageHeader
-        title="Dashboard"
-        description="Visão geral da operação da sua barbearia."
+        title={isBarber ? 'Meu painel' : 'Dashboard'}
+        description={isBarber ? 'Sua agenda, produção, faturamento e comissões.' : 'Visão geral da operação da sua barbearia.'}
       />
 
       <DashboardPeriodControls
@@ -276,12 +278,12 @@ export function DashboardClient({
         />
       </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {!isBarber ? <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Clientes novos" value={String(newClients)} icon={Users} accent="primary" hint="no período" />
         <StatCard label="Assinaturas ativas" value={String(activeSubs)} icon={CreditCard} accent="success" hint={`${expiringSubs.length} vencendo`} />
         <StatCard label="Clientes em risco" value={String(atRiskClients)} icon={AlertTriangle} accent="destructive" hint="inativos" />
         <StatCard label="Estoque baixo" value={String(lowStock.length)} icon={PackageX} accent="warning" hint="produtos" />
-      </div>
+      </div> : null}
 
       <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
@@ -344,7 +346,7 @@ export function DashboardClient({
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Trophy className="size-4 text-muted-foreground" />
-              Ranking de barbeiros
+              {isBarber ? 'Meu desempenho' : 'Ranking de barbeiros'}
             </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
@@ -368,7 +370,7 @@ export function DashboardClient({
           </CardContent>
         </Card>
 
-        <Card>
+        {!isBarber ? <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <AlertTriangle className="size-4 text-muted-foreground" />
@@ -413,7 +415,7 @@ export function DashboardClient({
               </div>
             </div>
           </CardContent>
-        </Card>
+        </Card> : null}
       </div>
     </div>
   )
