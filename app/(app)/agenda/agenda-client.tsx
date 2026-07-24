@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import Link from 'next/link'
-import { ChevronLeft, ChevronRight, Plus, CalendarDays, Ban, Coffee, Copy, ExternalLink, MessageCircle, Share2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, CalendarDays, Ban, Coffee, Copy, ExternalLink, MessageCircle, Share2, Save } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { StatusBadge } from '@/components/status-badge'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -11,10 +11,12 @@ import { Tabs } from '@/components/ui/tabs'
 import { Avatar } from '@/components/ui/avatar'
 import { Dialog, DialogHeader } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { formatCurrency } from '@/lib/format'
 import type { Appointment, Employee } from '@/lib/types'
 import { isBarberRole } from '@/lib/employees'
+import { useAppData } from '@/components/data/app-data-provider'
 
 const HOURS = Array.from({ length: 12 }, (_, i) => 8 + i) // 08:00 - 19:00
 
@@ -27,9 +29,23 @@ const statusColor: Record<Appointment['status'], string> = {
   faltou: 'border-l-warning bg-warning/10 opacity-80',
 }
 
+const appointmentStatuses: Array<{ value: Appointment['status']; label: string }> = [
+  { value: 'agendado', label: 'Agendado' },
+  { value: 'confirmado', label: 'Confirmado' },
+  { value: 'chegou', label: 'Chegou' },
+  { value: 'concluido', label: 'Concluído' },
+  { value: 'cancelado', label: 'Cancelado' },
+  { value: 'faltou', label: 'Faltou' },
+]
+
 function timeToTop(start: string) {
   const [h, mm] = start.split(':').map(Number)
   return (h - 8) * 64 + (mm / 60) * 64
+}
+
+function timeToMinutes(value: string) {
+  const [hours, minutes] = value.split(':').map(Number)
+  return hours * 60 + minutes
 }
 
 function toDateKey(date: Date) {
@@ -64,12 +80,17 @@ export function AgendaClient({
   publicSlug: string
   barbershopName: string
 }) {
+  const { catalog, clients, updateRecord } = useAppData()
   const [view, setView] = React.useState('dia')
   const [barberFilter, setBarberFilter] = React.useState<string>('todos')
   const [selectedDate, setSelectedDate] = React.useState(() => toDateKey(new Date()))
   const [shareOpen, setShareOpen] = React.useState(false)
   const [publicBookingUrl, setPublicBookingUrl] = React.useState('')
   const [copied, setCopied] = React.useState(false)
+  const [editingAppointment, setEditingAppointment] = React.useState<Appointment | null>(null)
+  const [editingPhone, setEditingPhone] = React.useState('')
+  const [savingAppointment, setSavingAppointment] = React.useState(false)
+  const [appointmentError, setAppointmentError] = React.useState('')
   const agendaAppointments = appointments
 
   React.useEffect(() => {
@@ -80,6 +101,96 @@ export function AgendaClient({
     await navigator.clipboard.writeText(publicBookingUrl)
     setCopied(true)
     window.setTimeout(() => setCopied(false), 2000)
+  }
+
+  function openAppointment(appointment: Appointment) {
+    const client = clients.find((item) => item.id === appointment.clientId)
+    setEditingAppointment({ ...appointment })
+    setEditingPhone(client?.phone ?? '')
+    setAppointmentError('')
+  }
+
+  function closeAppointment() {
+    if (savingAppointment) return
+    setEditingAppointment(null)
+    setAppointmentError('')
+  }
+
+  function updateAppointmentDraft(values: Partial<Appointment>) {
+    setEditingAppointment((current) => current ? { ...current, ...values } : current)
+    setAppointmentError('')
+  }
+
+  async function saveAppointment() {
+    if (!editingAppointment) return
+    const clientName = editingAppointment.clientName.trim()
+    const employee = employees.find((item) => item.id === editingAppointment.employeeId)
+    const service = catalog.find((item) => item.id === editingAppointment.serviceId && item.type === 'servico')
+    const price = Number(editingAppointment.price)
+    const durationMin = Number(editingAppointment.durationMin)
+
+    if (!clientName || !employee || !service || !editingAppointment.date || !editingAppointment.start) {
+      setAppointmentError('Preencha cliente, serviço, barbeiro, data e horário.')
+      return
+    }
+    if (!Number.isFinite(price) || price < 0 || !Number.isFinite(durationMin) || durationMin < 5) {
+      setAppointmentError('Revise o valor e a duração do serviço.')
+      return
+    }
+
+    const editedStart = timeToMinutes(editingAppointment.start)
+    const editedEnd = editedStart + durationMin
+    const hasConflict = appointments.some((appointment) => {
+      if (
+        appointment.id === editingAppointment.id
+        || appointment.employeeId !== employee.id
+        || appointment.date !== editingAppointment.date
+        || appointment.status === 'cancelado'
+      ) return false
+      const appointmentStart = timeToMinutes(appointment.start)
+      const appointmentEnd = appointmentStart + appointment.durationMin
+      return appointmentStart < editedEnd && appointmentEnd > editedStart
+    })
+    if (hasConflict) {
+      setAppointmentError('Este barbeiro já possui outro agendamento nesse horário.')
+      return
+    }
+
+    setSavingAppointment(true)
+    setAppointmentError('')
+
+    if (editingAppointment.clientId) {
+      const clientResult = await updateRecord('clients', editingAppointment.clientId, {
+        name: clientName,
+        phone: editingPhone.trim() || null,
+      })
+      if (clientResult.error) {
+        setAppointmentError(clientResult.error)
+        setSavingAppointment(false)
+        return
+      }
+    }
+
+    const result = await updateRecord('appointments', editingAppointment.id, {
+      client_name: clientName,
+      employee_id: employee.id,
+      employee_name: employee.name,
+      service_id: service.id,
+      service_name: service.name,
+      date: editingAppointment.date,
+      start: editingAppointment.start,
+      duration_min: durationMin,
+      status: editingAppointment.status,
+      price,
+      notes: editingAppointment.notes?.trim() || null,
+    })
+
+    setSavingAppointment(false)
+    if (result.error) {
+      setAppointmentError(result.error)
+      return
+    }
+    setEditingAppointment(null)
   }
 
   const barbers = employees.filter((e) => e.active && isBarberRole(e.role))
@@ -232,17 +343,20 @@ export function AgendaClient({
                         <div key={h} className="h-16 border-b border-border/60" />
                       ))}
                       {appts.map((a) => (
-                        <div
+                        <button
+                          type="button"
                           key={a.id}
+                          onClick={() => openAppointment(a)}
+                          aria-label={`Abrir agendamento de ${a.clientName} às ${a.start}`}
                           className={cn(
-                            'absolute left-1 right-1 overflow-hidden rounded-md border-l-2 px-2 py-1 shadow-sm',
+                            'absolute left-1 right-1 cursor-pointer overflow-hidden rounded-md border-l-2 px-2 py-1 text-left shadow-sm transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                             statusColor[a.status],
                           )}
                           style={{ top: timeToTop(a.start), height: (a.durationMin / 60) * 64 - 4 }}
                         >
                           <p className="truncate text-xs font-semibold text-foreground">{a.start} · {a.clientName}</p>
                           <p className="truncate text-[11px] text-muted-foreground">{a.serviceName}</p>
-                        </div>
+                        </button>
                       ))}
                     </div>
                   </div>
@@ -260,7 +374,13 @@ export function AgendaClient({
           </div>
           <div className="divide-y divide-border">
             {periodAppointments.map((a) => (
-                <div key={a.id} className="flex items-center gap-3 p-3 hover:bg-muted/50">
+                <button
+                  type="button"
+                  key={a.id}
+                  onClick={() => openAppointment(a)}
+                  className="flex w-full items-center gap-3 p-3 text-left transition hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                  aria-label={`Abrir agendamento de ${a.clientName} às ${a.start}`}
+                >
                   <div className="flex w-16 flex-col items-center rounded-md bg-muted py-1">
                     <span className="text-xs font-semibold text-foreground">{a.start}</span>
                     <span className="text-[10px] text-muted-foreground">
@@ -274,7 +394,7 @@ export function AgendaClient({
                   </div>
                   <span className="hidden text-sm font-medium text-foreground sm:block">{formatCurrency(a.price)}</span>
                   <StatusBadge status={a.status} />
-                </div>
+                </button>
               ))}
             {periodAppointments.length === 0 && (
               <p className="p-6 text-center text-sm text-muted-foreground">Nenhum agendamento neste período.</p>
@@ -310,6 +430,158 @@ export function AgendaClient({
             Enviar pelo WhatsApp
           </a>
         </div>
+      </Dialog>
+
+      <Dialog open={Boolean(editingAppointment)} onClose={closeAppointment} className="sm:max-w-2xl">
+        {editingAppointment ? (
+          <>
+            <DialogHeader
+              title="Detalhes do agendamento"
+              description="Consulte e edite as informações. As alterações serão refletidas diretamente na agenda."
+            />
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="grid gap-1.5 text-sm font-medium text-foreground">
+                Nome do cliente
+                <Input
+                  value={editingAppointment.clientName}
+                  onChange={(event) => updateAppointmentDraft({ clientName: event.target.value })}
+                  autoComplete="name"
+                />
+              </label>
+
+              <label className="grid gap-1.5 text-sm font-medium text-foreground">
+                Telefone / WhatsApp
+                <Input
+                  value={editingPhone}
+                  onChange={(event) => setEditingPhone(event.target.value)}
+                  inputMode="tel"
+                  autoComplete="tel"
+                  placeholder="(00) 00000-0000"
+                  disabled={!editingAppointment.clientId}
+                />
+              </label>
+
+              <label className="grid gap-1.5 text-sm font-medium text-foreground">
+                Serviço
+                <select
+                  value={editingAppointment.serviceId}
+                  onChange={(event) => {
+                    const service = catalog.find((item) => item.id === event.target.value)
+                    updateAppointmentDraft({
+                      serviceId: event.target.value,
+                      serviceName: service?.name ?? editingAppointment.serviceName,
+                      durationMin: service?.durationMin ?? editingAppointment.durationMin,
+                      price: service?.price ?? editingAppointment.price,
+                    })
+                  }}
+                  className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                >
+                  {catalog.filter((item) => item.type === 'servico' && item.active).map((service) => (
+                    <option key={service.id} value={service.id}>{service.name}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="grid gap-1.5 text-sm font-medium text-foreground">
+                Barbeiro
+                <select
+                  value={editingAppointment.employeeId}
+                  onChange={(event) => {
+                    const employee = employees.find((item) => item.id === event.target.value)
+                    updateAppointmentDraft({
+                      employeeId: event.target.value,
+                      employeeName: employee?.name ?? editingAppointment.employeeName,
+                    })
+                  }}
+                  className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                >
+                  {barbers.map((employee) => (
+                    <option key={employee.id} value={employee.id}>{employee.name}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="grid gap-1.5 text-sm font-medium text-foreground">
+                Data
+                <Input
+                  type="date"
+                  value={editingAppointment.date}
+                  onChange={(event) => updateAppointmentDraft({ date: event.target.value })}
+                />
+              </label>
+
+              <label className="grid gap-1.5 text-sm font-medium text-foreground">
+                Horário
+                <Input
+                  type="time"
+                  value={editingAppointment.start}
+                  onChange={(event) => updateAppointmentDraft({ start: event.target.value })}
+                />
+              </label>
+
+              <label className="grid gap-1.5 text-sm font-medium text-foreground">
+                Duração em minutos
+                <Input
+                  type="number"
+                  min={5}
+                  step={5}
+                  value={editingAppointment.durationMin}
+                  onChange={(event) => updateAppointmentDraft({ durationMin: Number(event.target.value) })}
+                />
+              </label>
+
+              <label className="grid gap-1.5 text-sm font-medium text-foreground">
+                Valor
+                <Input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={editingAppointment.price}
+                  onChange={(event) => updateAppointmentDraft({ price: Number(event.target.value) })}
+                />
+              </label>
+
+              <label className="grid gap-1.5 text-sm font-medium text-foreground sm:col-span-2">
+                Status
+                <select
+                  value={editingAppointment.status}
+                  onChange={(event) => updateAppointmentDraft({ status: event.target.value as Appointment['status'] })}
+                  className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                >
+                  {appointmentStatuses.map((status) => (
+                    <option key={status.value} value={status.value}>{status.label}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="grid gap-1.5 text-sm font-medium text-foreground sm:col-span-2">
+                Observação
+                <Textarea
+                  value={editingAppointment.notes ?? ''}
+                  onChange={(event) => updateAppointmentDraft({ notes: event.target.value })}
+                  placeholder="Preferências ou informações importantes do cliente"
+                />
+              </label>
+            </div>
+
+            {appointmentError ? (
+              <p role="alert" className="mt-4 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {appointmentError}
+              </p>
+            ) : null}
+
+            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button variant="outline" onClick={closeAppointment} disabled={savingAppointment}>
+                Cancelar
+              </Button>
+              <Button onClick={saveAppointment} disabled={savingAppointment}>
+                <Save className="size-4" />
+                {savingAppointment ? 'Salvando...' : 'Salvar alterações'}
+              </Button>
+            </div>
+          </>
+        ) : null}
       </Dialog>
     </div>
   )

@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { KeyRound, Mail, Pencil, Phone, Plus, Save, Scissors, Trash2, Trophy, UserCheck, UserX } from 'lucide-react'
+import { KeyRound, Mail, Pencil, Phone, Plus, Save, Trash2, Trophy, UserCheck, UserX } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Avatar } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -25,6 +25,50 @@ import { formatCurrency, formatPercent } from '@/lib/format'
 import { isBarberRole } from '@/lib/employees'
 import type { Employee } from '@/lib/types'
 
+function normalizeEmployeeName(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+}
+
+function editDistance(left: string, right: string) {
+  const previous = Array.from({ length: right.length + 1 }, (_, index) => index)
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+    const current = [leftIndex]
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+      current[rightIndex] = Math.min(
+        current[rightIndex - 1] + 1,
+        previous[rightIndex] + 1,
+        previous[rightIndex - 1] + (left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1),
+      )
+    }
+    previous.splice(0, previous.length, ...current)
+  }
+  return previous[right.length]
+}
+
+function resolveOrderEmployeeId(order: { employeeId: string; employeeName: string }, employees: Employee[]) {
+  if (order.employeeId && employees.some((employee) => employee.id === order.employeeId)) return order.employeeId
+  const orderName = normalizeEmployeeName(order.employeeName)
+  if (!orderName || orderName === 'naoatribuido') return ''
+  const exact = employees.find((employee) => normalizeEmployeeName(employee.name) === orderName)
+  if (exact) return exact.id
+  const candidates = employees
+    .map((employee) => ({ employee, distance: editDistance(orderName, normalizeEmployeeName(employee.name)) }))
+    .sort((left, right) => left.distance - right.distance)
+  return candidates[0]?.distance === 1 && candidates[1]?.distance !== 1 ? candidates[0].employee.id : ''
+}
+
+function paidOrderValue(order: ReturnType<typeof useAppData>['orders'][number]) {
+  if (order.total > 0) return order.total
+  return Math.max(
+    0,
+    order.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0) - order.discount + order.surcharge,
+  )
+}
+
 export default function FuncionariosPage() {
   const appData = useAppData()
   const [employees, setEmployees] = useState(() => appData.employees)
@@ -36,22 +80,30 @@ export default function FuncionariosPage() {
   const [accessLoading, setAccessLoading] = useState(false)
   const [editStatus, setEditStatus] = useState('')
   const commissions = appData.commissions
+  const currentMonth = new Date().toISOString().slice(0, 7)
+  const paidOrdersWithEmployee = useMemo(() => appData.orders
+    .filter((order) => order.status === 'paga' && order.createdAt.slice(0, 7) === currentMonth)
+    .map((order) => ({
+      order,
+      resolvedEmployeeId: resolveOrderEmployeeId(order, employees),
+      value: paidOrderValue(order),
+    })), [appData.orders, currentMonth, employees])
   const employeeValues = useMemo(() => new Map(employees.map((employee) => {
-    const paidOrders = appData.orders.filter((order) => order.status === 'paga' && order.employeeId === employee.id)
-    const revenue = paidOrders.reduce((sum, order) => sum + order.total, 0)
+    const paidOrders = paidOrdersWithEmployee.filter((item) => item.resolvedEmployeeId === employee.id)
+    const revenue = paidOrders.reduce((sum, item) => sum + item.value, 0)
     const services = paidOrders.reduce(
-      (sum, order) => sum + order.items.filter((item) => item.type === 'servico').reduce((itemSum, item) => itemSum + item.quantity, 0),
+      (sum, item) => sum + item.order.items.filter((orderItem) => orderItem.type === 'servico').reduce((itemSum, orderItem) => itemSum + orderItem.quantity, 0),
       0,
     )
-    const orderCommission = paidOrders.reduce((sum, order) => sum + order.items.reduce(
+    const orderCommission = paidOrders.reduce((sum, item) => sum + item.order.items.reduce(
       (itemSum, item) => itemSum + item.quantity * item.unitPrice * (item.type === 'servico' ? employee.serviceCommission : employee.productCommission) / 100,
       0,
     ), 0)
     const subscriptionCommission = commissions
-      .filter((item) => item.employeeId === employee.id && item.origin === 'assinatura')
+      .filter((item) => item.employeeId === employee.id && item.origin === 'assinatura' && item.date.slice(0, 7) === currentMonth)
       .reduce((sum, item) => sum + item.amount, 0)
     return [employee.id, { revenue, services, commission: orderCommission + subscriptionCommission }]
-  })), [appData.orders, commissions, employees])
+  })), [commissions, currentMonth, employees, paidOrdersWithEmployee])
   const ranking = employees.map((employee) => ({
     id: employee.id,
     name: employee.name,
@@ -60,6 +112,8 @@ export default function FuncionariosPage() {
     revenue: employeeValues.get(employee.id)?.revenue ?? 0,
   })).sort((a, b) => b.revenue - a.revenue)
   const pending = [...employeeValues.values()].reduce((sum, item) => sum + item.commission, 0)
+  const totalRevenue = [...employeeValues.values()].reduce((sum, item) => sum + item.revenue, 0)
+  const attributedPaidOrders = paidOrdersWithEmployee.filter((item) => item.resolvedEmployeeId).length
 
   const activeEmployees = useMemo(() => employees.filter((e) => e.active), [employees])
 
@@ -139,24 +193,61 @@ export default function FuncionariosPage() {
           <p className="mt-1 text-2xl font-bold text-foreground">{activeEmployees.length}</p>
         </Card>
         <Card className="p-4">
-          <p className="text-sm text-muted-foreground">Barbeiros ativos</p>
-          <p className="mt-1 text-2xl font-bold text-foreground">
-            {activeEmployees.filter((e) => isBarberRole(e.role)).length}
-          </p>
+          <p className="text-sm text-muted-foreground">Vendas pagas no mês</p>
+          <p className="mt-1 text-2xl font-bold text-foreground">{attributedPaidOrders}</p>
         </Card>
         <Card className="p-4">
-          <p className="text-sm text-muted-foreground">Comissões estimadas</p>
+          <p className="text-sm text-muted-foreground">Faturamento do mês</p>
+          <p className="mt-1 text-2xl font-bold text-foreground">{formatCurrency(totalRevenue)}</p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-sm text-muted-foreground">Comissões do mês</p>
           <p className="mt-1 text-2xl font-bold text-foreground">{formatCurrency(pending)}</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-sm text-muted-foreground">Top faturamento</p>
-          <p className="mt-1 truncate text-2xl font-bold text-foreground">{ranking[0]?.name}</p>
         </Card>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
-        <Card className="overflow-hidden">
-          <Table>
+      <Card className="mb-4 p-5">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="flex items-center gap-2 font-semibold text-foreground">
+              <Trophy className="size-4 text-gold-foreground" />
+              Ranking do mês
+            </h3>
+            <p className="mt-1 text-sm text-muted-foreground">Faturamento, serviços e comissão de cada integrante no mês atual.</p>
+          </div>
+          <span className="text-sm font-semibold text-foreground">Total {formatCurrency(totalRevenue)}</span>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {ranking.map((item, index) => {
+            const values = employeeValues.get(item.id)
+            return (
+              <div key={item.id} className="rounded-xl border border-border bg-muted/20 p-4">
+                <div className="flex items-center gap-3">
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">{index + 1}</span>
+                  <Avatar name={item.name} color={item.color} className="size-10" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-semibold text-foreground">{item.name}</p>
+                    <p className="text-xs text-muted-foreground">{item.services} serviços vendidos</p>
+                  </div>
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-3 border-t border-border pt-3">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Vendeu</p>
+                    <p className="mt-0.5 text-lg font-bold tabular-nums text-foreground">{formatCurrency(item.revenue)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Comissão</p>
+                    <p className="mt-0.5 text-lg font-bold tabular-nums text-emerald-700">{formatCurrency(values?.commission ?? 0)}</p>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </Card>
+
+      <Card className="w-full overflow-hidden">
+          <Table className="min-w-[1180px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Funcionário</TableHead>
@@ -213,33 +304,7 @@ export default function FuncionariosPage() {
               ))}
             </TableBody>
           </Table>
-        </Card>
-
-        <Card className="p-5">
-          <h3 className="mb-4 flex items-center gap-2 font-semibold text-foreground">
-            <Trophy className="size-4 text-gold-foreground" />
-            Ranking do mês
-          </h3>
-          <div className="space-y-4">
-            {ranking.map((item, index) => (
-              <div key={item.name} className="flex items-center gap-3">
-                <span className="flex size-7 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">{index + 1}</span>
-                <span
-                  className="flex size-9 items-center justify-center rounded-lg bg-muted text-muted-foreground"
-                  style={item.color ? { backgroundColor: `${item.color}1A`, color: item.color } : undefined}
-                >
-                  {index === 0 ? <Trophy className="size-4" /> : <Scissors className="size-4" />}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-foreground">{item.name}</p>
-                  <p className="text-xs text-muted-foreground">{item.services} serviços</p>
-                </div>
-                <span className="font-semibold tabular-nums text-foreground">{formatCurrency(item.revenue)}</span>
-              </div>
-            ))}
-          </div>
-        </Card>
-      </div>
+      </Card>
       <Dialog open={Boolean(editing)} onClose={() => setEditing(null)} className="sm:max-w-2xl">
         {editing ? <><DialogHeader title="Editar funcionário" description="Corrija os dados, função, status e comissões." /><div className="grid gap-4 sm:grid-cols-2">
           <Field label="Nome"><Input value={editing.name} onChange={e=>setEditing({...editing,name:e.target.value})}/></Field>
