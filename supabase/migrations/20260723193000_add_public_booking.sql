@@ -27,7 +27,7 @@ as $$
     ), '[]'::jsonb)
   )
   from public.barbershops b
-  where b.slug = lower(trim(p_slug))
+  where lower(trim(b.slug)) = lower(trim(p_slug))
   limit 1;
 $$;
 
@@ -57,7 +57,7 @@ begin
 
   select * into target_shop
   from public.barbershops
-  where slug = lower(trim(p_slug));
+  where lower(trim(slug)) = lower(trim(p_slug));
 
   if target_shop.id is null then
     return '[]'::jsonb;
@@ -151,7 +151,7 @@ begin
 
   select * into target_shop
   from public.barbershops
-  where slug = lower(trim(p_slug));
+  where lower(trim(slug)) = lower(trim(p_slug));
   if target_shop.id is null then
     raise exception 'Barbearia não encontrada.';
   end if;

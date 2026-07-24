@@ -173,6 +173,7 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
   }, [preparedStorageKey])
 
   function editBirthdayMessage(item: NotificationItem) {
+    setNotificationsOpen(false)
     setBirthdayEditor(item)
     setBirthdayText(birthdayMessage(item.title, barbershop.name || 'Duke Barber'))
   }
@@ -190,6 +191,7 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
   }
 
   function editRenewalMessage(item: NotificationItem) {
+    setNotificationsOpen(false)
     setRenewalEditor(item)
     setRenewalText(renewalMessage(
       item.title,
@@ -304,7 +306,7 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
           </Button>
 
           {notificationsOpen ? (
-            <div className="absolute right-0 top-full z-50 mt-3 w-[min(560px,calc(100vw-2rem))] overflow-hidden rounded-lg border border-border bg-popover shadow-xl">
+            <div className="fixed inset-x-2 top-16 z-50 max-h-[calc(100dvh-4.5rem)] overflow-hidden rounded-lg border border-border bg-popover shadow-xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-3 sm:w-[min(560px,calc(100vw-2rem))]">
               <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
                 <div>
                   <h2 className="text-base font-bold text-popover-foreground">Notificações</h2>
@@ -356,7 +358,7 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
                 })}
               </div>
 
-              <div className="max-h-[420px] space-y-3 overflow-y-auto p-5">
+              <div className="max-h-[calc(100dvh-13rem)] space-y-3 overflow-y-auto p-3 sm:max-h-[420px] sm:p-5">
                 {activeNotifications.length > 0 ? (
                   activeNotifications.map((item) => (
                     <div
@@ -426,7 +428,7 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
           ) : null}
         </div>
 
-        <div className="flex items-center gap-2 rounded-lg border border-border bg-background py-1 pl-1 pr-2.5">
+        <div className="hidden items-center gap-2 rounded-lg border border-border bg-background py-1 pl-1 pr-2.5 sm:flex">
           <Avatar name="Conta" className="size-7" />
           <span className="hidden leading-tight sm:block">
             <span className="block text-xs font-semibold text-foreground">Minha conta</span>

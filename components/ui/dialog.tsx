@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -26,9 +27,9 @@ function Dialog({ open, onClose, children, className }: DialogProps) {
     }
   }, [open, onClose])
 
-  if (!open) return null
+  if (!open || typeof document === 'undefined') return null
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
       <div
         className="absolute inset-0 bg-foreground/40 backdrop-blur-sm"
@@ -39,7 +40,7 @@ function Dialog({ open, onClose, children, className }: DialogProps) {
         role="dialog"
         aria-modal="true"
         className={cn(
-          'relative z-10 max-h-[92vh] w-full overflow-y-auto rounded-t-2xl border border-border bg-card p-6 shadow-xl sm:max-w-lg sm:rounded-2xl',
+          'relative z-10 max-h-[calc(100dvh-1rem)] w-full overflow-y-auto rounded-t-2xl border border-border bg-card p-4 shadow-xl sm:max-h-[92vh] sm:max-w-lg sm:rounded-2xl sm:p-6',
           className,
         )}
       >
@@ -54,7 +55,8 @@ function Dialog({ open, onClose, children, className }: DialogProps) {
         </Button>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 

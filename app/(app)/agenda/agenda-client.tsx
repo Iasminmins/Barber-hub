@@ -73,7 +73,7 @@ export function AgendaClient({
   const agendaAppointments = appointments
 
   React.useEffect(() => {
-    setPublicBookingUrl(`${window.location.origin}/agendar/${publicSlug}`)
+    setPublicBookingUrl(`${window.location.origin}/agendar/${encodeURIComponent(publicSlug.trim())}`)
   }, [publicSlug])
 
   async function copyBookingLink() {
@@ -165,14 +165,14 @@ export function AgendaClient({
       </div>
 
       {/* Controles */}
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-2">
           <Button variant="outline" size="icon-sm" aria-label="Período anterior" onClick={() => changePeriod(-1)}>
             <ChevronLeft className="size-4" />
           </Button>
-          <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5">
+          <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 sm:flex-none">
             <CalendarDays className="size-4 text-muted-foreground" />
-            <span className="text-sm font-medium capitalize text-foreground">
+            <span className="truncate text-sm font-medium capitalize text-foreground">
               {periodLabel}
             </span>
           </div>
@@ -180,7 +180,7 @@ export function AgendaClient({
             <ChevronRight className="size-4" />
           </Button>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
           <Tabs
             items={[
               { value: 'dia', label: 'Dia' },
@@ -193,7 +193,7 @@ export function AgendaClient({
           <select
             value={barberFilter}
             onChange={(e) => setBarberFilter(e.target.value)}
-            className="h-9 rounded-lg border border-border bg-card px-3 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
+            className="h-9 min-w-0 flex-1 rounded-lg border border-border bg-card px-3 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30 sm:flex-none"
           >
             <option value="todos">Todos os barbeiros</option>
             {barbers.map((b) => (

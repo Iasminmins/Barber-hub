@@ -15,7 +15,7 @@ export function PageHeader({ title, description, children }: PageHeaderProps) {
           <p className="mt-1 text-sm text-muted-foreground text-pretty">{description}</p>
         ) : null}
       </div>
-      {children ? <div className="flex flex-wrap items-center gap-2">{children}</div> : null}
+      {children ? <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">{children}</div> : null}
     </div>
   )
 }
