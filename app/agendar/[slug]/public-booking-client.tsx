@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { CalendarDays, CalendarX2, CheckCircle2, Clock3, LoaderCircle, MapPin, Scissors } from 'lucide-react'
+import { CalendarDays, CalendarX2, CheckCircle2, Clock3, LoaderCircle, MapPin, Scissors, UserRound } from 'lucide-react'
 import { BrandMark } from '@/components/brand-mark'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -23,12 +23,14 @@ type BookingService = {
 type BookingPage = {
   barbershop: { name: string; slug: string; city: string; color: string }
   services: BookingService[]
+  employees: Array<{ id: string; name: string }>
 }
 
 type BookingResult = {
   appointmentId: string
   barbershopName: string
   serviceName: string
+  employeeName: string
   date: string
   start: string
 }
@@ -54,6 +56,7 @@ export function PublicBookingClient({ slug }: { slug: string }) {
   }, [slug])
   const [page, setPage] = React.useState<BookingPage | null>(null)
   const [serviceId, setServiceId] = React.useState('')
+  const [employeeId, setEmployeeId] = React.useState('')
   const [date, setDate] = React.useState('')
   const [start, setStart] = React.useState('')
   const [slots, setSlots] = React.useState<string[]>([])
@@ -88,7 +91,7 @@ export function PublicBookingClient({ slug }: { slug: string }) {
   React.useEffect(() => {
     setStart('')
     setSlots([])
-    if (!serviceId || !date || !isSupabaseConfigured()) return
+    if (!serviceId || !employeeId || !date || !isSupabaseConfigured()) return
     setLoadingSlots(true)
     const supabase = createBrowserSupabaseClient()
     void supabase
@@ -96,18 +99,19 @@ export function PublicBookingClient({ slug }: { slug: string }) {
         p_slug: decodedSlug,
         p_service_id: serviceId,
         p_date: date,
+        p_employee_id: employeeId,
       })
       .then(({ data, error }) => {
         setSlots(error ? [] : (data as string[] ?? []))
         setStatus(error?.message ?? '')
         setLoadingSlots(false)
       })
-  }, [date, decodedSlug, serviceId])
+  }, [date, decodedSlug, employeeId, serviceId])
 
   async function submit() {
     setStatus('')
-    if (!serviceId || !date || !start || !name.trim() || !phone.trim()) {
-      setStatus('Preencha nome, telefone, serviço, data e horário.')
+    if (!serviceId || !employeeId || !date || !start || !name.trim() || !phone.trim()) {
+      setStatus('Preencha nome, telefone, serviço, profissional, data e horário.')
       return
     }
     setSubmitting(true)
@@ -120,6 +124,7 @@ export function PublicBookingClient({ slug }: { slug: string }) {
       p_client_name: name.trim(),
       p_phone: phone.trim(),
       p_notes: notes.trim() || null,
+      p_employee_id: employeeId,
     })
     setSubmitting(false)
     if (error) {
@@ -140,6 +145,7 @@ export function PublicBookingClient({ slug }: { slug: string }) {
           </p>
           <div className="mt-5 rounded-lg bg-muted p-4 text-sm">
             <p className="font-semibold">{result.serviceName}</p>
+            <p className="mt-1 text-muted-foreground">Profissional: {result.employeeName}</p>
             <p className="mt-1 text-muted-foreground">
               {new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long' }).format(new Date(`${result.date}T00:00:00`))} às {result.start}
             </p>
@@ -202,7 +208,7 @@ export function PublicBookingClient({ slug }: { slug: string }) {
           <div className="mb-5 border-b border-border pb-5 sm:mb-6">
             <h2 className="text-xl font-bold sm:text-2xl">Escolha seu horário</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Selecione o serviço, o dia e o horário. A equipe define automaticamente o profissional disponível.
+              Selecione o serviço, o profissional, o dia e o horário.
             </p>
           </div>
 
@@ -237,24 +243,46 @@ export function PublicBookingClient({ slug }: { slug: string }) {
               ) : null}
             </section>
 
+            <section>
+              <Label className="mb-2 block">2. Escolha o profissional</Label>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {(page.employees ?? []).map((employee) => (
+                  <button
+                    key={employee.id}
+                    type="button"
+                    onClick={() => setEmployeeId(employee.id)}
+                    className={cn(
+                      'flex items-center gap-3 rounded-lg border p-3 text-left transition-colors',
+                      employeeId === employee.id ? 'border-primary bg-primary/5 ring-2 ring-primary/15' : 'hover:bg-muted/50',
+                    )}
+                  >
+                    <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted">
+                      <UserRound className="size-4" />
+                    </span>
+                    <span className="font-semibold">{employee.name}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+
             <section className="grid gap-5 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="booking-date">2. Escolha o dia</Label>
+                <Label htmlFor="booking-date">3. Escolha o dia</Label>
                 <div className="relative">
                   <CalendarDays className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                   <Input id="booking-date" type="date" min={todayKey()} max={maxDateKey()} value={date} onChange={(event) => setDate(event.target.value)} className="pl-9" />
                 </div>
               </div>
               <div>
-                <Label className="mb-2 block">3. Escolha o horário</Label>
+                <Label className="mb-2 block">4. Escolha o horário</Label>
                 <div className="flex min-h-11 flex-wrap items-center gap-2 rounded-lg border border-dashed border-border bg-muted/25 p-2">
-                  {!serviceId || !date ? (
+                  {!serviceId || !employeeId || !date ? (
                     <span className="text-sm text-muted-foreground">
-                      Escolha primeiro o serviço e o dia para ver os horários.
+                      Escolha primeiro o serviço, o profissional e o dia para ver os horários.
                     </span>
                   ) : null}
                   {loadingSlots ? <span className="text-sm text-muted-foreground">Buscando horários...</span> : null}
-                  {!loadingSlots && date && serviceId && slots.length === 0 ? <span className="text-sm text-muted-foreground">Nenhum horário disponível neste dia.</span> : null}
+                  {!loadingSlots && date && serviceId && employeeId && slots.length === 0 ? <span className="text-sm text-muted-foreground">Nenhum horário disponível neste dia.</span> : null}
                   {slots.map((slot) => (
                     <button key={slot} type="button" onClick={() => setStart(slot)} className={cn('rounded-md border px-3 py-2 text-sm font-semibold', start === slot ? 'border-primary bg-primary text-primary-foreground' : 'bg-background hover:bg-muted')}>
                       {slot}
@@ -265,7 +293,7 @@ export function PublicBookingClient({ slug }: { slug: string }) {
             </section>
 
             <section>
-              <Label className="mb-2 block">4. Seus dados</Label>
+              <Label className="mb-2 block">5. Seus dados</Label>
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="booking-name">Nome completo</Label>

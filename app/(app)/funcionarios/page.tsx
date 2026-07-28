@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { KeyRound, Mail, Pencil, Phone, Plus, Save, Trash2, Trophy, UserCheck, UserX } from 'lucide-react'
+import { CalendarDays, ChevronLeft, ChevronRight, KeyRound, Mail, Pencil, Phone, Plus, Save, Trash2, Trophy, UserCheck, UserX, Users } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Avatar } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -79,6 +79,8 @@ export default function FuncionariosPage() {
   const [accessStatus, setAccessStatus] = useState('')
   const [accessLoading, setAccessLoading] = useState(false)
   const [editStatus, setEditStatus] = useState('')
+  const [section, setSection] = useState<'equipe' | 'semanal'>('equipe')
+  const [weekOffset, setWeekOffset] = useState(0)
   const commissions = appData.commissions
   const currentMonth = new Date().toISOString().slice(0, 7)
   const paidOrdersWithEmployee = useMemo(() => appData.orders
@@ -116,6 +118,46 @@ export default function FuncionariosPage() {
   const attributedPaidOrders = paidOrdersWithEmployee.filter((item) => item.resolvedEmployeeId).length
 
   const activeEmployees = useMemo(() => employees.filter((e) => e.active), [employees])
+  const weekRange = useMemo(() => {
+    const start = new Date()
+    start.setHours(0, 0, 0, 0)
+    start.setDate(start.getDate() - start.getDay() + weekOffset * 7)
+    const end = new Date(start)
+    end.setDate(end.getDate() + 6)
+    const key = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+    return { start: key(start), end: key(end), startDate: start, endDate: end }
+  }, [weekOffset])
+  const weeklyPaidOrders = useMemo(() => appData.orders
+    .filter((order) => order.status === 'paga' && order.createdAt.slice(0, 10) >= weekRange.start && order.createdAt.slice(0, 10) <= weekRange.end)
+    .map((order) => ({
+      order,
+      resolvedEmployeeId: resolveOrderEmployeeId(order, employees),
+      value: paidOrderValue(order),
+    })), [appData.orders, employees, weekRange])
+  const weeklyValues = useMemo(() => new Map(employees.map((employee) => {
+    const orders = weeklyPaidOrders.filter((item) => item.resolvedEmployeeId === employee.id)
+    const revenue = orders.reduce((sum, item) => sum + item.value, 0)
+    const salesCommission = orders.reduce((sum, item) => sum + item.order.items.reduce(
+      (itemSum, orderItem) => itemSum + orderItem.quantity * orderItem.unitPrice
+        * (orderItem.type === 'servico' ? employee.serviceCommission : employee.productCommission) / 100,
+      0,
+    ), 0)
+    const subscriptionCommission = commissions
+      .filter((item) => item.employeeId === employee.id && item.origin === 'assinatura' && item.date >= weekRange.start && item.date <= weekRange.end)
+      .reduce((sum, item) => sum + item.amount, 0)
+    const paid = commissions
+      .filter((item) => item.employeeId === employee.id && item.status === 'paga' && item.date >= weekRange.start && item.date <= weekRange.end)
+      .reduce((sum, item) => sum + item.amount, 0)
+    const generated = salesCommission + subscriptionCommission
+    return [employee.id, { revenue, generated, paid, pending: Math.max(0, generated - paid), orders: orders.length }]
+  })), [commissions, employees, weeklyPaidOrders, weekRange])
+  const weeklyRevenue = [...weeklyValues.values()].reduce((sum, item) => sum + item.revenue, 0)
+  const weeklyGenerated = [...weeklyValues.values()].reduce((sum, item) => sum + item.generated, 0)
+  const weeklyPaid = [...weeklyValues.values()].reduce((sum, item) => sum + item.paid, 0)
+  const weeklyPending = [...weeklyValues.values()].reduce((sum, item) => sum + item.pending, 0)
+  const weeklyEmployees = employees
+    .map((employee) => ({ employee, values: weeklyValues.get(employee.id)! }))
+    .sort((left, right) => right.values.revenue - left.values.revenue)
 
   async function deleteEmployee(id: string) {
     if (appData.member.role !== 'owner' && appData.member.role !== 'manager') { window.alert('Sem permissão para excluir funcionários.'); return }
@@ -187,7 +229,91 @@ export default function FuncionariosPage() {
         </Link>
       </PageHeader>
 
-      <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="mb-4 grid grid-cols-2 gap-2 rounded-xl bg-muted p-1">
+        <button
+          type="button"
+          onClick={() => setSection('equipe')}
+          className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors ${section === 'equipe' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+        >
+          <Users className="size-4" /> Equipe
+        </button>
+        <button
+          type="button"
+          onClick={() => setSection('semanal')}
+          className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors ${section === 'semanal' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+        >
+          <CalendarDays className="size-4" /> Relatório semanal
+        </button>
+      </div>
+
+      {section === 'semanal' ? (
+        <div className="space-y-4">
+          <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-blue-800">
+            <p className="flex items-center gap-2 font-semibold"><CalendarDays className="size-4" /> Período de comissões</p>
+            <p className="mt-1 text-sm">As comissões são calculadas de domingo a sábado de cada semana.</p>
+          </div>
+
+          <Card className="p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-foreground">Relatório semanal da equipe</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {new Intl.DateTimeFormat('pt-BR').format(weekRange.startDate)} – {new Intl.DateTimeFormat('pt-BR').format(weekRange.endDate)}
+                </p>
+              </div>
+              <div className="flex items-center gap-1">
+                <Button variant="outline" size="icon-sm" onClick={() => setWeekOffset((value) => value - 1)} aria-label="Semana anterior">
+                  <ChevronLeft className="size-4" />
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setWeekOffset(0)}>Semana atual</Button>
+                <Button variant="outline" size="icon-sm" onClick={() => setWeekOffset((value) => value + 1)} aria-label="Próxima semana">
+                  <ChevronRight className="size-4" />
+                </Button>
+              </div>
+            </div>
+
+            <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+              {[
+                ['Comissões pendentes', weeklyPending, 'text-amber-700'],
+                ['Comissões pagas', weeklyPaid, 'text-emerald-700'],
+                ['Comissões geradas', weeklyGenerated, 'text-foreground'],
+                ['Vendas totais', weeklyRevenue, 'text-foreground'],
+              ].map(([label, value, color]) => (
+                <div key={String(label)} className="rounded-xl border border-border bg-muted/20 p-4">
+                  <p className="text-sm text-muted-foreground">{label}</p>
+                  <p className={`mt-1 text-xl font-bold tabular-nums ${color}`}>{formatCurrency(Number(value))}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-6 border-t border-border pt-5">
+              <h3 className="mb-3 flex items-center gap-2 font-semibold"><Users className="size-4" /> Detalhamento por funcionário</h3>
+              <div className="space-y-3">
+                {weeklyEmployees.map(({ employee, values }) => (
+                  <div key={employee.id} className="flex flex-col gap-4 rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-50/70 to-blue-50/70 p-4 sm:flex-row sm:items-center">
+                    <Avatar name={employee.name} color={employee.avatarColor} className="size-10" />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-foreground">{employee.name}</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {values.orders} vendas · Faturamento {formatCurrency(values.revenue)}
+                      </p>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Gerada: {formatCurrency(values.generated)} · Paga: {formatCurrency(values.paid)}
+                      </p>
+                    </div>
+                    <div className="border-t border-border pt-3 text-left sm:border-l sm:border-t-0 sm:pl-5 sm:pt-0 sm:text-right">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">A pagar</p>
+                      <p className="mt-1 text-xl font-bold text-emerald-700">{formatCurrency(values.pending)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </Card>
+        </div>
+      ) : null}
+
+      <div className={`${section === 'semanal' ? 'hidden' : ''} mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4`}>
         <Card className="p-4">
           <p className="text-sm text-muted-foreground">Funcionários ativos</p>
           <p className="mt-1 text-2xl font-bold text-foreground">{activeEmployees.length}</p>
@@ -206,7 +332,7 @@ export default function FuncionariosPage() {
         </Card>
       </div>
 
-      <Card className="mb-4 p-5">
+      <Card className={`${section === 'semanal' ? 'hidden' : ''} mb-4 p-5`}>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <div>
             <h3 className="flex items-center gap-2 font-semibold text-foreground">
@@ -246,7 +372,7 @@ export default function FuncionariosPage() {
         </div>
       </Card>
 
-      <Card className="w-full overflow-hidden">
+      <Card className={`${section === 'semanal' ? 'hidden' : ''} w-full overflow-hidden`}>
           <Table className="min-w-[1180px]">
             <TableHeader>
               <TableRow>
