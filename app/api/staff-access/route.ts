@@ -28,9 +28,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Somente o proprietário pode gerenciar acessos.' }, { status: 403 })
     }
 
-    const body = await request.json() as { employeeId?: string; email?: string; enabled?: boolean }
+    const body = await request.json() as { employeeId?: string; email?: string; password?: string; enabled?: boolean }
     const employeeId = String(body.employeeId ?? '')
     const email = String(body.email ?? '').trim().toLowerCase()
+    const password = String(body.password ?? '')
     if (!employeeId) return NextResponse.json({ error: 'Funcionário inválido.' }, { status: 400 })
 
     const admin = createAdminSupabaseClient()
@@ -61,8 +62,18 @@ export async function POST(request: Request) {
     if (!email || !email.includes('@')) {
       return NextResponse.json({ error: 'Informe um e-mail válido para enviar o convite.' }, { status: 400 })
     }
+    if (password && password.length < 8) {
+      return NextResponse.json({ error: 'A senha deve ter pelo menos 8 caracteres.' }, { status: 400 })
+    }
 
     if (existingMember) {
+      if (password) {
+        const { error: passwordError } = await admin.auth.admin.updateUserById(existingMember.user_id, {
+          password,
+          email_confirm: true,
+        })
+        if (passwordError) return NextResponse.json({ error: passwordError.message }, { status: 400 })
+      }
       const { error } = await admin
         .from('members')
         .update({ active: true, email, name: employee.name, role: 'barber' })
@@ -73,10 +84,17 @@ export async function POST(request: Request) {
 
     const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '')
     const requestOrigin = new URL(request.url).origin
-    const { data: inviteData, error: inviteError } = await admin.auth.admin.inviteUserByEmail(email, {
-      redirectTo: `${configuredSiteUrl || requestOrigin}/atualizar-senha`,
-      data: { name: employee.name },
-    })
+    const { data: inviteData, error: inviteError } = password
+      ? await admin.auth.admin.createUser({
+          email,
+          password,
+          email_confirm: true,
+          user_metadata: { name: employee.name },
+        })
+      : await admin.auth.admin.inviteUserByEmail(email, {
+          redirectTo: `${configuredSiteUrl || requestOrigin}/atualizar-senha`,
+          data: { name: employee.name },
+        })
     if (inviteError || !inviteData.user) {
       return NextResponse.json({ error: inviteError?.message ?? 'Não foi possível enviar o convite.' }, { status: 400 })
     }
@@ -99,7 +117,7 @@ export async function POST(request: Request) {
       await admin.from('employees').update({ email }).eq('id', employee.id)
     }
 
-    return NextResponse.json({ active: true, invited: true })
+    return NextResponse.json({ active: true, invited: !password })
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Não foi possível gerenciar o acesso.' },

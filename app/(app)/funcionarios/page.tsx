@@ -1,11 +1,10 @@
 'use client'
 
-import Link from 'next/link'
 import { CalendarDays, ChevronLeft, ChevronRight, KeyRound, Mail, Pencil, Phone, Plus, Save, Trash2, Trophy, UserCheck, UserX, Users } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Avatar } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Dialog, DialogHeader } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -79,8 +78,11 @@ export default function FuncionariosPage() {
   const [accessStatus, setAccessStatus] = useState('')
   const [accessLoading, setAccessLoading] = useState(false)
   const [editStatus, setEditStatus] = useState('')
-  const [section, setSection] = useState<'equipe' | 'semanal'>('equipe')
+  const [section, setSection] = useState<'cadastro' | 'equipe' | 'semanal'>('equipe')
   const [weekOffset, setWeekOffset] = useState(0)
+  const [newEmployee, setNewEmployee] = useState({ name:'', role:'barber', email:'', phone:'', service:'', product:'', subscription:'', createAccess:false, password:'', confirmPassword:'' })
+  const [newEmployeeStatus, setNewEmployeeStatus] = useState('')
+  const [creatingEmployee, setCreatingEmployee] = useState(false)
   const commissions = appData.commissions
   const currentMonth = new Date().toISOString().slice(0, 7)
   const paidOrdersWithEmployee = useMemo(() => appData.orders
@@ -159,6 +161,82 @@ export default function FuncionariosPage() {
     .map((employee) => ({ employee, values: weeklyValues.get(employee.id)! }))
     .sort((left, right) => right.values.revenue - left.values.revenue)
 
+  useEffect(() => {
+    setEmployees(appData.employees)
+  }, [appData.employees])
+
+  async function createEmployee() {
+    if (appData.member.role !== 'owner' && appData.member.role !== 'manager') {
+      setNewEmployeeStatus('Somente proprietário ou gerente pode cadastrar funcionários.')
+      return
+    }
+    if (!newEmployee.name.trim()) {
+      setNewEmployeeStatus('Informe o nome do funcionário.')
+      return
+    }
+    if (newEmployee.createAccess && !newEmployee.email.trim()) {
+      setNewEmployeeStatus('Informe o e-mail para criar o acesso.')
+      return
+    }
+    if (newEmployee.createAccess && newEmployee.password.length < 8) {
+      setNewEmployeeStatus('A senha deve ter pelo menos 8 caracteres.')
+      return
+    }
+    if (newEmployee.createAccess && newEmployee.password !== newEmployee.confirmPassword) {
+      setNewEmployeeStatus('As senhas não coincidem.')
+      return
+    }
+    const commissionsToValidate = [newEmployee.service, newEmployee.product, newEmployee.subscription].map((value) => Number(value || 0))
+    if (commissionsToValidate.some((value) => !Number.isFinite(value) || value < 0 || value > 100)) {
+      setNewEmployeeStatus('As comissões devem estar entre 0% e 100%.')
+      return
+    }
+
+    setCreatingEmployee(true)
+    setNewEmployeeStatus('')
+    const result = await appData.insertRecord('employees', {
+      barbershop_id: appData.barbershop.id,
+      name: newEmployee.name.trim(),
+      role: newEmployee.role,
+      email: newEmployee.email.trim() || null,
+      phone: newEmployee.phone.trim() || null,
+      active: true,
+      service_commission: commissionsToValidate[0],
+      product_commission: commissionsToValidate[1],
+      subscription_commission: commissionsToValidate[2],
+    })
+    if (result.error || !result.data) {
+      setCreatingEmployee(false)
+      setNewEmployeeStatus(result.error ?? 'Não foi possível cadastrar o funcionário.')
+      return
+    }
+
+    if (newEmployee.createAccess) {
+      const { createBrowserSupabaseClient } = await import('@/lib/supabase/client')
+      const { data: sessionData } = await createBrowserSupabaseClient().auth.getSession()
+      const response = await fetch('/api/staff-access', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${sessionData.session?.access_token ?? ''}`,
+        },
+        body: JSON.stringify({ employeeId: String(result.data.id), email: newEmployee.email.trim(), password: newEmployee.password, enabled: true }),
+      })
+      const payload = await response.json()
+      if (!response.ok) {
+        setCreatingEmployee(false)
+        setNewEmployeeStatus(`Funcionário cadastrado, mas o acesso não foi criado: ${payload.error ?? 'erro inesperado'}`)
+        await appData.refresh()
+        return
+      }
+    }
+
+    await appData.refresh()
+    setCreatingEmployee(false)
+    setNewEmployee({ name:'', role:'barber', email:'', phone:'', service:'', product:'', subscription:'', createAccess:false, password:'', confirmPassword:'' })
+    setNewEmployeeStatus(newEmployee.createAccess ? 'Funcionário cadastrado com acesso liberado.' : 'Funcionário cadastrado com sucesso.')
+  }
+
   async function deleteEmployee(id: string) {
     if (appData.member.role !== 'owner' && appData.member.role !== 'manager') { window.alert('Sem permissão para excluir funcionários.'); return }
     if (!window.confirm('Excluir este funcionário?')) return
@@ -223,13 +301,20 @@ export default function FuncionariosPage() {
           <Save className="size-4" />
           Salvar
         </Button>
-        <Link href="/funcionarios/novo" className={buttonVariants({ variant: 'gold', size: 'sm' })}>
+        <Button variant="gold" size="sm" onClick={() => setSection('cadastro')}>
           <Plus className="size-4" />
           Novo funcionário
-        </Link>
+        </Button>
       </PageHeader>
 
-      <div className="mb-4 grid grid-cols-2 gap-2 rounded-xl bg-muted p-1">
+      <div className="mb-4 grid grid-cols-1 gap-2 rounded-xl bg-muted p-1 sm:grid-cols-3">
+        <button
+          type="button"
+          onClick={() => setSection('cadastro')}
+          className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors ${section === 'cadastro' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+        >
+          <Plus className="size-4" /> Cadastro e acesso
+        </button>
         <button
           type="button"
           onClick={() => setSection('equipe')}
@@ -245,6 +330,49 @@ export default function FuncionariosPage() {
           <CalendarDays className="size-4" /> Relatório semanal
         </button>
       </div>
+
+      {section === 'cadastro' ? (
+        <Card className="p-5">
+          <h2 className="text-lg font-semibold text-foreground">Cadastro de funcionário</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Adicione o profissional, defina as comissões e, se desejar, envie o acesso ao sistema.</p>
+          <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            <Field label="Nome *"><Input value={newEmployee.name} onChange={(event) => setNewEmployee((current) => ({ ...current, name:event.target.value }))} placeholder="Nome completo" /></Field>
+            <Field label="Função *">
+              <Select value={newEmployee.role} onChange={(event) => setNewEmployee((current) => ({ ...current, role:event.target.value }))}>
+                <option value="barber">Barbeiro</option><option value="manager">Gerente</option><option value="reception">Recepção</option>
+              </Select>
+            </Field>
+            <Field label="E-mail"><Input type="email" value={newEmployee.email} onChange={(event) => setNewEmployee((current) => ({ ...current, email:event.target.value }))} placeholder="email@exemplo.com" /></Field>
+            <Field label="Telefone"><Input value={newEmployee.phone} onChange={(event) => setNewEmployee((current) => ({ ...current, phone:event.target.value }))} placeholder="(00) 00000-0000" /></Field>
+            <Field label="Comissão em serviços (%)"><Input type="number" min="0" max="100" value={newEmployee.service} onChange={(event) => setNewEmployee((current) => ({ ...current, service:event.target.value }))} /></Field>
+            <Field label="Comissão em produtos (%)"><Input type="number" min="0" max="100" value={newEmployee.product} onChange={(event) => setNewEmployee((current) => ({ ...current, product:event.target.value }))} /></Field>
+            <Field label="Comissão em assinaturas (%)"><Input type="number" min="0" max="100" value={newEmployee.subscription} onChange={(event) => setNewEmployee((current) => ({ ...current, subscription:event.target.value }))} /></Field>
+          </div>
+          <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-muted/20 p-4">
+            <input type="checkbox" checked={newEmployee.createAccess} onChange={(event) => setNewEmployee((current) => ({ ...current, createAccess:event.target.checked }))} className="mt-1 size-4" />
+            <span>
+              <span className="block font-medium text-foreground">Criar acesso ao sistema</span>
+              <span className="mt-1 block text-sm text-muted-foreground">Envia um convite por e-mail para o funcionário criar a própria senha.</span>
+            </span>
+          </label>
+          {newEmployee.createAccess ? (
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <Field label="Senha de acesso *">
+                <Input type="password" value={newEmployee.password} onChange={(event) => setNewEmployee((current) => ({ ...current, password:event.target.value }))} minLength={8} autoComplete="new-password" placeholder="Mínimo de 8 caracteres" />
+              </Field>
+              <Field label="Confirmar senha *">
+                <Input type="password" value={newEmployee.confirmPassword} onChange={(event) => setNewEmployee((current) => ({ ...current, confirmPassword:event.target.value }))} minLength={8} autoComplete="new-password" placeholder="Repita a senha" />
+              </Field>
+            </div>
+          ) : null}
+          {newEmployeeStatus ? <p className="mt-4 rounded-lg bg-muted p-3 text-sm text-foreground">{newEmployeeStatus}</p> : null}
+          <div className="mt-5 flex justify-end">
+            <Button variant="gold" onClick={createEmployee} disabled={creatingEmployee}>
+              <Save className="size-4" /> {creatingEmployee ? 'Cadastrando...' : newEmployee.createAccess ? 'Cadastrar e enviar acesso' : 'Cadastrar funcionário'}
+            </Button>
+          </div>
+        </Card>
+      ) : null}
 
       {section === 'semanal' ? (
         <div className="space-y-4">
@@ -313,7 +441,7 @@ export default function FuncionariosPage() {
         </div>
       ) : null}
 
-      <div className={`${section === 'semanal' ? 'hidden' : ''} mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4`}>
+      <div className={`${section !== 'equipe' ? 'hidden' : ''} mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4`}>
         <Card className="p-4">
           <p className="text-sm text-muted-foreground">Funcionários ativos</p>
           <p className="mt-1 text-2xl font-bold text-foreground">{activeEmployees.length}</p>
@@ -332,7 +460,7 @@ export default function FuncionariosPage() {
         </Card>
       </div>
 
-      <Card className={`${section === 'semanal' ? 'hidden' : ''} mb-4 p-5`}>
+      <Card className={`${section !== 'equipe' ? 'hidden' : ''} mb-4 p-5`}>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <div>
             <h3 className="flex items-center gap-2 font-semibold text-foreground">
@@ -372,7 +500,7 @@ export default function FuncionariosPage() {
         </div>
       </Card>
 
-      <Card className={`${section === 'semanal' ? 'hidden' : ''} w-full overflow-hidden`}>
+      <Card className={`${section !== 'equipe' ? 'hidden' : ''} w-full overflow-hidden`}>
           <Table className="min-w-[1180px]">
             <TableHeader>
               <TableRow>
