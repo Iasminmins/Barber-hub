@@ -1,14 +1,17 @@
 'use client'
 
 import Link from 'next/link'
-import { CalendarDays, CreditCard, Crown, Plus, Printer, Receipt, Trash2, Upload } from 'lucide-react'
+import { CalendarDays, CreditCard, Crown, Minus, Pencil, Plus, Printer, Receipt, Save, Trash2, Upload } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { PageHeader } from '@/components/page-header'
 import { StatusBadge } from '@/components/status-badge'
 import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { Dialog, DialogHeader } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select } from '@/components/ui/select'
 import {
   Table,
   TableBody,
@@ -20,7 +23,9 @@ import {
 import { useAppData } from '@/components/data/app-data-provider'
 import { formatCurrency, formatDate } from '@/lib/format'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
-import type { Order } from '@/lib/types'
+import type { Order, OrderItem, OrderStatus, PaymentMethod } from '@/lib/types'
+
+type EditableOrder = Omit<Order, 'items'> & { items: OrderItem[] }
 
 const METHOD_LABEL: Record<string, string> = {
   dinheiro: 'Dinheiro',
@@ -88,10 +93,21 @@ function formatOrderDateTime(value: string) {
   }).format(date)
 }
 
+function toDateTimeLocal(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const offset = date.getTimezoneOffset() * 60000
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16)
+}
+
 export default function ComandasPage() {
-  const { barbershop, clients, orders: databaseOrders, subscriptions, deleteRecord } = useAppData()
+  const { barbershop, catalog, clients, employees, orders: databaseOrders, subscriptions, deleteRecord, updateRecord } = useAppData()
   const [orders, setOrders] = useState(() => sortOrdersByDate(databaseOrders))
   const [selectedMonth, setSelectedMonth] = useState(() => getLatestOrderMonth(databaseOrders))
+  const [editingOrder, setEditingOrder] = useState<EditableOrder | null>(null)
+  const [editingDate, setEditingDate] = useState('')
+  const [editError, setEditError] = useState('')
+  const [savingOrder, setSavingOrder] = useState(false)
 
   useEffect(() => {
     const nextOrders = sortOrdersByDate(databaseOrders)
@@ -146,6 +162,168 @@ export default function ComandasPage() {
     const result = await deleteRecord('orders', id)
     if (result.error) { window.alert(result.error); return }
     setOrders((current) => current.filter((order) => order.id !== id))
+  }
+
+  function openOrderEditor(order: Order) {
+    setEditError('')
+    setEditingDate(toDateTimeLocal(order.createdAt))
+    setEditingOrder({ ...order, items: order.items.map((item) => ({ ...item })) })
+  }
+
+  function updateEditingItem(index: number, values: Partial<OrderItem>) {
+    setEditingOrder((current) => current ? {
+      ...current,
+      items: current.items.map((item, itemIndex) => itemIndex === index ? { ...item, ...values } : item),
+    } : current)
+  }
+
+  function addCatalogItem(refId: string) {
+    const item = catalog.find((catalogItem) => catalogItem.id === refId)
+    if (!item) return
+    setEditingOrder((current) => {
+      if (!current) return current
+      const existingIndex = current.items.findIndex((orderItem) => orderItem.refId === item.id)
+      if (existingIndex >= 0) {
+        return {
+          ...current,
+          items: current.items.map((orderItem, index) => index === existingIndex
+            ? { ...orderItem, quantity: orderItem.quantity + 1 }
+            : orderItem),
+        }
+      }
+      return {
+        ...current,
+        items: [...current.items, {
+          id: `new-${crypto.randomUUID()}`,
+          refId: item.id,
+          type: item.type,
+          name: item.name,
+          quantity: 1,
+          unitPrice: item.price,
+        }],
+      }
+    })
+  }
+
+  async function saveEditedOrder() {
+    if (!editingOrder) return
+    const employee = employees.find((item) => item.id === editingOrder.employeeId)
+    const client = clients.find((item) => item.id === editingOrder.clientId)
+    const validItems = editingOrder.items.filter((item) => item.name.trim() && item.quantity > 0 && item.unitPrice >= 0)
+    if (!employee) { setEditError('Selecione o responsável.'); return }
+    if (!editingDate) { setEditError('Informe a data e o horário.'); return }
+    if (validItems.length === 0) { setEditError('A comanda precisa ter pelo menos um item válido.'); return }
+    if (editingOrder.status === 'paga' && !editingOrder.method) { setEditError('Selecione o pagamento da comanda paga.'); return }
+
+    const total = validItems.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0)
+      - editingOrder.discount + editingOrder.surcharge
+    if (total < 0) { setEditError('O total da comanda não pode ser negativo.'); return }
+
+    setSavingOrder(true)
+    setEditError('')
+    const supabase = createBrowserSupabaseClient()
+    const oldOrder = orders.find((item) => item.id === editingOrder.id)
+    const oldItems = oldOrder?.items ?? []
+
+    const deleteItemsResult = await supabase.from('order_items').delete().eq('order_id', editingOrder.id)
+    if (deleteItemsResult.error) { setSavingOrder(false); setEditError(deleteItemsResult.error.message); return }
+
+    const insertItemsResult = await supabase.from('order_items').insert(validItems.map((item) => ({
+      order_id: editingOrder.id,
+      barbershop_id: barbershop.id,
+      ref_id: item.refId || null,
+      type: item.type,
+      name: item.name.trim(),
+      quantity: item.quantity,
+      unit_price: item.unitPrice,
+    }))).select()
+
+    if (insertItemsResult.error) {
+      if (oldItems.length > 0) {
+        await supabase.from('order_items').insert(oldItems.map((item) => ({
+          order_id: editingOrder.id,
+          barbershop_id: barbershop.id,
+          ref_id: item.refId || null,
+          type: item.type,
+          name: item.name,
+          quantity: item.quantity,
+          unit_price: item.unitPrice,
+        })))
+      }
+      setSavingOrder(false)
+      setEditError(insertItemsResult.error.message)
+      return
+    }
+
+    const createdAt = new Date(editingDate).toISOString()
+    const orderResult = await updateRecord('orders', editingOrder.id, {
+      client_id: client?.id ?? null,
+      client_name: client?.name ?? (editingOrder.clientName.trim() || 'Cliente avulso'),
+      employee_id: employee.id,
+      employee_name: employee.name,
+      discount: editingOrder.discount,
+      surcharge: editingOrder.surcharge,
+      status: editingOrder.status,
+      method: editingOrder.status === 'paga' ? editingOrder.method : null,
+      total,
+      created_at: createdAt,
+    })
+    if (orderResult.error) { setSavingOrder(false); setEditError(orderResult.error); return }
+
+    const description = `Comanda #${editingOrder.number}`
+    const { data: financeEntry, error: financeLookupError } = await supabase
+      .from('financial_entries')
+      .select('id')
+      .eq('barbershop_id', barbershop.id)
+      .eq('category', 'Comandas')
+      .eq('description', description)
+      .maybeSingle()
+    if (financeLookupError) { setSavingOrder(false); setEditError(`Comanda salva, mas o financeiro falhou: ${financeLookupError.message}`); return }
+
+    if (editingOrder.status === 'paga') {
+      const financeValues = {
+        amount: total,
+        method: editingOrder.method,
+        date: editingDate.slice(0, 10),
+      }
+      const financeResult = financeEntry
+        ? await supabase.from('financial_entries').update(financeValues).eq('id', financeEntry.id)
+        : await supabase.from('financial_entries').insert({
+            barbershop_id: barbershop.id,
+            type: 'entrada',
+            category: 'Comandas',
+            description,
+            ...financeValues,
+          })
+      if (financeResult.error) { setSavingOrder(false); setEditError(`Comanda salva, mas o financeiro falhou: ${financeResult.error.message}`); return }
+    } else if (financeEntry) {
+      const financeResult = await supabase.from('financial_entries').delete().eq('id', financeEntry.id)
+      if (financeResult.error) { setSavingOrder(false); setEditError(`Comanda salva, mas o financeiro falhou: ${financeResult.error.message}`); return }
+    }
+
+    const savedItems = (insertItemsResult.data ?? []).map((item) => ({
+      id: item.id,
+      refId: item.ref_id ?? '',
+      type: item.type,
+      name: item.name,
+      quantity: Number(item.quantity),
+      unitPrice: Number(item.unit_price),
+    }))
+    const savedOrder: Order = {
+      ...editingOrder,
+      clientId: client?.id,
+      clientName: client?.name ?? (editingOrder.clientName.trim() || 'Cliente avulso'),
+      employeeId: employee.id,
+      employeeName: employee.name,
+      items: savedItems,
+      status: editingOrder.status,
+      method: editingOrder.status === 'paga' ? editingOrder.method : undefined,
+      total,
+      createdAt,
+    }
+    setOrders((current) => sortOrdersByDate(current.map((item) => item.id === savedOrder.id ? savedOrder : item)))
+    setSavingOrder(false)
+    setEditingOrder(null)
   }
 
   return (
@@ -273,9 +451,14 @@ export default function ComandasPage() {
                   <StatusBadge status={order.status} />
                 </TableCell>
                 <TableCell className="text-right">
-                  <Button variant="ghost" size="icon-sm" aria-label="Excluir comanda" onClick={() => deleteOrder(order.id)}>
-                    <Trash2 className="size-4" />
-                  </Button>
+                  <div className="flex justify-end gap-1">
+                    <Button variant="ghost" size="icon-sm" aria-label="Editar comanda" onClick={() => openOrderEditor(order)}>
+                      <Pencil className="size-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon-sm" aria-label="Excluir comanda" onClick={() => deleteOrder(order.id)}>
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
@@ -289,6 +472,112 @@ export default function ComandasPage() {
           </TableBody>
         </Table>
       </Card>
+
+      <Dialog open={Boolean(editingOrder)} onClose={() => !savingOrder && setEditingOrder(null)} className="sm:max-w-3xl">
+        {editingOrder ? (
+          <>
+            <DialogHeader title={`Editar comanda #${editingOrder.number}`} description="Corrija os dados, itens e pagamento da comanda." />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="edit-order-client">Cliente</Label>
+                <Select id="edit-order-client" value={editingOrder.clientId ?? ''} onChange={(event) => {
+                  const client = clients.find((item) => item.id === event.target.value)
+                  setEditingOrder({ ...editingOrder, clientId: client?.id, clientName: client?.name ?? 'Cliente avulso' })
+                }}>
+                  <option value="">Cliente avulso</option>
+                  {clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-order-employee">Responsável</Label>
+                <Select id="edit-order-employee" value={editingOrder.employeeId} onChange={(event) => setEditingOrder({ ...editingOrder, employeeId: event.target.value })}>
+                  <option value="">Selecione</option>
+                  {employees.filter((employee) => employee.active || employee.id === editingOrder.employeeId).map((employee) => <option key={employee.id} value={employee.id}>{employee.name}</option>)}
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-order-date">Data e horário</Label>
+                <Input id="edit-order-date" type="datetime-local" value={editingDate} onChange={(event) => setEditingDate(event.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-order-status">Status</Label>
+                <Select id="edit-order-status" value={editingOrder.status} onChange={(event) => setEditingOrder({ ...editingOrder, status: event.target.value as OrderStatus })}>
+                  <option value="aberta">Aberta</option>
+                  <option value="pendente">Pendente</option>
+                  <option value="paga">Paga</option>
+                  <option value="cancelada">Cancelada</option>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-order-method">Pagamento</Label>
+                <Select id="edit-order-method" value={editingOrder.method ?? ''} disabled={editingOrder.status !== 'paga'} onChange={(event) => setEditingOrder({ ...editingOrder, method: event.target.value as PaymentMethod })}>
+                  <option value="">Selecione</option>
+                  <option value="dinheiro">Dinheiro</option>
+                  <option value="pix">Pix</option>
+                  <option value="credito">Crédito</option>
+                  <option value="debito">Débito</option>
+                  <option value="outro">Outro</option>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-order-discount">Desconto</Label>
+                  <Input id="edit-order-discount" type="number" min="0" step="0.01" value={editingOrder.discount} onChange={(event) => setEditingOrder({ ...editingOrder, discount: Number(event.target.value) })} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-order-surcharge">Acréscimo</Label>
+                  <Input id="edit-order-surcharge" type="number" min="0" step="0.01" value={editingOrder.surcharge} onChange={(event) => setEditingOrder({ ...editingOrder, surcharge: Number(event.target.value) })} />
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5 space-y-3">
+              <div className="flex items-end gap-2">
+                <div className="flex-1 space-y-2">
+                  <Label htmlFor="edit-order-add-item">Adicionar produto ou serviço</Label>
+                  <Select id="edit-order-add-item" defaultValue="" onChange={(event) => { addCatalogItem(event.target.value); event.target.value = '' }}>
+                    <option value="">Selecione um item</option>
+                    {catalog.filter((item) => item.active).map((item) => <option key={item.id} value={item.id}>{item.name} — {formatCurrency(item.price)}</option>)}
+                  </Select>
+                </div>
+              </div>
+              {editingOrder.items.map((item, index) => (
+                <div key={item.id} className="grid grid-cols-[1fr_80px_120px_36px] items-end gap-2 rounded-lg border border-border p-3">
+                  <div className="space-y-1">
+                    <Label>Item</Label>
+                    <Input value={item.name} onChange={(event) => updateEditingItem(index, { name: event.target.value })} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Qtd.</Label>
+                    <Input type="number" min="1" value={item.quantity} onChange={(event) => updateEditingItem(index, { quantity: Number(event.target.value) })} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Valor unitário</Label>
+                    <Input type="number" min="0" step="0.01" value={item.unitPrice} onChange={(event) => updateEditingItem(index, { unitPrice: Number(event.target.value) })} />
+                  </div>
+                  <Button variant="ghost" size="icon-sm" aria-label={`Remover ${item.name}`} onClick={() => setEditingOrder({ ...editingOrder, items: editingOrder.items.filter((_, itemIndex) => itemIndex !== index) })}>
+                    <Minus className="size-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-5 flex items-center justify-between border-t border-border pt-4">
+              <div>
+                {editError ? <p className="text-sm text-destructive">{editError}</p> : null}
+                <p className="font-semibold">Total: {formatCurrency(editingOrder.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0) - editingOrder.discount + editingOrder.surcharge)}</p>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" disabled={savingOrder} onClick={() => setEditingOrder(null)}>Cancelar</Button>
+                <Button variant="gold" disabled={savingOrder} onClick={saveEditedOrder}>
+                  <Save className="size-4" />
+                  {savingOrder ? 'Salvando...' : 'Salvar alterações'}
+                </Button>
+              </div>
+            </div>
+          </>
+        ) : null}
+      </Dialog>
     </div>
   )
 }

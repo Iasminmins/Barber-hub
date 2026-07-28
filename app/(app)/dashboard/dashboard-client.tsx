@@ -64,6 +64,19 @@ function getRangeDays(range: DateRange) {
   return Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1)
 }
 
+function getSaoPauloHour(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return -1
+
+  const hour = new Intl.DateTimeFormat('pt-BR', {
+    hour: '2-digit',
+    hourCycle: 'h23',
+    timeZone: 'America/Sao_Paulo',
+  }).format(date)
+
+  return Number(hour)
+}
+
 function buildRevenueSeries(orders: Order[], range: DateRange, period: Period) {
   const paid = orders.filter((order) => order.status === 'paga' && isInsideRange(order.createdAt, range))
 
@@ -75,8 +88,7 @@ function buildRevenueSeries(orders: Order[], range: DateRange, period: Period) {
     }))
 
     for (const order of paid) {
-      const match = order.createdAt.match(/T(\d{2}):/)
-      const hour = match ? Number(match[1]) : -1
+      const hour = getSaoPauloHour(order.createdAt)
       if (!Number.isInteger(hour) || hour < 0 || hour > 23) continue
       hours[hour].receita += order.total
       hours[hour].comandas += 1

@@ -138,6 +138,18 @@ function statusPriority(status: SubscriptionStatus) {
   return 3
 }
 
+function toLocalDateKey(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function parseLocalDateKey(value: string) {
+  const [year, month, day] = value.split('-').map(Number)
+  return new Date(year, month - 1, day)
+}
+
 export function AssinaturasClient({
   catalog,
   financialEntries,
@@ -155,6 +167,8 @@ export function AssinaturasClient({
   const [subscriptionRecords, setSubscriptionRecords] = React.useState(subscriptions)
   const [editingSubscription, setEditingSubscription] = React.useState<SubscriptionDraft | null>(null)
   const [subscriptionStatus, setSubscriptionStatus] = React.useState('')
+  const [renewalStatus, setRenewalStatus] = React.useState('')
+  const [renewingSubscriptionId, setRenewingSubscriptionId] = React.useState<string | null>(null)
   const [subscriptionFilter, setSubscriptionFilter] = React.useState<SubscriptionFilter>('ativas')
   const [subscriptionSearch, setSubscriptionSearch] = React.useState('')
   const [saleSearch, setSaleSearch] = React.useState('')
@@ -306,16 +320,56 @@ export function AssinaturasClient({
     setEditingSubscription(null)
   }
 
+  async function renewSubscription(subscription: Subscription) {
+    const plan = plans.find((item) => item.id === subscription.planId)
+    const cycleDays = plan?.rules?.cycleDays ?? 30
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const currentDueDate = parseLocalDateKey(subscription.dueDate)
+    const cycleStart = currentDueDate > today ? currentDueDate : today
+    const nextDueDate = new Date(cycleStart)
+    nextDueDate.setDate(nextDueDate.getDate() + cycleDays)
+
+    if (!window.confirm(`Renovar a assinatura de ${subscription.clientName} por mais ${cycleDays} dias?`)) return
+
+    const startDate = toLocalDateKey(cycleStart)
+    const dueDate = toLocalDateKey(nextDueDate)
+    setRenewalStatus('')
+    setRenewingSubscriptionId(subscription.id)
+
+    const result = await updateRecord('subscriptions', subscription.id, {
+      start_date: startDate,
+      due_date: dueDate,
+      status: 'ativo',
+      credits_used: subscription.creditsTotal ? 0 : null,
+    })
+
+    setRenewingSubscriptionId(null)
+    if (result.error) {
+      setRenewalStatus(`Não foi possível renovar: ${result.error}`)
+      return
+    }
+
+    setSubscriptionRecords((current) => current.map((item) => (
+      item.id === subscription.id
+        ? {
+            ...item,
+            startDate,
+            dueDate,
+            status: 'ativo',
+            creditsUsed: item.creditsTotal ? 0 : item.creditsUsed,
+          }
+        : item
+    )))
+    setRenewalStatus(`Assinatura de ${subscription.clientName} renovada até ${formatDate(dueDate)}.`)
+  }
+
   return (
     <div>
       <PageHeader
         title="Assinaturas"
         description="Planos recorrentes, pacotes, créditos e clientes com vencimento próximo."
       >
-        <Button variant="outline" size="sm">
-          <Repeat className="size-4" />
-          Renovar vencidas
-        </Button>
         <Link href="/assinaturas/nova" className={buttonVariants({ variant: 'gold', size: 'sm' })}>
           <Plus className="size-4" />
           Nova assinatura
@@ -391,6 +445,9 @@ export function AssinaturasClient({
               ))}
             </div>
           </div>
+          {renewalStatus ? (
+            <p className="border-b border-border px-4 py-2 text-sm text-muted-foreground">{renewalStatus}</p>
+          ) : null}
           <Table>
             <TableHeader>
               <TableRow>
@@ -438,7 +495,20 @@ export function AssinaturasClient({
                     <TableCell>
                       <StatusBadge status={sub.displayStatus} />
                     </TableCell>
-                    <TableCell className="text-right"><Button variant="ghost" size="icon-sm" aria-label={`Editar assinatura de ${sub.clientName}`} onClick={()=>{setSubscriptionStatus('');setEditingSubscription({id:sub.id,clientId:sub.clientId,planId:sub.planId,price:String(sub.price).replace('.',','),startDate:sub.startDate,dueDate:sub.dueDate,status:sub.status,creditsUsed:String(sub.creditsUsed??''),creditsTotal:String(sub.creditsTotal??'')})}}><Pencil className="size-4"/></Button></TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={renewingSubscriptionId === sub.id}
+                          onClick={() => renewSubscription(sub)}
+                        >
+                          <Repeat className="size-4" />
+                          {renewingSubscriptionId === sub.id ? 'Renovando...' : 'Renovar'}
+                        </Button>
+                        <Button variant="ghost" size="icon-sm" aria-label={`Editar assinatura de ${sub.clientName}`} onClick={()=>{setSubscriptionStatus('');setEditingSubscription({id:sub.id,clientId:sub.clientId,planId:sub.planId,price:String(sub.price).replace('.',','),startDate:sub.startDate,dueDate:sub.dueDate,status:sub.status,creditsUsed:String(sub.creditsUsed??''),creditsTotal:String(sub.creditsTotal??'')})}}><Pencil className="size-4"/></Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 )
               })}
