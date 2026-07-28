@@ -219,14 +219,66 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
       </PageHeader>
 
       {filter === "novos" ? (
-        <div className="mb-4 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
-          <p className="text-sm font-semibold text-foreground">Clientes novos</p>
-          <p className="text-sm text-muted-foreground">
-            {newClientsRange
-              ? `Cadastros de ${formatDate(newClientsRange.start)} até ${formatDate(newClientsRange.end)}`
-              : "Cadastros novos no período selecionado"}
-            {" · "}{filtered.length} cliente(s)
-          </p>
+        <div className="mb-4 flex flex-col gap-3 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-foreground">Clientes novos</p>
+            <p className="text-sm text-muted-foreground">
+              {newClientsRange
+                ? `Cadastros de ${formatDate(newClientsRange.start)} até ${formatDate(newClientsRange.end)}`
+                : "Cadastros novos no período selecionado"}
+              {" · "}{filtered.length} cliente(s)
+            </p>
+          </div>
+          <div className="grid grid-cols-1 items-end gap-2 sm:grid-cols-[1fr_1fr_auto]">
+            <label className="space-y-1 text-xs font-medium text-muted-foreground">
+              Data inicial do cadastro
+              <Input
+                type="date"
+                value={newClientsRange?.start ?? ""}
+                max={newClientsRange?.end}
+                onChange={(event) => {
+                  const start = event.target.value
+                  if (!start) return
+                  setNewClientsRange((current) => ({
+                    start,
+                    end: current && start <= current.end ? current.end : start,
+                  }))
+                }}
+                className="h-9 bg-card"
+              />
+            </label>
+            <label className="space-y-1 text-xs font-medium text-muted-foreground">
+              Data final do cadastro
+              <Input
+                type="date"
+                value={newClientsRange?.end ?? ""}
+                min={newClientsRange?.start}
+                onChange={(event) => {
+                  const end = event.target.value
+                  if (!end) return
+                  setNewClientsRange((current) => ({
+                    start: current && current.start <= end ? current.start : end,
+                    end,
+                  }))
+                }}
+                className="h-9 bg-card"
+              />
+            </label>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-9 bg-card"
+              onClick={() => {
+                setNewClientsRange(null)
+                setFilter("todos")
+                router.replace("/clientes")
+              }}
+            >
+              <X className="size-4" />
+              Limpar filtro
+            </Button>
+          </div>
         </div>
       ) : null}
 
@@ -262,6 +314,7 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
               <TableHeader>
                 <TableRow>
                   <TableHead>Cliente</TableHead>
+                  {filter === "novos" ? <TableHead>Cadastrado em</TableHead> : null}
                   <TableHead>Contato</TableHead>
                   <TableHead className="text-right">Visitas</TableHead>
                   <TableHead className="text-right">Total gasto</TableHead>
@@ -287,6 +340,11 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
                         </div>
                       </div>
                     </TableCell>
+                    {filter === "novos" ? (
+                      <TableCell className="whitespace-nowrap text-muted-foreground">
+                        {formatDate(c.createdAt)}
+                      </TableCell>
+                    ) : null}
                     <TableCell className="text-muted-foreground">{c.phone || "-"}</TableCell>
                     <TableCell className="text-right tabular-nums">{stats.visits}</TableCell>
                     <TableCell className="text-right font-medium tabular-nums">{formatCurrency(stats.totalSpent)}</TableCell>
@@ -301,7 +359,7 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
                 })}
                 {filtered.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
+                    <TableCell colSpan={filter === "novos" ? 7 : 6} className="py-10 text-center text-muted-foreground">
                       Nenhum cliente encontrado.
                     </TableCell>
                   </TableRow>
