@@ -76,7 +76,7 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
   const [records, setRecords] = useState(clients)
   const [query, setQuery] = useState("")
   const [filter, setFilter] = useState<Filter>("todos")
-  const [selectedId, setSelectedId] = useState<string | null>(clients[0]?.id ?? null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [editing, setEditing] = useState<ClientDraft | null>(null)
   const [editStatus, setEditStatus] = useState("")
@@ -187,7 +187,7 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
         </Link>
       </PageHeader>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px] 2xl:grid-cols-[minmax(0,1fr)_380px]">
+      <div className={`grid gap-5 ${selected ? 'xl:grid-cols-[minmax(0,1fr)_340px] 2xl:grid-cols-[minmax(0,1fr)_380px]' : 'grid-cols-1'}`}>
         <div className="min-w-0">
           <Card className="mb-4 p-3">
             <div className="grid gap-3">
@@ -228,7 +228,7 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
                   const stats = getClientStats(c)
                   return (
                   <TableRow key={c.id} className={selectedId === c.id ? "bg-accent/40" : ""}>
-                    <TableCell onClick={() => setSelectedId(c.id)} className="cursor-pointer">
+                    <TableCell onClick={() => setSelectedId((current) => current === c.id ? null : c.id)} className="cursor-pointer">
                       <div className="flex items-center gap-3">
                         <Avatar name={c.name} />
                         <div className="min-w-0">
@@ -265,8 +265,8 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
           </Card>
         </div>
 
-        <div className="min-w-0 xl:sticky xl:top-6 xl:self-start">
-          {selected ? (
+        {selected ? (
+          <div className="min-w-0 xl:sticky xl:top-6 xl:self-start">
             <Card className="p-5">
               <div className="mb-4 flex items-start justify-between">
                 <div className="flex items-center gap-3">
@@ -276,7 +276,7 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
                     <p className="text-sm text-muted-foreground">Cliente desde {formatDate(selected.createdAt)}</p>
                   </div>
                 </div>
-                <button onClick={() => setSelectedId(null)} className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground lg:hidden" aria-label="Fechar">
+                <button onClick={() => setSelectedId(null)} className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Fechar detalhes">
                   <X className="size-4" />
                 </button>
               </div>
@@ -315,12 +315,8 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
                 </Button>
               </div>
             </Card>
-          ) : (
-            <Card className="flex h-full min-h-48 items-center justify-center p-6 text-center text-sm text-muted-foreground">
-              Selecione um cliente para ver os detalhes.
-            </Card>
-          )}
-        </div>
+          </div>
+        ) : null}
       </div>
 
       <Dialog open={historyOpen} onClose={() => setHistoryOpen(false)} className="sm:max-w-2xl">
