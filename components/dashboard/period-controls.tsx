@@ -1,5 +1,6 @@
 'use client'
 
+import * as React from 'react'
 import { CalendarDays, FileSpreadsheet, FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -70,18 +71,53 @@ export function DashboardPeriodControls({
   onPeriodChange: (period: Period) => void
   onRangeChange: (range: DateRange) => void
 }) {
+  const [customRangeOpen, setCustomRangeOpen] = React.useState(false)
+  const customRangeRef = React.useRef<HTMLDivElement>(null)
+
+  React.useEffect(() => {
+    if (!customRangeOpen) return
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (customRangeRef.current && !customRangeRef.current.contains(event.target as Node)) {
+        setCustomRangeOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', closeOnOutsideClick)
+    return () => document.removeEventListener('mousedown', closeOnOutsideClick)
+  }, [customRangeOpen])
+
+  function selectPeriod(nextPeriod: Period) {
+    onPeriodChange(nextPeriod)
+    setCustomRangeOpen(nextPeriod === 'personalizado')
+  }
+
+  function changeStart(start: string) {
+    if (!start) return
+    onRangeChange({
+      start,
+      end: start > range.end ? start : range.end,
+    })
+  }
+
+  function changeEnd(end: string) {
+    if (!end) return
+    onRangeChange({
+      start: end < range.start ? end : range.start,
+      end,
+    })
+  }
+
   return (
-    <div className="mb-6 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-      <div className="inline-grid grid-cols-2 gap-1 rounded-lg bg-muted p-1 sm:grid-cols-5">
+    <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1 sm:grid-cols-5 lg:flex-1">
         {periodOptions.map((option) => {
           const active = option.value === period
           return (
             <button
               key={option.value}
               type="button"
-              onClick={() => onPeriodChange(option.value)}
+              onClick={() => selectPeriod(option.value)}
               className={cn(
-                'h-10 rounded-md px-4 text-sm font-semibold transition-colors',
+                'h-10 min-w-0 rounded-md px-3 text-sm font-semibold transition-colors sm:flex-1',
                 active
                   ? 'bg-card text-foreground shadow-sm'
                   : 'text-muted-foreground hover:bg-card/70 hover:text-foreground',
@@ -93,38 +129,63 @@ export function DashboardPeriodControls({
         })}
       </div>
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <div className="flex min-h-10 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm text-foreground shadow-sm">
-          <CalendarDays className="size-4 text-muted-foreground" />
-          <span className="tabular-nums">
-            {formatInputDate(range.start)} - {formatInputDate(range.end)}
-          </span>
+      <div className="flex flex-wrap items-center gap-2">
+        <div ref={customRangeRef} className="relative min-w-0 flex-1 sm:flex-none">
+          <button
+            type="button"
+            onClick={() => {
+              if (period !== 'personalizado') onPeriodChange('personalizado')
+              setCustomRangeOpen((current) => !current)
+            }}
+            className="flex h-10 w-full min-w-0 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm text-foreground shadow-sm hover:bg-muted sm:w-auto"
+            aria-expanded={customRangeOpen}
+            aria-label="Selecionar período personalizado"
+          >
+            <CalendarDays className="size-4 shrink-0 text-muted-foreground" />
+            <span className="truncate whitespace-nowrap tabular-nums">
+              {formatInputDate(range.start)} - {formatInputDate(range.end)}
+            </span>
+          </button>
+
+          {customRangeOpen ? (
+            <div className="absolute right-0 top-full z-40 mt-2 w-[min(22rem,calc(100vw-2rem))] rounded-lg border border-border bg-popover p-4 shadow-xl">
+              <p className="mb-3 text-sm font-semibold text-foreground">Período personalizado</p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <label className="space-y-1.5 text-xs font-medium text-muted-foreground">
+                  Data inicial
+                  <Input
+                    type="date"
+                    value={range.start}
+                    max={range.end}
+                    onChange={(event) => changeStart(event.target.value)}
+                    aria-label="Data inicial"
+                    className="h-10"
+                  />
+                </label>
+                <label className="space-y-1.5 text-xs font-medium text-muted-foreground">
+                  Data final
+                  <Input
+                    type="date"
+                    value={range.end}
+                    min={range.start}
+                    onChange={(event) => changeEnd(event.target.value)}
+                    aria-label="Data final"
+                    className="h-10"
+                  />
+                </label>
+              </div>
+              <div className="mt-4 flex justify-end">
+                <Button size="sm" onClick={() => setCustomRangeOpen(false)}>Concluir</Button>
+              </div>
+            </div>
+          ) : null}
         </div>
 
-        {period === 'personalizado' && (
-          <div className="grid grid-cols-2 gap-2">
-            <Input
-              type="date"
-              value={range.start}
-              onChange={(event) => onRangeChange({ ...range, start: event.target.value })}
-              aria-label="Data inicial"
-              className="h-10"
-            />
-            <Input
-              type="date"
-              value={range.end}
-              onChange={(event) => onRangeChange({ ...range, end: event.target.value })}
-              aria-label="Data final"
-              className="h-10"
-            />
-          </div>
-        )}
-
-        <Button variant="outline" className="h-10">
+        <Button variant="outline" className="h-10 shrink-0">
           <FileSpreadsheet className="size-4" />
           Excel
         </Button>
-        <Button variant="outline" className="h-10">
+        <Button variant="outline" className="h-10 shrink-0">
           <FileText className="size-4" />
           PDF
         </Button>
