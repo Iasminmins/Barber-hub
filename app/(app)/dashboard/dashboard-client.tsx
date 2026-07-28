@@ -67,6 +67,24 @@ function getRangeDays(range: DateRange) {
 function buildRevenueSeries(orders: Order[], range: DateRange, period: Period) {
   const paid = orders.filter((order) => order.status === 'paga' && isInsideRange(order.createdAt, range))
 
+  if (range.start === range.end) {
+    const hours = Array.from({ length: 24 }, (_, hour) => ({
+      label: `${String(hour).padStart(2, '0')}:00`,
+      receita: 0,
+      comandas: 0,
+    }))
+
+    for (const order of paid) {
+      const match = order.createdAt.match(/T(\d{2}):/)
+      const hour = match ? Number(match[1]) : -1
+      if (!Number.isInteger(hour) || hour < 0 || hour > 23) continue
+      hours[hour].receita += order.total
+      hours[hour].comandas += 1
+    }
+
+    return hours
+  }
+
   if (period === 'ano') {
     const months = Array.from({ length: 12 }, (_, index) => {
       const date = new Date(new Date(`${range.start}T00:00:00`).getFullYear(), index, 1)
@@ -220,6 +238,7 @@ export function DashboardClient({
     .reduce((sum, commission) => sum + commission.amount, 0)
 
   const revenueSeries = buildRevenueSeries(dashboardOrders, range, period)
+  const isSingleDay = range.start === range.end
   const revenueByMethod = buildRevenueByMethod(dashboardOrders, range)
   const ranking = buildRanking(dashboardOrders, employees, range)
   const maxRevenue = Math.max(1, ...ranking.map((item) => item.revenue))
@@ -289,14 +308,14 @@ export function DashboardClient({
         <Card className="lg:col-span-2">
           <CardHeader className="flex-row items-center justify-between">
             <div>
-              <CardTitle>Receita no período</CardTitle>
+              <CardTitle>{isSingleDay ? 'Faturamento por horário' : 'Receita no período'}</CardTitle>
               <p className="text-sm text-muted-foreground">
-                Total filtrado: {formatCurrency(revenue)}
+                {isSingleDay ? 'Distribuição das vendas ao longo do dia' : `Total filtrado: ${formatCurrency(revenue)}`}
               </p>
             </div>
           </CardHeader>
           <CardContent>
-            <RevenueChart data={revenueSeries} />
+            <RevenueChart data={revenueSeries} hourly={isSingleDay} />
           </CardContent>
         </Card>
 

@@ -397,21 +397,35 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
                       </div>
                       {activeTab === 'aniversarios' ? (
                         <Button
+                          type="button"
                           variant="ghost"
                           size="icon-sm"
+                          className="relative z-10 shrink-0"
                           aria-label={`Preparar mensagem para ${item.title}`}
                           disabled={!normalizeWhatsAppPhone(item.phone ?? '')}
-                          onClick={() => editBirthdayMessage(item)}
+                          title={!normalizeWhatsAppPhone(item.phone ?? '') ? 'Cadastre um telefone para enviar a mensagem' : undefined}
+                          onMouseDown={(event) => event.stopPropagation()}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            editBirthdayMessage(item)
+                          }}
                         >
                           <MessageSquare className="size-4 text-success" />
                         </Button>
                       ) : activeTab === 'planos' ? (
                         <Button
+                          type="button"
                           variant="ghost"
                           size="icon-sm"
+                          className="relative z-10 shrink-0"
                           aria-label={`Preparar renovação para ${item.title}`}
                           disabled={!normalizeWhatsAppPhone(item.phone ?? '')}
-                          onClick={() => editRenewalMessage(item)}
+                          title={!normalizeWhatsAppPhone(item.phone ?? '') ? 'Cadastre um telefone para enviar a mensagem' : undefined}
+                          onMouseDown={(event) => event.stopPropagation()}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            editRenewalMessage(item)
+                          }}
                         >
                           <MessageSquare className="size-4 text-emerald-600" />
                         </Button>

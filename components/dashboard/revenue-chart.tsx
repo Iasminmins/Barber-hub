@@ -17,7 +17,7 @@ interface Point {
   comandas: number
 }
 
-export function RevenueChart({ data }: { data: Point[] }) {
+export function RevenueChart({ data, hourly = false }: { data: Point[]; hourly?: boolean }) {
   return (
     <ResponsiveContainer width="100%" height={260}>
       <AreaChart data={data} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
@@ -30,6 +30,7 @@ export function RevenueChart({ data }: { data: Point[] }) {
         <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
         <XAxis
           dataKey="label"
+          interval={hourly ? 1 : 'preserveStartEnd'}
           tickLine={false}
           axisLine={false}
           tick={{ fill: 'var(--color-muted-foreground)', fontSize: 12 }}
@@ -39,7 +40,11 @@ export function RevenueChart({ data }: { data: Point[] }) {
           axisLine={false}
           width={60}
           tick={{ fill: 'var(--color-muted-foreground)', fontSize: 12 }}
-          tickFormatter={(v) => `R$${v / 1000}k`}
+          tickFormatter={(value) => {
+            const number = Number(value)
+            if (hourly || Math.abs(number) < 1000) return `R$${number.toLocaleString('pt-BR')}`
+            return `R$${(number / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}k`
+          }}
         />
         <Tooltip
           cursor={{ stroke: 'var(--color-border)' }}

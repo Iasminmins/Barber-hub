@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import Link from 'next/link'
-import { ChevronLeft, ChevronRight, Plus, CalendarDays, Ban, Coffee, Copy, ExternalLink, MessageCircle, Share2, Save } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, CalendarDays, Ban, Coffee, Copy, ExternalLink, MessageCircle, Share2, Save, Trash2 } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { StatusBadge } from '@/components/status-badge'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -80,7 +80,7 @@ export function AgendaClient({
   publicSlug: string
   barbershopName: string
 }) {
-  const { catalog, clients, updateRecord } = useAppData()
+  const { catalog, clients, updateRecord, deleteRecord } = useAppData()
   const [view, setView] = React.useState('dia')
   const [barberFilter, setBarberFilter] = React.useState<string>('todos')
   const [selectedDate, setSelectedDate] = React.useState(() => toDateKey(new Date()))
@@ -90,6 +90,8 @@ export function AgendaClient({
   const [editingAppointment, setEditingAppointment] = React.useState<Appointment | null>(null)
   const [editingPhone, setEditingPhone] = React.useState('')
   const [savingAppointment, setSavingAppointment] = React.useState(false)
+  const [deletingAppointment, setDeletingAppointment] = React.useState(false)
+  const [confirmingDelete, setConfirmingDelete] = React.useState(false)
   const [appointmentError, setAppointmentError] = React.useState('')
   const agendaAppointments = appointments
 
@@ -108,12 +110,14 @@ export function AgendaClient({
     setEditingAppointment({ ...appointment })
     setEditingPhone(client?.phone ?? '')
     setAppointmentError('')
+    setConfirmingDelete(false)
   }
 
   function closeAppointment() {
-    if (savingAppointment) return
+    if (savingAppointment || deletingAppointment) return
     setEditingAppointment(null)
     setAppointmentError('')
+    setConfirmingDelete(false)
   }
 
   function updateAppointmentDraft(values: Partial<Appointment>) {
@@ -191,6 +195,20 @@ export function AgendaClient({
       return
     }
     setEditingAppointment(null)
+  }
+
+  async function deleteAppointment() {
+    if (!editingAppointment) return
+    setDeletingAppointment(true)
+    setAppointmentError('')
+    const result = await deleteRecord('appointments', editingAppointment.id)
+    setDeletingAppointment(false)
+    if (result.error) {
+      setAppointmentError(result.error)
+      return
+    }
+    setEditingAppointment(null)
+    setConfirmingDelete(false)
   }
 
   const barbers = employees.filter((e) => e.active && isBarberRole(e.role))
@@ -571,15 +589,42 @@ export function AgendaClient({
               </p>
             ) : null}
 
-            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-              <Button variant="outline" onClick={closeAppointment} disabled={savingAppointment}>
-                Cancelar
-              </Button>
-              <Button onClick={saveAppointment} disabled={savingAppointment}>
-                <Save className="size-4" />
-                {savingAppointment ? 'Salvando...' : 'Salvar alterações'}
-              </Button>
-            </div>
+            {confirmingDelete ? (
+              <div className="mt-6 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+                <p className="text-sm font-medium text-foreground">Excluir este agendamento?</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Ele será removido definitivamente da agenda.
+                </p>
+                <div className="mt-3 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                  <Button variant="outline" onClick={() => setConfirmingDelete(false)} disabled={deletingAppointment}>
+                    Voltar
+                  </Button>
+                  <Button variant="destructive" onClick={deleteAppointment} disabled={deletingAppointment}>
+                    <Trash2 className="size-4" />
+                    {deletingAppointment ? 'Excluindo...' : 'Sim, excluir'}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:items-center">
+                <Button
+                  variant="ghost"
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive sm:mr-auto"
+                  onClick={() => setConfirmingDelete(true)}
+                  disabled={savingAppointment}
+                >
+                  <Trash2 className="size-4" />
+                  Excluir agendamento
+                </Button>
+                <Button variant="outline" onClick={closeAppointment} disabled={savingAppointment}>
+                  Cancelar
+                </Button>
+                <Button onClick={saveAppointment} disabled={savingAppointment}>
+                  <Save className="size-4" />
+                  {savingAppointment ? 'Salvando...' : 'Salvar alterações'}
+                </Button>
+              </div>
+            )}
           </>
         ) : null}
       </Dialog>
