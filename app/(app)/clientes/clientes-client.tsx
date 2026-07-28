@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { AlertTriangle, Cake, CalendarDays, Mail, MessageCircle, Pencil, Phone, Plus, Save, Scissors, Search, Star, Trash2, X } from "lucide-react"
 import type { Client, ClientTag } from "@/lib/types"
 import { formatCurrency, formatDate } from "@/lib/format"
@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/table"
 import { useAppData } from '@/components/data/app-data-provider'
 
-type Filter = "todos" | "vip" | "recorrente" | "aniversariante" | "inadimplente" | "inativo" | "sem_telefone" | "duplicados" | "suspeitos"
+type Filter = "todos" | "novos" | "vip" | "recorrente" | "aniversariante" | "inadimplente" | "inativo" | "sem_telefone" | "duplicados" | "suspeitos"
 type ClientDraft = { id:string; name:string; phone:string; email:string; birthDate:string; preferredBarber:string; address:string; notes:string; tags:ClientTag[] }
 
 const TAG_LABEL: Record<ClientTag, string> = {
@@ -62,6 +62,17 @@ function orderDateKey(value: string) {
   return value.slice(0, 10)
 }
 
+function currentMonthRange() {
+  const today = new Date()
+  const year = today.getFullYear()
+  const month = String(today.getMonth() + 1).padStart(2, "0")
+  const lastDay = new Date(year, today.getMonth() + 1, 0).getDate()
+  return {
+    start: `${year}-${month}-01`,
+    end: `${year}-${month}-${String(lastDay).padStart(2, "0")}`,
+  }
+}
+
 function whatsappUrl(phone: string, name: string) {
   const digits = normalizePhone(phone)
   if (!digits) return ""
@@ -76,10 +87,24 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
   const [records, setRecords] = useState(clients)
   const [query, setQuery] = useState("")
   const [filter, setFilter] = useState<Filter>("todos")
+  const [newClientsRange, setNewClientsRange] = useState<{ start: string; end: string } | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [editing, setEditing] = useState<ClientDraft | null>(null)
   const [editStatus, setEditStatus] = useState("")
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get("filtro") !== "novos") return
+    const start = params.get("inicio") ?? ""
+    const end = params.get("fim") ?? ""
+    setFilter("novos")
+    setNewClientsRange(
+      /^\d{4}-\d{2}-\d{2}$/.test(start) && /^\d{4}-\d{2}-\d{2}$/.test(end)
+        ? { start, end }
+        : null,
+    )
+  }, [])
 
   const duplicateKeys = useMemo(() => {
     const keys = records.map((client) => normalizePhone(client.phone) || normalizeName(client.name)).filter(Boolean)
@@ -126,13 +151,18 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
         c.email.toLowerCase().includes(q)
       const matchesFilter =
         filter === "todos" ||
+        (filter === "novos" && (
+          newClientsRange
+            ? c.createdAt.slice(0, 10) >= newClientsRange.start && c.createdAt.slice(0, 10) <= newClientsRange.end
+            : true
+        )) ||
         (filter === "aniversariante" ? c.tags.includes("aniversariante") || isBirthdayThisMonth(c.birthDate) : c.tags.includes(filter as ClientTag)) ||
         (filter === "sem_telefone" && !normalizePhone(c.phone)) ||
         (filter === "duplicados" && duplicateKeys.has(normalizePhone(c.phone) || normalizeName(c.name))) ||
         (filter === "suspeitos" && productNames.has(normalizeName(c.name)))
       return matchesQuery && matchesFilter
     })
-  }, [records, query, filter, duplicateKeys, productNames])
+  }, [records, query, filter, duplicateKeys, productNames, newClientsRange])
 
   const selected = records.find((c) => c.id === selectedId) ?? null
   const selectedStats = selected ? getClientStats(selected) : null
@@ -168,6 +198,7 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
 
   const filters: { key: Filter; label: string }[] = [
     { key: "todos", label: "Todos" },
+    { key: "novos", label: "Novos" },
     { key: "vip", label: "VIP" },
     { key: "recorrente", label: "Recorrentes" },
     { key: "aniversariante", label: "Aniversariantes" },
@@ -187,6 +218,18 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
         </Link>
       </PageHeader>
 
+      {filter === "novos" ? (
+        <div className="mb-4 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
+          <p className="text-sm font-semibold text-foreground">Clientes novos</p>
+          <p className="text-sm text-muted-foreground">
+            {newClientsRange
+              ? `Cadastros de ${formatDate(newClientsRange.start)} até ${formatDate(newClientsRange.end)}`
+              : "Cadastros novos no período selecionado"}
+            {" · "}{filtered.length} cliente(s)
+          </p>
+        </div>
+      ) : null}
+
       <div className={`grid gap-5 ${selected ? 'xl:grid-cols-[minmax(0,1fr)_340px] 2xl:grid-cols-[minmax(0,1fr)_380px]' : 'grid-cols-1'}`}>
         <div className="min-w-0">
           <Card className="mb-4 p-3">
@@ -199,7 +242,10 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
                 {filters.map((f) => (
                   <button
                     key={f.key}
-                    onClick={() => setFilter(f.key)}
+                    onClick={() => {
+                      setFilter(f.key)
+                      if (f.key === "novos" && !newClientsRange) setNewClientsRange(currentMonthRange())
+                    }}
                     className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                       filter === f.key ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"
                     }`}

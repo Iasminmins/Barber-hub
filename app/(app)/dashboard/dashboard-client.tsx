@@ -310,7 +310,14 @@ export function DashboardClient({
       </div>
 
       {!isBarber ? <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label="Clientes novos" value={String(newClients)} icon={Users} accent="primary" hint="no período" />
+        <StatCard
+          label="Clientes novos"
+          value={String(newClients)}
+          icon={Users}
+          accent="primary"
+          hint="no período"
+          href={`/clientes?filtro=novos&inicio=${range.start}&fim=${range.end}`}
+        />
         <StatCard label="Assinaturas ativas" value={String(activeSubs)} icon={CreditCard} accent="success" hint={`${expiringSubs.length} vencendo`} />
         <StatCard label="Clientes em risco" value={String(atRiskClients)} icon={AlertTriangle} accent="destructive" hint="inativos" />
         <StatCard label="Estoque baixo" value={String(lowStock.length)} icon={PackageX} accent="warning" hint="produtos" />

@@ -1,4 +1,5 @@
 import * as React from 'react'
+import Link from 'next/link'
 import type { LucideIcon } from 'lucide-react'
 import { ArrowDownRight, ArrowUpRight } from 'lucide-react'
 import { Card } from '@/components/ui/card'
@@ -11,6 +12,7 @@ interface StatCardProps {
   hint?: string
   trend?: { value: string; positive: boolean }
   accent?: 'primary' | 'gold' | 'success' | 'warning' | 'destructive'
+  href?: string
 }
 
 const accentMap: Record<NonNullable<StatCardProps['accent']>, string> = {
@@ -21,9 +23,12 @@ const accentMap: Record<NonNullable<StatCardProps['accent']>, string> = {
   destructive: 'bg-destructive/12 text-destructive',
 }
 
-export function StatCard({ label, value, icon: Icon, hint, trend, accent = 'primary' }: StatCardProps) {
-  return (
-    <Card className="p-4">
+export function StatCard({ label, value, icon: Icon, hint, trend, accent = 'primary', href }: StatCardProps) {
+  const content = (
+    <Card className={cn(
+      'h-full p-4',
+      href && 'cursor-pointer transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md',
+    )}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-sm font-medium text-muted-foreground">{label}</p>
@@ -51,4 +56,10 @@ export function StatCard({ label, value, icon: Icon, hint, trend, accent = 'prim
       )}
     </Card>
   )
+
+  return href ? (
+    <Link href={href} className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`${label}: ${value}. Ver detalhes`}>
+      {content}
+    </Link>
+  ) : content
 }
