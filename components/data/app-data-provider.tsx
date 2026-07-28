@@ -90,7 +90,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     const { data: memberships, error: memberError } = await withTimeout(
       supabase
         .from('members')
-        .select('id, barbershop_id, employee_id, name, email, role, active')
+        .select('id, barbershop_id, employee_id, name, email, role, active, permissions')
         .eq('user_id', user.id)
         .eq('active', true)
         .limit(1),
@@ -120,7 +120,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
     const results = await withTimeout(
       Promise.all([
-        supabase.from('members').select('id, barbershop_id, employee_id, name, email, role, active').eq('barbershop_id', shopId).order('name'),
+        supabase.from('members').select('id, barbershop_id, employee_id, name, email, role, active, permissions').eq('barbershop_id', shopId).order('name'),
         supabase.from('employees').select('*').eq('barbershop_id', shopId).order('name'),
         fetchAllRows((from, to) => supabase.from('clients').select('*').eq('barbershop_id', shopId).order('name').range(from, to)),
         supabase.from('catalog_items').select('*').eq('barbershop_id', shopId).order('name'),
@@ -160,8 +160,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         paymentMethods: normalizePaymentMethods(shop.payment_methods),
         agendaSettings: normalizeAgendaSettings(shop.agenda_settings),
       },
-      member: { id: currentMembership.id, barbershopId: shopId, employeeId: linkedEmployeeId || undefined, name: currentMembership.name, email: currentMembership.email, role: currentMembership.role, active: currentMembership.active },
-      staffMembers: staffMembers.map((r: any) => ({ id:r.id, barbershopId:r.barbershop_id, employeeId:r.employee_id??undefined, name:r.name, email:r.email, role:r.role, active:r.active })),
+      member: { id: currentMembership.id, barbershopId: shopId, employeeId: linkedEmployeeId || undefined, name: currentMembership.name, email: currentMembership.email, role: currentMembership.role, active: currentMembership.active, permissions:currentMembership.permissions??['dashboard','agenda'] },
+      staffMembers: staffMembers.map((r: any) => ({ id:r.id, barbershopId:r.barbershop_id, employeeId:r.employee_id??undefined, name:r.name, email:r.email, role:r.role, active:r.active, permissions:r.permissions??['dashboard','agenda'] })),
       employees: visibleEmployees.map((r: any) => ({ id:r.id, barbershopId:r.barbershop_id, name:r.name, role:r.role, phone:r.phone??'', email:r.email??'', active:r.active, serviceCommission:num(r.service_commission), productCommission:num(r.product_commission), subscriptionCommission:num(r.subscription_commission), avatarColor:r.avatar_color??undefined })),
       clients: clients.map((r: any) => ({ id:r.id, barbershopId:r.barbershop_id, name:r.name, phone:r.phone??'', email:r.email??'', birthDate:r.birth_date??'', address:r.address??'', notes:r.notes??'', tags:r.tags??[], totalSpent:num(r.total_spent), visits:num(r.visits), lastVisit:r.last_visit??'', favoriteService:r.favorite_service??'', preferredBarber:r.preferred_barber??'', createdAt:r.created_at })),
       catalog: catalog.map((r: any) => ({ id:r.id, barbershopId:r.barbershop_id, type:r.type, name:r.name, category:r.category??'', price:num(r.price), cost:num(r.cost), durationMin:r.duration_min??undefined, stock:r.stock??undefined, minStock:r.min_stock??undefined, commission:num(r.commission), active:r.active })),

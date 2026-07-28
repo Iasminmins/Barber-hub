@@ -1,12 +1,17 @@
 'use client'
 
 import * as React from 'react'
+import { usePathname } from 'next/navigation'
 import { X } from 'lucide-react'
 import { SidebarContent } from './sidebar'
 import { Topbar } from './topbar'
 import { Button } from '@/components/ui/button'
+import { useAppData } from '@/components/data/app-data-provider'
+import { canAccessPath } from '@/lib/staff-permissions'
 
 export function AppShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname()
+  const { member } = useAppData()
   const [mobileOpen, setMobileOpen] = React.useState(false)
   const [collapsed, setCollapsed] = React.useState(false)
 
@@ -50,7 +55,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         }`}
       >
         <Topbar onMenu={() => setMobileOpen(true)} />
-        <main className="min-w-0 flex-1 p-3 sm:p-4 lg:p-6">{children}</main>
+        <main className="min-w-0 flex-1 p-3 sm:p-4 lg:p-6">
+          {member.role === 'barber' && !canAccessPath(pathname, member.permissions) ? (
+            <div className="grid min-h-[60vh] place-items-center text-center">
+              <div>
+                <h1 className="text-xl font-semibold text-foreground">Acesso não liberado</h1>
+                <p className="mt-2 text-sm text-muted-foreground">Peça ao proprietário para liberar esta área.</p>
+              </div>
+            </div>
+          ) : children}
+        </main>
       </div>
     </div>
   )

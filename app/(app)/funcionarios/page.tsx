@@ -1,10 +1,11 @@
 'use client'
 
+import Link from 'next/link'
 import { CalendarDays, ChevronLeft, ChevronRight, KeyRound, Mail, Pencil, Phone, Plus, Save, Trash2, Trophy, UserCheck, UserX, Users } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Avatar } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Dialog, DialogHeader } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -23,6 +24,7 @@ import { useAppData } from '@/components/data/app-data-provider'
 import { formatCurrency, formatPercent } from '@/lib/format'
 import { isBarberRole } from '@/lib/employees'
 import type { Employee } from '@/lib/types'
+import { staffPermissionOptions, type StaffPermission } from '@/lib/staff-permissions'
 
 function normalizeEmployeeName(value: string) {
   return value
@@ -80,7 +82,7 @@ export default function FuncionariosPage() {
   const [editStatus, setEditStatus] = useState('')
   const [section, setSection] = useState<'cadastro' | 'equipe' | 'semanal'>('equipe')
   const [weekOffset, setWeekOffset] = useState(0)
-  const [newEmployee, setNewEmployee] = useState({ name:'', role:'barber', email:'', phone:'', service:'', product:'', subscription:'', createAccess:false, password:'', confirmPassword:'' })
+  const [accessForm, setAccessForm] = useState<{ employeeId:string; email:string; password:string; confirmPassword:string; permissions:StaffPermission[] }>({ employeeId:'', email:'', password:'', confirmPassword:'', permissions:['dashboard','agenda'] })
   const [newEmployeeStatus, setNewEmployeeStatus] = useState('')
   const [creatingEmployee, setCreatingEmployee] = useState(false)
   const commissions = appData.commissions
@@ -165,76 +167,57 @@ export default function FuncionariosPage() {
     setEmployees(appData.employees)
   }, [appData.employees])
 
-  async function createEmployee() {
-    if (appData.member.role !== 'owner' && appData.member.role !== 'manager') {
-      setNewEmployeeStatus('Somente proprietário ou gerente pode cadastrar funcionários.')
+  async function createPlatformAccess() {
+    if (appData.member.role !== 'owner') {
+      setNewEmployeeStatus('Somente o proprietário pode criar acessos.')
       return
     }
-    if (!newEmployee.name.trim()) {
-      setNewEmployeeStatus('Informe o nome do funcionário.')
+    if (!accessForm.employeeId) {
+      setNewEmployeeStatus('Selecione um funcionário já cadastrado.')
       return
     }
-    if (newEmployee.createAccess && !newEmployee.email.trim()) {
+    if (!accessForm.email.trim()) {
       setNewEmployeeStatus('Informe o e-mail para criar o acesso.')
       return
     }
-    if (newEmployee.createAccess && newEmployee.password.length < 8) {
+    if (accessForm.password.length < 8) {
       setNewEmployeeStatus('A senha deve ter pelo menos 8 caracteres.')
       return
     }
-    if (newEmployee.createAccess && newEmployee.password !== newEmployee.confirmPassword) {
+    if (accessForm.password !== accessForm.confirmPassword) {
       setNewEmployeeStatus('As senhas não coincidem.')
-      return
-    }
-    const commissionsToValidate = [newEmployee.service, newEmployee.product, newEmployee.subscription].map((value) => Number(value || 0))
-    if (commissionsToValidate.some((value) => !Number.isFinite(value) || value < 0 || value > 100)) {
-      setNewEmployeeStatus('As comissões devem estar entre 0% e 100%.')
       return
     }
 
     setCreatingEmployee(true)
     setNewEmployeeStatus('')
-    const result = await appData.insertRecord('employees', {
-      barbershop_id: appData.barbershop.id,
-      name: newEmployee.name.trim(),
-      role: newEmployee.role,
-      email: newEmployee.email.trim() || null,
-      phone: newEmployee.phone.trim() || null,
-      active: true,
-      service_commission: commissionsToValidate[0],
-      product_commission: commissionsToValidate[1],
-      subscription_commission: commissionsToValidate[2],
+    const { createBrowserSupabaseClient } = await import('@/lib/supabase/client')
+    const { data: sessionData } = await createBrowserSupabaseClient().auth.getSession()
+    const response = await fetch('/api/staff-access', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${sessionData.session?.access_token ?? ''}`,
+      },
+      body: JSON.stringify({
+        employeeId: accessForm.employeeId,
+        email: accessForm.email.trim(),
+        password: accessForm.password,
+        permissions:accessForm.permissions,
+        enabled: true,
+      }),
     })
-    if (result.error || !result.data) {
+    const payload = await response.json()
+    if (!response.ok) {
       setCreatingEmployee(false)
-      setNewEmployeeStatus(result.error ?? 'Não foi possível cadastrar o funcionário.')
+      setNewEmployeeStatus(payload.error ?? 'Não foi possível criar o acesso.')
       return
-    }
-
-    if (newEmployee.createAccess) {
-      const { createBrowserSupabaseClient } = await import('@/lib/supabase/client')
-      const { data: sessionData } = await createBrowserSupabaseClient().auth.getSession()
-      const response = await fetch('/api/staff-access', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${sessionData.session?.access_token ?? ''}`,
-        },
-        body: JSON.stringify({ employeeId: String(result.data.id), email: newEmployee.email.trim(), password: newEmployee.password, enabled: true }),
-      })
-      const payload = await response.json()
-      if (!response.ok) {
-        setCreatingEmployee(false)
-        setNewEmployeeStatus(`Funcionário cadastrado, mas o acesso não foi criado: ${payload.error ?? 'erro inesperado'}`)
-        await appData.refresh()
-        return
-      }
     }
 
     await appData.refresh()
     setCreatingEmployee(false)
-    setNewEmployee({ name:'', role:'barber', email:'', phone:'', service:'', product:'', subscription:'', createAccess:false, password:'', confirmPassword:'' })
-    setNewEmployeeStatus(newEmployee.createAccess ? 'Funcionário cadastrado com acesso liberado.' : 'Funcionário cadastrado com sucesso.')
+    setAccessForm({ employeeId:'', email:'', password:'', confirmPassword:'', permissions:['dashboard','agenda'] })
+    setNewEmployeeStatus('Acesso criado com sucesso.')
   }
 
   async function deleteEmployee(id: string) {
@@ -301,10 +284,10 @@ export default function FuncionariosPage() {
           <Save className="size-4" />
           Salvar
         </Button>
-        <Button variant="gold" size="sm" onClick={() => setSection('cadastro')}>
+        <Link href="/funcionarios/novo" className={buttonVariants({ variant: 'gold', size: 'sm' })}>
           <Plus className="size-4" />
           Novo funcionário
-        </Button>
+        </Link>
       </PageHeader>
 
       <div className="mb-4 grid grid-cols-1 gap-2 rounded-xl bg-muted p-1 sm:grid-cols-3">
@@ -313,7 +296,7 @@ export default function FuncionariosPage() {
           onClick={() => setSection('cadastro')}
           className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors ${section === 'cadastro' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
         >
-          <Plus className="size-4" /> Cadastro e acesso
+          <KeyRound className="size-4" /> Acessos à plataforma
         </button>
         <button
           type="button"
@@ -333,42 +316,65 @@ export default function FuncionariosPage() {
 
       {section === 'cadastro' ? (
         <Card className="p-5">
-          <h2 className="text-lg font-semibold text-foreground">Cadastro de funcionário</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Adicione o profissional, defina as comissões e, se desejar, envie o acesso ao sistema.</p>
+          <h2 className="text-lg font-semibold text-foreground">Criar acesso à plataforma</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Selecione um funcionário já cadastrado e defina os dados que ele usará para entrar no sistema.</p>
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            <Field label="Nome *"><Input value={newEmployee.name} onChange={(event) => setNewEmployee((current) => ({ ...current, name:event.target.value }))} placeholder="Nome completo" /></Field>
-            <Field label="Função *">
-              <Select value={newEmployee.role} onChange={(event) => setNewEmployee((current) => ({ ...current, role:event.target.value }))}>
-                <option value="barber">Barbeiro</option><option value="manager">Gerente</option><option value="reception">Recepção</option>
+            <Field label="Funcionário *">
+              <Select
+                value={accessForm.employeeId}
+                onChange={(event) => {
+                  const employee = employees.find((item) => item.id === event.target.value)
+                  const member = appData.staffMembers.find((item) => item.employeeId === event.target.value)
+                  setAccessForm((current) => ({
+                    ...current,
+                    employeeId:event.target.value,
+                    email:employee?.email ?? '',
+                    permissions:member?.permissions ?? ['dashboard','agenda'],
+                  }))
+                  setNewEmployeeStatus('')
+                }}
+              >
+                <option value="">Selecione o funcionário</option>
+                {employees.filter((employee) => employee.active).map((employee) => (
+                  <option key={employee.id} value={employee.id}>{employee.name}</option>
+                ))}
               </Select>
             </Field>
-            <Field label="E-mail"><Input type="email" value={newEmployee.email} onChange={(event) => setNewEmployee((current) => ({ ...current, email:event.target.value }))} placeholder="email@exemplo.com" /></Field>
-            <Field label="Telefone"><Input value={newEmployee.phone} onChange={(event) => setNewEmployee((current) => ({ ...current, phone:event.target.value }))} placeholder="(00) 00000-0000" /></Field>
-            <Field label="Comissão em serviços (%)"><Input type="number" min="0" max="100" value={newEmployee.service} onChange={(event) => setNewEmployee((current) => ({ ...current, service:event.target.value }))} /></Field>
-            <Field label="Comissão em produtos (%)"><Input type="number" min="0" max="100" value={newEmployee.product} onChange={(event) => setNewEmployee((current) => ({ ...current, product:event.target.value }))} /></Field>
-            <Field label="Comissão em assinaturas (%)"><Input type="number" min="0" max="100" value={newEmployee.subscription} onChange={(event) => setNewEmployee((current) => ({ ...current, subscription:event.target.value }))} /></Field>
+            <Field label="E-mail de acesso *"><Input type="email" value={accessForm.email} onChange={(event) => setAccessForm((current) => ({ ...current, email:event.target.value }))} placeholder="email@exemplo.com" /></Field>
+            <Field label="Senha de acesso *"><Input type="password" value={accessForm.password} onChange={(event) => setAccessForm((current) => ({ ...current, password:event.target.value }))} minLength={8} autoComplete="new-password" placeholder="Mínimo de 8 caracteres" /></Field>
+            <Field label="Confirmar senha *"><Input type="password" value={accessForm.confirmPassword} onChange={(event) => setAccessForm((current) => ({ ...current, confirmPassword:event.target.value }))} minLength={8} autoComplete="new-password" placeholder="Repita a senha" /></Field>
           </div>
-          <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-muted/20 p-4">
-            <input type="checkbox" checked={newEmployee.createAccess} onChange={(event) => setNewEmployee((current) => ({ ...current, createAccess:event.target.checked }))} className="mt-1 size-4" />
-            <span>
-              <span className="block font-medium text-foreground">Criar acesso ao sistema</span>
-              <span className="mt-1 block text-sm text-muted-foreground">Envia um convite por e-mail para o funcionário criar a própria senha.</span>
-            </span>
-          </label>
-          {newEmployee.createAccess ? (
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <Field label="Senha de acesso *">
-                <Input type="password" value={newEmployee.password} onChange={(event) => setNewEmployee((current) => ({ ...current, password:event.target.value }))} minLength={8} autoComplete="new-password" placeholder="Mínimo de 8 caracteres" />
-              </Field>
-              <Field label="Confirmar senha *">
-                <Input type="password" value={newEmployee.confirmPassword} onChange={(event) => setNewEmployee((current) => ({ ...current, confirmPassword:event.target.value }))} minLength={8} autoComplete="new-password" placeholder="Repita a senha" />
-              </Field>
+          <div className="mt-5">
+            <Label>O que este funcionário pode visualizar?</Label>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {staffPermissionOptions.map((permission) => {
+                const checked = accessForm.permissions.includes(permission.key)
+                const required = permission.key === 'dashboard'
+                return (
+                  <label key={permission.key} className="flex items-center justify-between rounded-lg border border-border p-3 text-sm">
+                    <span>{permission.label}</span>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={required}
+                      onChange={(event) => setAccessForm((current) => ({
+                        ...current,
+                        permissions:event.target.checked
+                          ? [...current.permissions, permission.key]
+                          : current.permissions.filter((item) => item !== permission.key),
+                      }))}
+                      className="size-4"
+                    />
+                  </label>
+                )
+              })}
             </div>
-          ) : null}
+            <p className="mt-2 text-xs text-muted-foreground">Dashboard é obrigatório. Configurações, importação e funcionários permanecem restritos à administração.</p>
+          </div>
           {newEmployeeStatus ? <p className="mt-4 rounded-lg bg-muted p-3 text-sm text-foreground">{newEmployeeStatus}</p> : null}
           <div className="mt-5 flex justify-end">
-            <Button variant="gold" onClick={createEmployee} disabled={creatingEmployee}>
-              <Save className="size-4" /> {creatingEmployee ? 'Cadastrando...' : newEmployee.createAccess ? 'Cadastrar e enviar acesso' : 'Cadastrar funcionário'}
+            <Button variant="gold" onClick={createPlatformAccess} disabled={creatingEmployee}>
+              <Save className="size-4" /> {creatingEmployee ? 'Criando acesso...' : 'Criar acesso à plataforma'}
             </Button>
           </div>
         </Card>

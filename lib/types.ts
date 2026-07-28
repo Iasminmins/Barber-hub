@@ -7,6 +7,7 @@
  */
 
 import type { AgendaSettings, PaymentMethodConfig } from '@/lib/barbershop-settings'
+import type { StaffPermission } from '@/lib/staff-permissions'
 
 export type Role = 'owner' | 'manager' | 'barber' | 'reception'
 
@@ -36,6 +37,7 @@ export interface Member {
   role: Role
   active: boolean
   employeeId?: string
+  permissions: StaffPermission[]
 }
 
 export interface Employee {

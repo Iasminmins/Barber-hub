@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createAdminSupabaseClient, createAuthenticatedServerClient } from '@/lib/supabase/server'
+import { staffPermissionOptions, type StaffPermission } from '@/lib/staff-permissions'
 
 function bearerToken(request: Request) {
   const authorization = request.headers.get('authorization') ?? ''
@@ -28,10 +29,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Somente o proprietário pode gerenciar acessos.' }, { status: 403 })
     }
 
-    const body = await request.json() as { employeeId?: string; email?: string; password?: string; enabled?: boolean }
+    const body = await request.json() as { employeeId?: string; email?: string; password?: string; permissions?: string[]; enabled?: boolean }
     const employeeId = String(body.employeeId ?? '')
     const email = String(body.email ?? '').trim().toLowerCase()
     const password = String(body.password ?? '')
+    const validPermissionKeys = new Set(staffPermissionOptions.map((item) => item.key))
+    const requestedPermissions = Array.isArray(body.permissions)
+      ? body.permissions.filter((item): item is StaffPermission => validPermissionKeys.has(item as StaffPermission))
+      : null
+    const permissions = Array.from(new Set<StaffPermission>(['dashboard', ...(requestedPermissions ?? ['agenda'])]))
     if (!employeeId) return NextResponse.json({ error: 'Funcionário inválido.' }, { status: 400 })
 
     const admin = createAdminSupabaseClient()
@@ -76,7 +82,7 @@ export async function POST(request: Request) {
       }
       const { error } = await admin
         .from('members')
-        .update({ active: true, email, name: employee.name, role: 'barber' })
+        .update({ active: true, email, name: employee.name, role: 'barber', ...(requestedPermissions ? { permissions } : {}) })
         .eq('id', existingMember.id)
       if (error) throw error
       return NextResponse.json({ active: true, invited: false })
@@ -107,6 +113,7 @@ export async function POST(request: Request) {
       email,
       role: 'barber',
       active: true,
+      permissions,
     })
     if (memberError) {
       await admin.auth.admin.deleteUser(inviteData.user.id)

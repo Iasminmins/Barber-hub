@@ -8,6 +8,7 @@ import { useAppData } from '@/components/data/app-data-provider'
 import { navGroups } from '@/lib/nav'
 import { getSaasPlan } from '@/lib/saas-plans'
 import { cn } from '@/lib/utils'
+import { allowedPathsForPermissions } from '@/lib/staff-permissions'
 
 export function SidebarContent({
   collapsed = false,
@@ -22,7 +23,7 @@ export function SidebarContent({
   const { barbershop, member } = useAppData()
   const currentPlan = getSaasPlan(barbershop.plan)
   const allowedPaths = member.role === 'barber'
-    ? ['/dashboard', '/agenda']
+    ? allowedPathsForPermissions(member.permissions)
     : member.role === 'reception'
       ? ['/dashboard', '/agenda', '/comandas', '/clientes']
       : null
