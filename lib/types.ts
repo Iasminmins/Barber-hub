@@ -63,7 +63,14 @@ export interface Client {
   phone: string
   email: string
   birthDate: string
+  postalCode: string
   address: string
+  addressNumber: string
+  addressComplement: string
+  neighborhood: string
+  city: string
+  state: string
+  preferredDay: string
   notes: string
   tags: ClientTag[]
   totalSpent: number

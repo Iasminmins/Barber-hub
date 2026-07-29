@@ -29,7 +29,11 @@ import { useAppData } from '@/components/data/app-data-provider'
 import { buildFirstClientActivity, getEffectiveClientStartDate } from '@/lib/client-start'
 
 type Filter = "todos" | "novos" | "vip" | "recorrente" | "aniversariante" | "inadimplente" | "inativo" | "sem_telefone" | "duplicados" | "suspeitos"
-type ClientDraft = { id:string; name:string; phone:string; email:string; birthDate:string; preferredBarber:string; address:string; notes:string; tags:ClientTag[] }
+type ClientDraft = {
+  id:string; name:string; phone:string; email:string; birthDate:string; postalCode:string;
+  address:string; addressNumber:string; addressComplement:string; neighborhood:string;
+  city:string; state:string; preferredDay:string; preferredBarber:string; notes:string; tags:ClientTag[]
+}
 
 const TAG_LABEL: Record<ClientTag, string> = {
   vip: "VIP",
@@ -205,10 +209,10 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
   async function saveClient() {
     if (!editing) return
     if (!editing.name.trim()) { setEditStatus("Informe o nome do cliente."); return }
-    const values = { name:editing.name.trim(), phone:editing.phone.trim()||null, email:editing.email.trim()||null, birth_date:editing.birthDate||null, preferred_barber:editing.preferredBarber||null, address:editing.address.trim()||null, notes:editing.notes.trim()||null, tags:editing.tags }
+    const values = { name:editing.name.trim(), phone:editing.phone.trim()||null, email:editing.email.trim()||null, birth_date:editing.birthDate||null, postal_code:editing.postalCode.replace(/\D/g,'')||null, address:editing.address.trim()||null, address_number:editing.addressNumber.trim()||null, address_complement:editing.addressComplement.trim()||null, neighborhood:editing.neighborhood.trim()||null, city:editing.city.trim()||null, state:editing.state.trim().toUpperCase()||null, preferred_day:editing.preferredDay||null, preferred_barber:editing.preferredBarber||null, notes:editing.notes.trim()||null, tags:editing.tags }
     const result = await updateRecord("clients", editing.id, values)
     if (result.error) { setEditStatus(result.error); return }
-    setRecords((current) => current.map((client) => client.id === editing.id ? { ...client, name:editing.name.trim(), phone:editing.phone.trim(), email:editing.email.trim(), birthDate:editing.birthDate, preferredBarber:editing.preferredBarber, address:editing.address.trim(), notes:editing.notes.trim(), tags:editing.tags } : client))
+    setRecords((current) => current.map((client) => client.id === editing.id ? { ...client, name:editing.name.trim(), phone:editing.phone.trim(), email:editing.email.trim(), birthDate:editing.birthDate, postalCode:editing.postalCode, address:editing.address.trim(), addressNumber:editing.addressNumber.trim(), addressComplement:editing.addressComplement.trim(), neighborhood:editing.neighborhood.trim(), city:editing.city.trim(), state:editing.state.trim().toUpperCase(), preferredDay:editing.preferredDay, preferredBarber:editing.preferredBarber, notes:editing.notes.trim(), tags:editing.tags } : client))
     setEditing(null)
   }
 
@@ -417,6 +421,18 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
                 {selected.email && <div className="flex items-center gap-2 text-muted-foreground"><Mail className="size-4" />{selected.email}</div>}
                 <div className="flex items-center gap-2 text-muted-foreground"><Cake className="size-4 shrink-0" />{selected.birthDate ? formatDate(selected.birthDate) : "-"}</div>
                 <div className="flex items-center gap-2 text-muted-foreground"><Scissors className="size-4 shrink-0" />{selected.preferredBarber ? `Prefere ${selected.preferredBarber}` : "Sem preferência"}</div>
+                {selected.address || selected.city ? (
+                  <div className="flex items-start gap-2 text-muted-foreground">
+                    <CalendarDays className="mt-0.5 size-4 shrink-0" />
+                    <span>{[
+                      [selected.address, selected.addressNumber].filter(Boolean).join(', '),
+                      selected.addressComplement,
+                      selected.neighborhood,
+                      [selected.city, selected.state].filter(Boolean).join(' - '),
+                      selected.postalCode ? `CEP ${selected.postalCode.replace(/^(\d{5})(\d{3})$/, '$1-$2')}` : '',
+                    ].filter(Boolean).join(' · ')}</span>
+                  </div>
+                ) : null}
               </div>
 
               <div className="my-4 grid grid-cols-2 gap-3">
@@ -428,7 +444,7 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
               <p className="mb-4 text-sm text-muted-foreground">{selected.notes || "Sem observações registradas."}</p>
 
               <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="icon" aria-label={`Editar ${selected.name}`} onClick={() => { setEditStatus(""); setEditing({ id:selected.id, name:selected.name, phone:selected.phone, email:selected.email, birthDate:selected.birthDate, preferredBarber:selected.preferredBarber, address:selected.address, notes:selected.notes, tags:[...selected.tags] }) }}><Pencil className="size-4" /></Button>
+                <Button variant="outline" size="icon" aria-label={`Editar ${selected.name}`} onClick={() => { setEditStatus(""); setEditing({ id:selected.id, name:selected.name, phone:selected.phone, email:selected.email, birthDate:selected.birthDate, postalCode:selected.postalCode, address:selected.address, addressNumber:selected.addressNumber, addressComplement:selected.addressComplement, neighborhood:selected.neighborhood, city:selected.city, state:selected.state, preferredDay:selected.preferredDay, preferredBarber:selected.preferredBarber, notes:selected.notes, tags:[...selected.tags] }) }}><Pencil className="size-4" /></Button>
                 <Button variant="outline" className="min-w-24 flex-1" onClick={() => setHistoryOpen(true)}>Histórico</Button>
                 {normalizePhone(selected.phone) ? <a className={buttonVariants({ variant: "outline", size: "icon" })} aria-label={`WhatsApp ${selected.name}`} href={whatsappUrl(selected.phone, selected.name)} target="_blank" rel="noreferrer"><MessageCircle className="size-4" /></a> : null}
                 <Button variant="gold" className="min-w-24 flex-1" onClick={() => router.push(`/agenda/novo?cliente=${encodeURIComponent(selected.id)}`)}>Agendar</Button>
@@ -484,7 +500,14 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
           <Field label="E-mail"><Input type="email" value={editing.email} onChange={e=>setEditing({...editing,email:e.target.value})}/></Field>
           <Field label="Data de nascimento"><Input type="date" value={editing.birthDate} onChange={e=>setEditing({...editing,birthDate:e.target.value})}/></Field>
           <Field label="Barbeiro preferido"><Select value={editing.preferredBarber} onChange={e=>setEditing({...editing,preferredBarber:e.target.value})}><option value="">Selecionar</option>{employees.filter(e=>e.active).map(e=><option key={e.id} value={e.name}>{e.name}</option>)}</Select></Field>
-          <Field label="Endereço"><Input value={editing.address} onChange={e=>setEditing({...editing,address:e.target.value})}/></Field>
+          <Field label="CEP"><Input value={editing.postalCode} onChange={e=>setEditing({...editing,postalCode:e.target.value})}/></Field>
+          <Field label="Rua / Logradouro"><Input value={editing.address} onChange={e=>setEditing({...editing,address:e.target.value})}/></Field>
+          <Field label="Número"><Input value={editing.addressNumber} onChange={e=>setEditing({...editing,addressNumber:e.target.value})}/></Field>
+          <Field label="Complemento"><Input value={editing.addressComplement} onChange={e=>setEditing({...editing,addressComplement:e.target.value})}/></Field>
+          <Field label="Bairro"><Input value={editing.neighborhood} onChange={e=>setEditing({...editing,neighborhood:e.target.value})}/></Field>
+          <Field label="Cidade"><Input value={editing.city} onChange={e=>setEditing({...editing,city:e.target.value})}/></Field>
+          <Field label="Estado (UF)"><Input maxLength={2} value={editing.state} onChange={e=>setEditing({...editing,state:e.target.value.toUpperCase()})}/></Field>
+          <Field label="Dia preferido"><Select value={editing.preferredDay} onChange={e=>setEditing({...editing,preferredDay:e.target.value})}><option value="">Selecionar</option>{['Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado','Domingo'].map(day=><option key={day} value={day}>{day}</option>)}</Select></Field>
           <div className="space-y-2 sm:col-span-2"><Label>Observações</Label><Textarea value={editing.notes} onChange={e=>setEditing({...editing,notes:e.target.value})}/></div>
           <div className="space-y-2 sm:col-span-2"><Label>Classificação</Label><div className="grid grid-cols-2 gap-2">{([['vip','VIP'],['recorrente','Recorrente'],['aniversariante','Aniversariante'],['inadimplente','Inadimplente'],['inativo','Inativo']] as const).map(([tag,label])=><label key={tag} className="flex items-center justify-between rounded-md border p-2 text-sm"><span>{label}</span><input type="checkbox" checked={editing.tags.includes(tag)} onChange={e=>setEditing({...editing,tags:e.target.checked?[...editing.tags,tag]:editing.tags.filter(item=>item!==tag)})}/></label>)}</div></div>
         </div>{editStatus?<p className="mt-4 text-sm text-destructive">{editStatus}</p>:null}<div className="mt-5 flex justify-end gap-2"><Button variant="outline" onClick={()=>setEditing(null)}>Cancelar</Button><Button variant="gold" onClick={saveClient}><Save className="size-4"/>Salvar alterações</Button></div></>:null}
