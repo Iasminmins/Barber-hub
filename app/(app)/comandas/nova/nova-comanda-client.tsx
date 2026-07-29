@@ -81,6 +81,7 @@ export function NovaComandaClient({
   const [clientId, setClientId] = useState('')
   const [employeeId, setEmployeeId] = useState('')
   const [payment, setPayment] = useState<PaymentChoice | ''>('')
+  const [manualTotal, setManualTotal] = useState<string | null>(null)
   const [saveError, setSaveError] = useState('')
 
   const filteredItems = useMemo(() => {
@@ -107,6 +108,9 @@ export function NovaComandaClient({
     (sum, item) => sum + parseMoney(prices[item.id] ?? '') * (quantities[item.id] ?? 0),
     0,
   )
+  const total = manualTotal === null ? subtotal : parseMoney(manualTotal)
+  const discount = Math.max(0, subtotal - total)
+  const surcharge = Math.max(0, total - subtotal)
   const selectedCount = selectedItems.reduce((sum, item) => sum + (quantities[item.id] ?? 0), 0)
 
   function setItemQuantity(itemId: string, quantity: number) {
@@ -153,20 +157,24 @@ export function NovaComandaClient({
       setSaveError('Adicione pelo menos um item à comanda.')
       return
     }
+    if (total <= 0) {
+      setSaveError('Informe um total válido para a comanda.')
+      return
+    }
     if (selectedItems.some((item) => parseMoney(prices[item.id] ?? '') <= 0)) {
       setSaveError('Informe um valor válido para todos os itens selecionados.')
       return
     }
 
     const client = clients.find((item) => item.id === clientId)
-    const orderResult = await insertRecord('orders', { barbershop_id: barbershopId, number: nextOrderNumber, client_id: client?.id ?? null, client_name: client?.name ?? 'Cliente avulso', employee_id: employee.id, employee_name: employee.name, discount: 0, surcharge: 0, status: payment === 'pendente' ? 'pendente' : 'paga', method: payment === 'pendente' ? null : payment, total: subtotal })
+    const orderResult = await insertRecord('orders', { barbershop_id: barbershopId, number: nextOrderNumber, client_id: client?.id ?? null, client_name: client?.name ?? 'Cliente avulso', employee_id: employee.id, employee_name: employee.name, discount, surcharge, status: payment === 'pendente' ? 'pendente' : 'paga', method: payment === 'pendente' ? null : payment, total })
     if (orderResult.error || !orderResult.data) { setSaveError(orderResult.error ?? 'Não foi possível criar a comanda.'); return }
     for (const item of selectedItems) {
       const itemResult = await insertRecord('order_items', { order_id: orderResult.data.id, barbershop_id: barbershopId, ref_id: item.id, type: item.type, name: item.name, quantity: quantities[item.id] ?? 1, unit_price: parseMoney(prices[item.id] ?? '') })
       if (itemResult.error) { await deleteRecord('orders', orderResult.data.id); setSaveError(itemResult.error); return }
     }
     if (payment !== 'pendente') {
-      const financialResult = await insertRecord('financial_entries', { barbershop_id: barbershopId, type:'entrada', category:'Comandas', description:`Comanda #${nextOrderNumber}`, amount:subtotal, method:payment, date:todayKey() })
+      const financialResult = await insertRecord('financial_entries', { barbershop_id: barbershopId, type:'entrada', category:'Comandas', description:`Comanda #${nextOrderNumber}`, amount:total, method:payment, date:todayKey() })
       if (financialResult.error) { setSaveError(`Comanda salva, mas o financeiro falhou: ${financialResult.error}`); return }
     }
     router.push('/comandas')
@@ -388,11 +396,38 @@ export function NovaComandaClient({
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Desconto</span>
-                <span className="font-medium text-foreground">{formatCurrency(0)}</span>
+                <span className="font-medium text-foreground">{formatCurrency(discount)}</span>
               </div>
-              <div className="flex justify-between border-t border-border pt-3 text-base">
+              {surcharge > 0 ? (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Acréscimo</span>
+                  <span className="font-medium text-foreground">{formatCurrency(surcharge)}</span>
+                </div>
+              ) : null}
+              <div className="flex items-center justify-between gap-3 border-t border-border pt-3 text-base">
                 <span className="font-semibold text-foreground">Total</span>
-                <span className="font-bold text-foreground">{formatCurrency(subtotal)}</span>
+                <div className="w-32">
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">R$</span>
+                    <Input
+                      value={manualTotal ?? subtotal.toFixed(2).replace('.', ',')}
+                      onChange={(event) => setManualTotal(event.target.value)}
+                      onFocus={(event) => event.currentTarget.select()}
+                      inputMode="decimal"
+                      aria-label="Total da comanda"
+                      className="h-9 pl-8 text-right font-bold tabular-nums"
+                    />
+                  </div>
+                  {manualTotal !== null ? (
+                    <button
+                      type="button"
+                      onClick={() => setManualTotal(null)}
+                      className="mt-1 w-full text-right text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      Usar subtotal
+                    </button>
+                  ) : null}
+                </div>
               </div>
             </div>
           </Card>
@@ -437,7 +472,7 @@ export function NovaComandaClient({
               type="button"
               variant="gold"
               className="mt-4 w-full"
-              disabled={subtotal <= 0}
+              disabled={subtotal <= 0 || total <= 0}
               onClick={saveOrder}
             >
               <Save className="size-4" />
