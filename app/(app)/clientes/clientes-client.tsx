@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect, useMemo, useState } from "react"
-import { AlertTriangle, Cake, CalendarDays, Mail, MessageCircle, Pencil, Phone, Plus, Save, Scissors, Search, Star, Trash2, X } from "lucide-react"
+import { AlertTriangle, Cake, CalendarDays, Mail, MessageCircle, Monitor, Pencil, Phone, Plus, Save, Scissors, Search, Smartphone, Star, Trash2, X } from "lucide-react"
 import type { Client, ClientTag } from "@/lib/types"
 import { formatCurrency, formatDate } from "@/lib/format"
 import { Input } from "@/components/ui/input"
@@ -78,12 +78,29 @@ function currentMonthRange() {
   }
 }
 
-function whatsappUrl(phone: string, name: string) {
+function whatsappAppUrl(phone: string, name: string) {
   const digits = normalizePhone(phone)
-  if (!digits) return ""
   const brNumber = digits.length <= 11 ? `55${digits}` : digits
   const text = encodeURIComponent(`Olá, ${name}! Tudo bem? Aqui é da Duke Barber.`)
-  return `https://wa.me/${brNumber}?text=${text}`
+  return `whatsapp://send?phone=${brNumber}&text=${text}`
+}
+
+function whatsappWebUrl(phone: string, name: string) {
+  const digits = normalizePhone(phone)
+  const brNumber = digits.length <= 11 ? `55${digits}` : digits
+  const text = encodeURIComponent(`Olá, ${name}! Tudo bem? Aqui é da Duke Barber.`)
+  return `https://web.whatsapp.com/send?phone=${brNumber}&text=${text}`
+}
+
+function toClientDraft(client: Client): ClientDraft {
+  return {
+    id:client.id, name:client.name, phone:client.phone, email:client.email,
+    birthDate:client.birthDate, postalCode:client.postalCode, address:client.address,
+    addressNumber:client.addressNumber, addressComplement:client.addressComplement,
+    neighborhood:client.neighborhood, city:client.city, state:client.state,
+    preferredDay:client.preferredDay, preferredBarber:client.preferredBarber,
+    notes:client.notes, tags:[...client.tags],
+  }
 }
 
 export function ClientesClient({ clients }: { clients: Client[] }) {
@@ -95,6 +112,8 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
   const [newClientsRange, setNewClientsRange] = useState<{ start: string; end: string } | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false)
+  const [whatsappClient, setWhatsappClient] = useState<Client | null>(null)
   const [editing, setEditing] = useState<ClientDraft | null>(null)
   const [editStatus, setEditStatus] = useState("")
 
@@ -156,6 +175,11 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
   }
   const isDuplicateClient = (client: Client) => duplicateKeys.has(normalizePhone(client.phone) || normalizeName(client.name))
   const isSuspiciousClient = (client: Client) => productNames.has(normalizeName(client.name))
+
+  function openClientDetails(id: string) {
+    setSelectedId(id)
+    if (window.matchMedia("(max-width: 1279px)").matches) setMobileDetailsOpen(true)
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -347,7 +371,7 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
                   const stats = getClientStats(c)
                   return (
                   <TableRow key={c.id} className={selectedId === c.id ? "bg-accent/40" : ""}>
-                    <TableCell onClick={() => setSelectedId((current) => current === c.id ? null : c.id)} className="cursor-pointer">
+                    <TableCell onClick={() => openClientDetails(c.id)} className="cursor-pointer">
                       <div className="flex items-center gap-3">
                         <Avatar name={c.name} />
                         <div className="min-w-0">
@@ -444,9 +468,9 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
               <p className="mb-4 text-sm text-muted-foreground">{selected.notes || "Sem observações registradas."}</p>
 
               <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="icon" aria-label={`Editar ${selected.name}`} onClick={() => { setEditStatus(""); setEditing({ id:selected.id, name:selected.name, phone:selected.phone, email:selected.email, birthDate:selected.birthDate, postalCode:selected.postalCode, address:selected.address, addressNumber:selected.addressNumber, addressComplement:selected.addressComplement, neighborhood:selected.neighborhood, city:selected.city, state:selected.state, preferredDay:selected.preferredDay, preferredBarber:selected.preferredBarber, notes:selected.notes, tags:[...selected.tags] }) }}><Pencil className="size-4" /></Button>
+                <Button variant="outline" size="icon" aria-label={`Editar ${selected.name}`} onClick={() => { setEditStatus(""); setEditing(toClientDraft(selected)) }}><Pencil className="size-4" /></Button>
                 <Button variant="outline" className="min-w-24 flex-1" onClick={() => setHistoryOpen(true)}>Histórico</Button>
-                {normalizePhone(selected.phone) ? <a className={buttonVariants({ variant: "outline", size: "icon" })} aria-label={`WhatsApp ${selected.name}`} href={whatsappUrl(selected.phone, selected.name)} target="_blank" rel="noreferrer"><MessageCircle className="size-4" /></a> : null}
+                {normalizePhone(selected.phone) ? <Button variant="outline" size="icon" aria-label={`WhatsApp ${selected.name}`} onClick={() => setWhatsappClient(selected)}><MessageCircle className="size-4" /></Button> : null}
                 <Button variant="gold" className="min-w-24 flex-1" onClick={() => router.push(`/agenda/novo?cliente=${encodeURIComponent(selected.id)}`)}>Agendar</Button>
                 <Button variant="destructive" size="icon" aria-label="Excluir cliente" onClick={() => deleteClient(selected.id)}>
                   <Trash2 className="size-4" />
@@ -456,6 +480,73 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
           </div>
         ) : null}
       </div>
+
+      <Dialog open={mobileDetailsOpen && Boolean(selected)} onClose={() => setMobileDetailsOpen(false)} className="max-h-[92dvh] overflow-y-auto sm:max-w-lg">
+        {selected ? (
+          <>
+            <DialogHeader title={selected.name} description="Ficha completa do cliente" />
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 rounded-lg bg-muted/50 p-3">
+                <Avatar name={selected.name} className="size-12 text-base" />
+                <div className="min-w-0">
+                  <p className="font-semibold text-foreground">{selected.name}</p>
+                  <p className="text-sm text-muted-foreground">
+                    Cliente desde {clientStartDates.get(selected.id) ? formatDate(clientStartDates.get(selected.id)!) : "-"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-lg bg-muted p-3"><p className="text-xs text-muted-foreground">Visitas</p><p className="text-lg font-semibold">{selectedStats?.visits ?? selected.visits}</p></div>
+                <div className="rounded-lg bg-muted p-3"><p className="text-xs text-muted-foreground">Total gasto</p><p className="text-lg font-semibold">{formatCurrency(selectedStats?.totalSpent ?? selected.totalSpent)}</p></div>
+              </div>
+
+              <div className="space-y-2 rounded-lg border border-border p-3 text-sm">
+                <p className="flex items-center gap-2"><Phone className="size-4 text-muted-foreground" />{selected.phone || "Sem telefone"}</p>
+                {selected.email ? <p className="flex items-center gap-2"><Mail className="size-4 text-muted-foreground" />{selected.email}</p> : null}
+                <p className="flex items-center gap-2"><Cake className="size-4 text-muted-foreground" />{selected.birthDate ? formatDate(selected.birthDate) : "Nascimento não informado"}</p>
+                <p className="flex items-center gap-2"><Scissors className="size-4 text-muted-foreground" />{selected.preferredBarber ? `Prefere ${selected.preferredBarber}` : "Barbeiro não informado"}</p>
+                {selected.address || selected.city ? <p className="flex items-start gap-2"><CalendarDays className="mt-0.5 size-4 shrink-0 text-muted-foreground" /><span>{[[selected.address,selected.addressNumber].filter(Boolean).join(", "),selected.addressComplement,selected.neighborhood,[selected.city,selected.state].filter(Boolean).join(" - ")].filter(Boolean).join(" · ")}</span></p> : null}
+              </div>
+
+              {selected.notes ? <div><p className="mb-1 text-sm font-medium">Observações</p><p className="text-sm text-muted-foreground">{selected.notes}</p></div> : null}
+
+              <div className="grid grid-cols-2 gap-2">
+                {normalizePhone(selected.phone) ? <Button variant="gold" className="col-span-2" onClick={() => setWhatsappClient(selected)}><MessageCircle className="size-4" />Conversar no WhatsApp</Button> : null}
+                <Button variant="outline" onClick={() => { setMobileDetailsOpen(false); setHistoryOpen(true) }}>Histórico</Button>
+                <Button variant="outline" onClick={() => { setMobileDetailsOpen(false); setEditStatus(""); setEditing(toClientDraft(selected)) }}><Pencil className="size-4" />Editar</Button>
+                <Button variant="gold" className="col-span-2" onClick={() => router.push(`/agenda/novo?cliente=${encodeURIComponent(selected.id)}`)}>Agendar horário</Button>
+              </div>
+            </div>
+          </>
+        ) : null}
+      </Dialog>
+
+      <Dialog open={Boolean(whatsappClient)} onClose={() => setWhatsappClient(null)} className="sm:max-w-sm">
+        {whatsappClient ? (
+          <>
+            <DialogHeader title="Abrir conversa" description={`Escolha onde conversar com ${whatsappClient.name}.`} />
+            <div className="grid gap-2">
+              <a
+                href={whatsappAppUrl(whatsappClient.phone, whatsappClient.name)}
+                className={buttonVariants({ variant: "gold" })}
+                onClick={() => setWhatsappClient(null)}
+              >
+                <Smartphone className="size-4" />Aplicativo do WhatsApp
+              </a>
+              <a
+                href={whatsappWebUrl(whatsappClient.phone, whatsappClient.name)}
+                target="_blank"
+                rel="noreferrer"
+                className={buttonVariants({ variant: "outline" })}
+                onClick={() => setWhatsappClient(null)}
+              >
+                <Monitor className="size-4" />WhatsApp Web
+              </a>
+            </div>
+          </>
+        ) : null}
+      </Dialog>
 
       <Dialog open={historyOpen} onClose={() => setHistoryOpen(false)} className="sm:max-w-2xl">
         <DialogHeader
