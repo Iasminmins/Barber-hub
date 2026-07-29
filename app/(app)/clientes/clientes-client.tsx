@@ -26,6 +26,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useAppData } from '@/components/data/app-data-provider'
+import { buildFirstClientActivity, getEffectiveClientStartDate } from '@/lib/client-start'
 
 type Filter = "todos" | "novos" | "vip" | "recorrente" | "aniversariante" | "inadimplente" | "inativo" | "sem_telefone" | "duplicados" | "suspeitos"
 type ClientDraft = { id:string; name:string; phone:string; email:string; birthDate:string; preferredBarber:string; address:string; notes:string; tags:ClientTag[] }
@@ -83,7 +84,7 @@ function whatsappUrl(phone: string, name: string) {
 
 export function ClientesClient({ clients }: { clients: Client[] }) {
   const router = useRouter()
-  const { appointments, catalog, employees, orders, deleteRecord, updateRecord } = useAppData()
+  const { appointments, catalog, employees, imports, orders, deleteRecord, updateRecord } = useAppData()
   const [records, setRecords] = useState(clients)
   const [query, setQuery] = useState("")
   const [filter, setFilter] = useState<Filter>("todos")
@@ -113,6 +114,17 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
     return new Set([...counts.entries()].filter(([, count]) => count > 1).map(([key]) => key))
   }, [records])
   const productNames = useMemo(() => new Set(catalog.map((item) => normalizeName(item.name))), [catalog])
+  const firstClientActivity = useMemo(
+    () => buildFirstClientActivity(orders, appointments),
+    [appointments, orders],
+  )
+  const clientStartDates = useMemo(
+    () => new Map(records.map((client) => [
+      client.id,
+      getEffectiveClientStartDate(client, firstClientActivity, imports),
+    ])),
+    [firstClientActivity, imports, records],
+  )
   const clientStats = useMemo(() => {
     const stats = new Map<string, { visits: number; totalSpent: number; lastVisit: string }>()
     for (const order of orders) {
@@ -153,7 +165,11 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
         filter === "todos" ||
         (filter === "novos" && (
           newClientsRange
-            ? c.createdAt.slice(0, 10) >= newClientsRange.start && c.createdAt.slice(0, 10) <= newClientsRange.end
+            ? Boolean(
+                clientStartDates.get(c.id)
+                && clientStartDates.get(c.id)! >= newClientsRange.start
+                && clientStartDates.get(c.id)! <= newClientsRange.end,
+              )
             : true
         )) ||
         (filter === "aniversariante" ? c.tags.includes("aniversariante") || isBirthdayThisMonth(c.birthDate) : c.tags.includes(filter as ClientTag)) ||
@@ -162,7 +178,7 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
         (filter === "suspeitos" && productNames.has(normalizeName(c.name)))
       return matchesQuery && matchesFilter
     })
-  }, [records, query, filter, duplicateKeys, productNames, newClientsRange])
+  }, [records, query, filter, duplicateKeys, productNames, newClientsRange, clientStartDates])
 
   const selected = records.find((c) => c.id === selectedId) ?? null
   const selectedStats = selected ? getClientStats(selected) : null
@@ -224,14 +240,14 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
             <p className="text-sm font-semibold text-foreground">Clientes novos</p>
             <p className="text-sm text-muted-foreground">
               {newClientsRange
-                ? `Cadastros de ${formatDate(newClientsRange.start)} até ${formatDate(newClientsRange.end)}`
-                : "Cadastros novos no período selecionado"}
+                ? `Primeiro registro de ${formatDate(newClientsRange.start)} até ${formatDate(newClientsRange.end)}`
+                : "Clientes novos no período selecionado"}
               {" · "}{filtered.length} cliente(s)
             </p>
           </div>
           <div className="grid grid-cols-1 items-end gap-2 sm:grid-cols-[1fr_1fr_auto]">
             <label className="space-y-1 text-xs font-medium text-muted-foreground">
-              Data inicial do cadastro
+              Data inicial
               <Input
                 type="date"
                 value={newClientsRange?.start ?? ""}
@@ -248,7 +264,7 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
               />
             </label>
             <label className="space-y-1 text-xs font-medium text-muted-foreground">
-              Data final do cadastro
+              Data final
               <Input
                 type="date"
                 value={newClientsRange?.end ?? ""}
@@ -314,7 +330,7 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
               <TableHeader>
                 <TableRow>
                   <TableHead>Cliente</TableHead>
-                  {filter === "novos" ? <TableHead>Cadastrado em</TableHead> : null}
+                  {filter === "novos" ? <TableHead>Cliente desde</TableHead> : null}
                   <TableHead>Contato</TableHead>
                   <TableHead className="text-right">Visitas</TableHead>
                   <TableHead className="text-right">Total gasto</TableHead>
@@ -342,7 +358,7 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
                     </TableCell>
                     {filter === "novos" ? (
                       <TableCell className="whitespace-nowrap text-muted-foreground">
-                        {formatDate(c.createdAt)}
+                        {clientStartDates.get(c.id) ? formatDate(clientStartDates.get(c.id)!) : "-"}
                       </TableCell>
                     ) : null}
                     <TableCell className="text-muted-foreground">{c.phone || "-"}</TableCell>
@@ -377,7 +393,9 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
                   <Avatar name={selected.name} className="size-12 text-base" />
                   <div>
                     <h3 className="break-words font-semibold text-foreground">{selected.name}</h3>
-                    <p className="text-sm text-muted-foreground">Cliente desde {formatDate(selected.createdAt)}</p>
+                    <p className="text-sm text-muted-foreground">
+                      Cliente desde {clientStartDates.get(selected.id) ? formatDate(clientStartDates.get(selected.id)!) : "-"}
+                    </p>
                   </div>
                 </div>
                 <button onClick={() => setSelectedId(null)} className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Fechar detalhes">

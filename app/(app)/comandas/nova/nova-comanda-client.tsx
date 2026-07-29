@@ -43,6 +43,20 @@ const initialQuantities = (items: CatalogItem[]) =>
     return quantities
   }, {})
 
+const initialPrices = (items: CatalogItem[]) =>
+  items.reduce<Record<string, string>>((prices, item) => {
+    prices[item.id] = item.price.toFixed(2).replace('.', ',')
+    return prices
+  }, {})
+
+function parseMoney(value: string) {
+  const cleaned = value.replace(/[^\d.,]/g, '')
+  const normalized = cleaned.includes(',')
+    ? cleaned.replace(/\./g, '').replace(',', '.')
+    : cleaned
+  return Math.max(0, Number(normalized || 0))
+}
+
 function todayKey() {
   const today = new Date()
   const year = today.getFullYear()
@@ -61,6 +75,7 @@ export function NovaComandaClient({
   const router = useRouter()
   const { insertRecord, deleteRecord } = useAppData()
   const [quantities, setQuantities] = useState(() => initialQuantities(items))
+  const [prices, setPrices] = useState(() => initialPrices(items))
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<CatalogFilter>('todos')
   const [clientId, setClientId] = useState('')
@@ -89,7 +104,7 @@ export function NovaComandaClient({
   )
 
   const subtotal = selectedItems.reduce(
-    (sum, item) => sum + item.price * (quantities[item.id] ?? 0),
+    (sum, item) => sum + parseMoney(prices[item.id] ?? '') * (quantities[item.id] ?? 0),
     0,
   )
   const selectedCount = selectedItems.reduce((sum, item) => sum + (quantities[item.id] ?? 0), 0)
@@ -116,6 +131,10 @@ export function NovaComandaClient({
     setItemQuantity(itemId, 0)
   }
 
+  function setItemPrice(itemId: string, price: string) {
+    setPrices((current) => ({ ...current, [itemId]: price }))
+  }
+
   async function saveOrder() {
     setSaveError('')
 
@@ -134,12 +153,16 @@ export function NovaComandaClient({
       setSaveError('Adicione pelo menos um item à comanda.')
       return
     }
+    if (selectedItems.some((item) => parseMoney(prices[item.id] ?? '') <= 0)) {
+      setSaveError('Informe um valor válido para todos os itens selecionados.')
+      return
+    }
 
     const client = clients.find((item) => item.id === clientId)
     const orderResult = await insertRecord('orders', { barbershop_id: barbershopId, number: nextOrderNumber, client_id: client?.id ?? null, client_name: client?.name ?? 'Cliente avulso', employee_id: employee.id, employee_name: employee.name, discount: 0, surcharge: 0, status: payment === 'pendente' ? 'pendente' : 'paga', method: payment === 'pendente' ? null : payment, total: subtotal })
     if (orderResult.error || !orderResult.data) { setSaveError(orderResult.error ?? 'Não foi possível criar a comanda.'); return }
     for (const item of selectedItems) {
-      const itemResult = await insertRecord('order_items', { order_id: orderResult.data.id, barbershop_id: barbershopId, ref_id: item.id, type: item.type, name: item.name, quantity: quantities[item.id] ?? 1, unit_price: item.price })
+      const itemResult = await insertRecord('order_items', { order_id: orderResult.data.id, barbershop_id: barbershopId, ref_id: item.id, type: item.type, name: item.name, quantity: quantities[item.id] ?? 1, unit_price: parseMoney(prices[item.id] ?? '') })
       if (itemResult.error) { await deleteRecord('orders', orderResult.data.id); setSaveError(itemResult.error); return }
     }
     if (payment !== 'pendente') {
@@ -247,7 +270,8 @@ export function NovaComandaClient({
             <div className="max-h-[560px] divide-y divide-border overflow-y-auto">
               {filteredItems.map((item) => {
                 const quantity = quantities[item.id] ?? 0
-                const lineTotal = item.price * quantity
+                const unitPrice = parseMoney(prices[item.id] ?? '')
+                const lineTotal = unitPrice * quantity
                 const itemIcon =
                   item.type === 'servico' ? (
                     <Scissors className="size-4" />
@@ -319,10 +343,18 @@ export function NovaComandaClient({
                       </Button>
                     </div>
                     <div className="text-right lg:w-32">
-                      <p className="text-xs text-muted-foreground">Valor</p>
-                      <p className="font-semibold tabular-nums text-foreground">
-                        {formatCurrency(item.price)}
-                      </p>
+                      <p className="text-xs text-muted-foreground">Valor unitário</p>
+                      <div className="relative mt-1">
+                        <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">R$</span>
+                        <Input
+                          value={prices[item.id] ?? ''}
+                          onChange={(event) => setItemPrice(item.id, event.target.value)}
+                          onFocus={(event) => event.currentTarget.select()}
+                          inputMode="decimal"
+                          aria-label={`Valor unitário de ${item.name}`}
+                          className="h-8 pl-8 text-right font-semibold tabular-nums"
+                        />
+                      </div>
                       {quantity > 0 ? (
                         <p className="text-xs tabular-nums text-muted-foreground">
                           Subtotal {formatCurrency(lineTotal)}
@@ -373,11 +405,11 @@ export function NovaComandaClient({
                   <div className="min-w-0">
                     <p className="truncate font-medium text-foreground">{item.name}</p>
                     <p className="text-xs text-muted-foreground">
-                      {quantities[item.id]} x {formatCurrency(item.price)}
+                      {quantities[item.id]} x {formatCurrency(parseMoney(prices[item.id] ?? ''))}
                     </p>
                   </div>
                   <span className="font-semibold tabular-nums text-foreground">
-                    {formatCurrency(item.price * (quantities[item.id] ?? 0))}
+                    {formatCurrency(parseMoney(prices[item.id] ?? '') * (quantities[item.id] ?? 0))}
                   </span>
                 </div>
               ))}

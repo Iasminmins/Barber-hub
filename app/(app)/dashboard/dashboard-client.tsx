@@ -39,6 +39,7 @@ import type {
   Subscription,
 } from '@/lib/types'
 import { isBarberRole } from '@/lib/employees'
+import { buildFirstClientActivity, getEffectiveClientStartDate } from '@/lib/client-start'
 
 const METHOD_LABEL: Record<string, string> = {
   pix: 'Pix',
@@ -84,42 +85,6 @@ function normalizeText(value: string) {
 
 function isStandaloneRevenue(entry: FinancialEntry) {
   return entry.type === 'entrada' && normalizeText(entry.category) !== 'comandas'
-}
-
-function clientKey(name: string) {
-  return `name:${normalizeText(name).replace(/\s+/g, ' ')}`
-}
-
-function buildFirstClientActivity(orders: Order[], appointments: Appointment[]) {
-  const firstActivity = new Map<string, string>()
-  const register = (id: string | undefined, name: string, date: string) => {
-    const dateKey = toDateKey(date)
-    if (!dateKey) return
-    for (const key of [id, clientKey(name)].filter(Boolean) as string[]) {
-      const current = firstActivity.get(key)
-      if (!current || dateKey < current) firstActivity.set(key, dateKey)
-    }
-  }
-
-  for (const order of orders) {
-    if (order.status === 'paga') register(order.clientId, order.clientName, order.createdAt)
-  }
-  for (const appointment of appointments) {
-    register(appointment.clientId, appointment.clientName, appointment.date)
-  }
-  return firstActivity
-}
-
-function wasCreatedByRecentImport(client: Client, imports: ImportRecord[]) {
-  const createdAt = new Date(client.createdAt).getTime()
-  if (Number.isNaN(createdAt)) return false
-  return imports.some((record) => {
-    if (!['clientes', 'comandas', 'assinaturas'].includes(record.entity)) return false
-    const completedAt = new Date(record.createdAt).getTime()
-    if (Number.isNaN(completedAt)) return false
-    const elapsed = completedAt - createdAt
-    return elapsed >= 0 && elapsed <= 6 * 60 * 60 * 1000
-  })
 }
 
 function buildRevenueSeries(orders: Order[], financialEntries: FinancialEntry[], range: DateRange, period: Period) {
@@ -307,14 +272,8 @@ export function DashboardClient({
   const pendingOrders = filteredOrders.filter((order) => order.status === 'pendente').length
   const firstClientActivity = buildFirstClientActivity(dashboardOrders, dashboardAppointments)
   const newClients = clients.filter((client) => {
-    const firstActivity = firstClientActivity.get(client.id) ?? firstClientActivity.get(clientKey(client.name))
-    const createdDate = toDateKey(client.createdAt)
-    if (firstActivity) {
-      const effectiveStart = createdDate && createdDate < firstActivity ? createdDate : firstActivity
-      return isInsideRange(effectiveStart, range)
-    }
-    if (wasCreatedByRecentImport(client, imports)) return false
-    return isInsideRange(client.createdAt, range)
+    const effectiveStart = getEffectiveClientStartDate(client, firstClientActivity, imports)
+    return isInsideRange(effectiveStart, range)
   }).length
   const atRiskClients = clients.filter((client) => client.tags.includes('inativo')).length
   const activeSubs = subscriptions.filter((subscription) => subscription.status === 'ativo').length
