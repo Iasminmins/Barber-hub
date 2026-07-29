@@ -26,6 +26,7 @@ import {
 import { daysUntil, formatCurrency, formatDate } from '@/lib/format'
 import type { CatalogItem, FinancialEntry, PaymentMethod, Plan, PlanCycle, PlanRules, Subscription, SubscriptionStatus } from '@/lib/types'
 import { useAppData } from '@/components/data/app-data-provider'
+import { isBarberRole } from '@/lib/employees'
 
 type View = 'assinaturas' | 'planos' | 'financeiro'
 type SubscriptionFilter = 'ativas' | 'vencendo' | 'vencidas' | 'todas'
@@ -33,6 +34,7 @@ type SubscriptionDraft = {
   id: string
   clientId: string
   planId: string
+  employeeId: string
   price: string
   startDate: string
   dueDate: string
@@ -173,7 +175,7 @@ export function AssinaturasClient({
   plans: Plan[]
   subscriptions: Subscription[]
 }) {
-  const { barbershop, clients, insertRecord, updateRecord } = useAppData()
+  const { barbershop, clients, employees, insertRecord, updateRecord } = useAppData()
   const [view, setView] = React.useState<View>('assinaturas')
   const [plans, setPlans] = React.useState(initialPlans)
   const [subscriptionRecords, setSubscriptionRecords] = React.useState(subscriptions)
@@ -324,6 +326,7 @@ export function AssinaturasClient({
     const original = subscriptionRecords.find((item) => item.id === editingSubscription.id)
     const client = clients.find((item) => item.id === editingSubscription.clientId)
     const plan = plans.find((item) => item.id === editingSubscription.planId)
+    const employee = employees.find((item) => item.id === editingSubscription.employeeId)
     const price = parseMoney(editingSubscription.price)
     if (!original || !client || !plan || !editingSubscription.startDate || !editingSubscription.dueDate) { setSubscriptionStatus('Preencha cliente, plano e datas.'); return }
     const creditsUsed = Number(editingSubscription.creditsUsed || 0), creditsTotal = Number(editingSubscription.creditsTotal || 0)
@@ -339,7 +342,7 @@ export function AssinaturasClient({
       setSubscriptionStatus('Este pagamento já foi lançado na receita de hoje.')
       return
     }
-    const result = await updateRecord('subscriptions', editingSubscription.id, { client_id:client.id, client_name:client.name, plan_id:plan.id, plan_name:plan.name, price, start_date:editingSubscription.startDate, due_date:editingSubscription.dueDate, status:editingSubscription.status, credits_used:creditsTotal ? creditsUsed : null, credits_total:creditsTotal || null })
+    const result = await updateRecord('subscriptions', editingSubscription.id, { client_id:client.id, client_name:client.name, plan_id:plan.id, plan_name:plan.name, employee_id:employee?.id??null, employee_name:employee?.name??null, price, start_date:editingSubscription.startDate, due_date:editingSubscription.dueDate, status:editingSubscription.status, credits_used:creditsTotal ? creditsUsed : null, credits_total:creditsTotal || null })
     if (result.error) { setSubscriptionStatus(result.error); return }
     if (editingSubscription.registerPayment) {
       const financialResult = await insertRecord('financial_entries', {
@@ -357,6 +360,8 @@ export function AssinaturasClient({
           client_name: original.clientName,
           plan_id: original.planId,
           plan_name: original.planName,
+          employee_id: original.employeeId || null,
+          employee_name: original.employeeName || null,
           price: original.price,
           start_date: original.startDate,
           due_date: original.dueDate,
@@ -368,7 +373,7 @@ export function AssinaturasClient({
         return
       }
     }
-    setSubscriptionRecords((current) => current.map((sub) => sub.id === editingSubscription.id ? { ...sub, clientId:client.id, clientName:client.name, planId:plan.id, planName:plan.name, price, startDate:editingSubscription.startDate, dueDate:editingSubscription.dueDate, status:editingSubscription.status, creditsUsed:creditsTotal?creditsUsed:undefined, creditsTotal:creditsTotal||undefined } : sub))
+    setSubscriptionRecords((current) => current.map((sub) => sub.id === editingSubscription.id ? { ...sub, clientId:client.id, clientName:client.name, planId:plan.id, planName:plan.name, employeeId:employee?.id??'', employeeName:employee?.name??'', price, startDate:editingSubscription.startDate, dueDate:editingSubscription.dueDate, status:editingSubscription.status, creditsUsed:creditsTotal?creditsUsed:undefined, creditsTotal:creditsTotal||undefined } : sub))
     setRenewalStatus(editingSubscription.registerPayment ? `Pagamento de ${client.name} lançado na receita de hoje.` : '')
     setEditingSubscription(null)
   }
@@ -528,6 +533,7 @@ export function AssinaturasClient({
               <TableRow>
                 <TableHead>Cliente</TableHead>
                 <TableHead>Plano</TableHead>
+                <TableHead>Barbeiro</TableHead>
                 <TableHead>Vencimento</TableHead>
                 <TableHead className="text-right">Valor</TableHead>
                 <TableHead>Uso</TableHead>
@@ -543,6 +549,7 @@ export function AssinaturasClient({
                   <TableRow key={sub.id}>
                     <TableCell className="font-medium text-foreground">{sub.clientName}</TableCell>
                     <TableCell className="text-muted-foreground">{sub.planName}</TableCell>
+                    <TableCell className="text-muted-foreground">{sub.employeeName || 'Não informado'}</TableCell>
                     <TableCell>
                       <div>
                         <p className="text-sm text-foreground">{formatDate(sub.dueDate)}</p>
@@ -581,7 +588,7 @@ export function AssinaturasClient({
                           <Repeat className="size-4" />
                           {renewingSubscriptionId === sub.id ? 'Renovando...' : 'Renovar'}
                         </Button>
-                        <Button variant="ghost" size="icon-sm" aria-label={`Editar assinatura de ${sub.clientName}`} onClick={()=>{setSubscriptionStatus('');setEditingSubscription({id:sub.id,clientId:sub.clientId,planId:sub.planId,price:String(sub.price).replace('.',','),startDate:sub.startDate,dueDate:sub.dueDate,status:sub.status,creditsUsed:String(sub.creditsUsed??''),creditsTotal:String(sub.creditsTotal??''),registerPayment:false,paymentMethod:'pix'})}}><Pencil className="size-4"/></Button>
+                        <Button variant="ghost" size="icon-sm" aria-label={`Editar assinatura de ${sub.clientName}`} onClick={()=>{setSubscriptionStatus('');setEditingSubscription({id:sub.id,clientId:sub.clientId,planId:sub.planId,employeeId:sub.employeeId,price:String(sub.price).replace('.',','),startDate:sub.startDate,dueDate:sub.dueDate,status:sub.status,creditsUsed:String(sub.creditsUsed??''),creditsTotal:String(sub.creditsTotal??''),registerPayment:false,paymentMethod:'pix'})}}><Pencil className="size-4"/></Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -589,7 +596,7 @@ export function AssinaturasClient({
               })}
               {filteredSubscriptions.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-28 text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={8} className="h-28 text-center text-sm text-muted-foreground">
                     Nenhuma assinatura encontrada neste filtro.
                   </TableCell>
                 </TableRow>
@@ -991,6 +998,7 @@ export function AssinaturasClient({
         {editingSubscription?<><DialogHeader title="Editar assinatura" description="Corrija cliente, plano, datas, valor, créditos e status."/><div className="grid gap-4 sm:grid-cols-2">
           <Field label="Cliente"><Select value={editingSubscription.clientId} onChange={e=>setEditingSubscription({...editingSubscription,clientId:e.target.value})}>{clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</Select></Field>
           <Field label="Plano"><Select value={editingSubscription.planId} onChange={e=>setEditingSubscription({...editingSubscription,planId:e.target.value})}>{plans.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field>
+          <Field label="Barbeiro"><Select value={editingSubscription.employeeId} onChange={e=>setEditingSubscription({...editingSubscription,employeeId:e.target.value})}><option value="">Selecionar barbeiro</option>{employees.filter(employee=>employee.active&&isBarberRole(employee.role)).map(employee=><option key={employee.id} value={employee.id}>{employee.name}</option>)}</Select></Field>
           <Field label="Início"><Input type="date" value={editingSubscription.startDate} onChange={e=>setEditingSubscription({...editingSubscription,startDate:e.target.value})}/></Field>
           <Field label="Próximo vencimento"><Input type="date" value={editingSubscription.dueDate} onChange={e=>{const original=subscriptionRecords.find(item=>item.id===editingSubscription.id);setEditingSubscription({...editingSubscription,dueDate:e.target.value,registerPayment:Boolean(original&&e.target.value>original.dueDate)})}}/></Field>
           <Field label="Valor"><Input inputMode="decimal" value={editingSubscription.price} onChange={e=>setEditingSubscription({...editingSubscription,price:e.target.value})}/></Field>

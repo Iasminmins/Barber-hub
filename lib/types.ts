@@ -186,6 +186,8 @@ export interface Subscription {
   planName: string
   clientId: string
   clientName: string
+  employeeId: string
+  employeeName: string
   price: number
   startDate: string
   dueDate: string
