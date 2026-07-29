@@ -24,7 +24,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { daysUntil, formatCurrency, formatDate } from '@/lib/format'
-import type { CatalogItem, FinancialEntry, Plan, PlanCycle, PlanRules, Subscription, SubscriptionStatus } from '@/lib/types'
+import type { CatalogItem, FinancialEntry, PaymentMethod, Plan, PlanCycle, PlanRules, Subscription, SubscriptionStatus } from '@/lib/types'
 import { useAppData } from '@/components/data/app-data-provider'
 
 type View = 'assinaturas' | 'planos' | 'financeiro'
@@ -169,6 +169,7 @@ export function AssinaturasClient({
   const [subscriptionStatus, setSubscriptionStatus] = React.useState('')
   const [renewalStatus, setRenewalStatus] = React.useState('')
   const [renewingSubscriptionId, setRenewingSubscriptionId] = React.useState<string | null>(null)
+  const [renewalDraft, setRenewalDraft] = React.useState<{ subscription: Subscription; method: PaymentMethod } | null>(null)
   const [subscriptionFilter, setSubscriptionFilter] = React.useState<SubscriptionFilter>('ativas')
   const [subscriptionSearch, setSubscriptionSearch] = React.useState('')
   const [saleSearch, setSaleSearch] = React.useState('')
@@ -320,7 +321,7 @@ export function AssinaturasClient({
     setEditingSubscription(null)
   }
 
-  async function renewSubscription(subscription: Subscription) {
+  async function renewSubscription(subscription: Subscription, method: PaymentMethod) {
     const plan = plans.find((item) => item.id === subscription.planId)
     const cycleDays = plan?.rules?.cycleDays ?? 30
     const today = new Date()
@@ -330,12 +331,11 @@ export function AssinaturasClient({
     const nextDueDate = new Date(cycleStart)
     nextDueDate.setDate(nextDueDate.getDate() + cycleDays)
 
-    if (!window.confirm(`Renovar a assinatura de ${subscription.clientName} por mais ${cycleDays} dias?`)) return
-
     const startDate = toLocalDateKey(cycleStart)
     const dueDate = toLocalDateKey(nextDueDate)
     setRenewalStatus('')
     setRenewingSubscriptionId(subscription.id)
+    setRenewalDraft(null)
 
     const result = await updateRecord('subscriptions', subscription.id, {
       start_date: startDate,
@@ -344,12 +344,35 @@ export function AssinaturasClient({
       credits_used: subscription.creditsTotal ? 0 : null,
     })
 
-    setRenewingSubscriptionId(null)
     if (result.error) {
+      setRenewingSubscriptionId(null)
       setRenewalStatus(`Não foi possível renovar: ${result.error}`)
       return
     }
 
+    const financialResult = await insertRecord('financial_entries', {
+      barbershop_id: barbershop.id,
+      type: 'entrada',
+      category: 'Assinaturas',
+      description: `Renovação - ${subscription.clientName} - ${subscription.planName}`,
+      amount: subscription.price,
+      method,
+      date: toLocalDateKey(today),
+    })
+
+    if (financialResult.error) {
+      await updateRecord('subscriptions', subscription.id, {
+        start_date: subscription.startDate,
+        due_date: subscription.dueDate,
+        status: subscription.status,
+        credits_used: subscription.creditsUsed ?? null,
+      })
+      setRenewingSubscriptionId(null)
+      setRenewalStatus(`Não foi possível registrar o pagamento; a renovação foi desfeita: ${financialResult.error}`)
+      return
+    }
+
+    setRenewingSubscriptionId(null)
     setSubscriptionRecords((current) => current.map((item) => (
       item.id === subscription.id
         ? {
@@ -361,7 +384,7 @@ export function AssinaturasClient({
           }
         : item
     )))
-    setRenewalStatus(`Assinatura de ${subscription.clientName} renovada até ${formatDate(dueDate)}.`)
+    setRenewalStatus(`Assinatura de ${subscription.clientName} renovada até ${formatDate(dueDate)} e lançada na receita de hoje.`)
   }
 
   return (
@@ -501,7 +524,7 @@ export function AssinaturasClient({
                           variant="outline"
                           size="sm"
                           disabled={renewingSubscriptionId === sub.id}
-                          onClick={() => renewSubscription(sub)}
+                          onClick={() => setRenewalDraft({ subscription: sub, method: 'pix' })}
                         >
                           <Repeat className="size-4" />
                           {renewingSubscriptionId === sub.id ? 'Renovando...' : 'Renovar'}
@@ -923,6 +946,47 @@ export function AssinaturasClient({
           <Field label="Créditos usados"><Input type="number" min="0" value={editingSubscription.creditsUsed} onChange={e=>setEditingSubscription({...editingSubscription,creditsUsed:e.target.value})}/></Field>
           <Field label="Créditos totais"><Input type="number" min="0" value={editingSubscription.creditsTotal} onChange={e=>setEditingSubscription({...editingSubscription,creditsTotal:e.target.value})}/></Field>
         </div>{subscriptionStatus?<p className="mt-4 text-sm text-destructive">{subscriptionStatus}</p>:null}<div className="mt-5 flex justify-end gap-2"><Button variant="outline" onClick={()=>setEditingSubscription(null)}>Cancelar</Button><Button variant="gold" onClick={saveSubscription}><Save className="size-4"/>Salvar alterações</Button></div></>:null}
+      </Dialog>
+      <Dialog open={Boolean(renewalDraft)} onClose={()=>setRenewalDraft(null)} className="sm:max-w-md">
+        {renewalDraft ? (
+          <>
+            <DialogHeader
+              title="Confirmar renovação"
+              description={`${renewalDraft.subscription.clientName} · ${renewalDraft.subscription.planName}`}
+            />
+            <div className="space-y-4">
+              <div className="rounded-md border border-border bg-muted/40 p-4">
+                <p className="text-sm text-muted-foreground">Valor a receber</p>
+                <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">
+                  {formatCurrency(renewalDraft.subscription.price)}
+                </p>
+              </div>
+              <Field label="Forma de pagamento">
+                <Select
+                  value={renewalDraft.method}
+                  onChange={(event) => setRenewalDraft({
+                    ...renewalDraft,
+                    method: event.target.value as PaymentMethod,
+                  })}
+                >
+                  {Object.entries(PAYMENT_METHOD_LABEL).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </Select>
+              </Field>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setRenewalDraft(null)}>Cancelar</Button>
+              <Button
+                variant="gold"
+                onClick={() => renewSubscription(renewalDraft.subscription, renewalDraft.method)}
+              >
+                <Repeat className="size-4" />
+                Renovar e lançar receita
+              </Button>
+            </div>
+          </>
+        ) : null}
       </Dialog>
     </div>
   )

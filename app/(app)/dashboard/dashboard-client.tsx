@@ -77,8 +77,17 @@ function getSaoPauloHour(value: string) {
   return Number(hour)
 }
 
-function buildRevenueSeries(orders: Order[], range: DateRange, period: Period) {
+function normalizeText(value: string) {
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase()
+}
+
+function isStandaloneRevenue(entry: FinancialEntry) {
+  return entry.type === 'entrada' && normalizeText(entry.category) !== 'comandas'
+}
+
+function buildRevenueSeries(orders: Order[], financialEntries: FinancialEntry[], range: DateRange, period: Period) {
   const paid = orders.filter((order) => order.status === 'paga' && isInsideRange(order.createdAt, range))
+  const extraRevenue = financialEntries.filter((entry) => isStandaloneRevenue(entry) && isInsideRange(entry.date, range))
 
   if (range.start === range.end) {
     const hours = Array.from({ length: 24 }, (_, hour) => ({
@@ -93,6 +102,8 @@ function buildRevenueSeries(orders: Order[], range: DateRange, period: Period) {
       hours[hour].receita += order.total
       hours[hour].comandas += 1
     }
+    // Movimentações financeiras têm somente a data, portanto são exibidas ao meio-dia.
+    for (const entry of extraRevenue) hours[12].receita += entry.amount
 
     return hours
   }
@@ -113,6 +124,10 @@ function buildRevenueSeries(orders: Order[], range: DateRange, period: Period) {
       if (!Number.isInteger(monthIndex) || monthIndex < 0 || monthIndex >= months.length) continue
       months[monthIndex].receita += order.total
       months[monthIndex].comandas += 1
+    }
+    for (const entry of extraRevenue) {
+      const monthIndex = Number(toDateKey(entry.date).slice(5, 7)) - 1
+      if (monthIndex >= 0 && monthIndex < months.length) months[monthIndex].receita += entry.amount
     }
 
     return months.map(({ label, receita, comandas }) => ({ label, receita, comandas }))
@@ -142,15 +157,28 @@ function buildRevenueSeries(orders: Order[], range: DateRange, period: Period) {
     points[index].receita += order.total
     points[index].comandas += 1
   }
+  for (const entry of extraRevenue) {
+    const entryDate = toDateKey(entry.date)
+    if (!entryDate) continue
+    const index = Math.min(
+      maxPoints - 1,
+      Math.max(0, Math.floor(((new Date(`${entryDate}T00:00:00`).getTime() - new Date(`${range.start}T00:00:00`).getTime()) / 86400000 / days) * maxPoints)),
+    )
+    points[index].receita += entry.amount
+  }
 
   return points.map(({ label, receita, comandas }) => ({ label, receita, comandas }))
 }
 
-function buildRevenueByMethod(orders: Order[], range: DateRange) {
+function buildRevenueByMethod(orders: Order[], financialEntries: FinancialEntry[], range: DateRange) {
   const map = new Map<string, number>()
   for (const order of orders) {
     if (order.status !== 'paga' || !order.method || !isInsideRange(order.createdAt, range)) continue
     map.set(order.method, (map.get(order.method) ?? 0) + order.total)
+  }
+  for (const entry of financialEntries) {
+    if (!isStandaloneRevenue(entry) || !entry.method || !isInsideRange(entry.date, range)) continue
+    map.set(entry.method, (map.get(entry.method) ?? 0) + entry.amount)
   }
 
   return Object.entries(METHOD_LABEL).map(([method, label]) => ({
@@ -202,6 +230,7 @@ export function DashboardClient({
   clients,
   commissions,
   employees,
+  financialEntries,
   orders,
   subscriptions,
   isBarber = false,
@@ -230,9 +259,11 @@ export function DashboardClient({
 
   const filteredOrders = dashboardOrders.filter((order) => isInsideRange(order.createdAt, range))
   const paidOrders = filteredOrders.filter((order) => order.status === 'paga')
+  const extraRevenue = financialEntries.filter((entry) => isStandaloneRevenue(entry) && isInsideRange(entry.date, range))
   const filteredAppointments = dashboardAppointments.filter((appointment) => isInsideRange(appointment.date, range))
-  const revenue = paidOrders.reduce((sum, order) => sum + order.total, 0)
-  const avgTicket = paidOrders.length > 0 ? revenue / paidOrders.length : 0
+  const orderRevenue = paidOrders.reduce((sum, order) => sum + order.total, 0)
+  const revenue = orderRevenue + extraRevenue.reduce((sum, entry) => sum + entry.amount, 0)
+  const avgTicket = paidOrders.length > 0 ? orderRevenue / paidOrders.length : 0
   const openOrders = filteredOrders.filter((order) => order.status === 'aberta').length
   const pendingOrders = filteredOrders.filter((order) => order.status === 'pendente').length
   const newClients = clients.filter((client) => isInsideRange(client.createdAt, range)).length
@@ -249,9 +280,9 @@ export function DashboardClient({
     .filter((commission) => commission.status === 'pendente' && isInsideRange(commission.date, range))
     .reduce((sum, commission) => sum + commission.amount, 0)
 
-  const revenueSeries = buildRevenueSeries(dashboardOrders, range, period)
+  const revenueSeries = buildRevenueSeries(dashboardOrders, financialEntries, range, period)
   const isSingleDay = range.start === range.end
-  const revenueByMethod = buildRevenueByMethod(dashboardOrders, range)
+  const revenueByMethod = buildRevenueByMethod(dashboardOrders, financialEntries, range)
   const ranking = buildRanking(dashboardOrders, employees, range)
   const maxRevenue = Math.max(1, ...ranking.map((item) => item.revenue))
   const upcoming = filteredAppointments
