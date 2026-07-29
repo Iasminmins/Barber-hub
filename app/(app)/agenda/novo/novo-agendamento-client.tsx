@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useState } from 'react'
-import { ArrowLeft, CalendarPlus, Save } from 'lucide-react'
+import { ArrowLeft, CalendarPlus, MessageCircle, Save } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -25,6 +25,25 @@ function todayISO() {
   return new Date().toISOString().slice(0, 10)
 }
 
+function normalizePhone(value: string) {
+  return value.replace(/\D/g, '')
+}
+
+function whatsappUrl(phone: string, message: string) {
+  const digits = normalizePhone(phone)
+  const brNumber = digits.length <= 11 ? `55${digits}` : digits
+  return `https://wa.me/${brNumber}?text=${encodeURIComponent(message)}`
+}
+
+function formatAppointmentDate(value: string) {
+  return new Intl.DateTimeFormat('pt-BR', {
+    weekday: 'long',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(new Date(`${value}T12:00:00`))
+}
+
 export function NovoAgendamentoClient({
   clients,
   barbers,
@@ -43,12 +62,16 @@ export function NovoAgendamentoClient({
   const [notes, setNotes] = useState('')
   const [saveError, setSaveError] = useState('')
 
-  async function saveAppointment() {
+  async function saveAppointment(sendWhatsapp = false) {
     setSaveError('')
 
     const client = clients.find((item) => item.id === clientId)
     if (!client) {
       setSaveError('Selecione um cliente.')
+      return
+    }
+    if (sendWhatsapp && !normalizePhone(client.phone)) {
+      setSaveError('Este cliente está sem telefone. Cadastre o WhatsApp antes de enviar.')
       return
     }
 
@@ -86,8 +109,32 @@ export function NovoAgendamentoClient({
       return
     }
 
+    const whatsappWindow = sendWhatsapp ? window.open('', '_blank') : null
     const result = await insertRecord('appointments', { barbershop_id: barbershop.id, client_id: client.id, client_name: client.name, employee_id: barber.id, employee_name: barber.name, service_id: service.id, service_name: service.name, date, start, duration_min: service.durationMin ?? 40, status, price: service.price, notes: notes.trim() || null })
-    if (result.error) { setSaveError(result.error); return }
+    if (result.error) {
+      whatsappWindow?.close()
+      setSaveError(result.error)
+      return
+    }
+    if (sendWhatsapp) {
+      const message = [
+        `Olá, ${client.name}! 👋`,
+        '',
+        `Seu horário na *${barbershop.name}* foi agendado:`,
+        `📅 *Data:* ${formatAppointmentDate(date)}`,
+        `⏰ *Horário:* ${start}`,
+        `✂️ *Serviço:* ${service.name}`,
+        `👤 *Barbeiro:* ${barber.name}`,
+        '',
+        'Se precisar remarcar, fale com a gente por aqui.',
+      ].join('\n')
+      const url = whatsappUrl(client.phone, message)
+      if (whatsappWindow) whatsappWindow.location.href = url
+      else {
+        window.location.href = url
+        return
+      }
+    }
     router.push('/agenda')
   }
 
@@ -174,15 +221,21 @@ export function NovoAgendamentoClient({
         </Card>
 
         <Card className="h-fit p-5">
-          <h3 className="mb-2 font-semibold text-foreground">Confirmação</h3>
+          <h3 className="mb-2 font-semibold text-foreground">Finalizar agendamento</h3>
           <p className="mb-4 text-sm text-muted-foreground">
-            O cliente pode receber lembrete pelo WhatsApp quando a integração estiver ativa.
+            Salve normalmente ou envie ao cliente uma confirmação com data, horário, serviço e barbeiro.
           </p>
           {saveError ? <p className="mb-3 text-sm font-medium text-destructive">{saveError}</p> : null}
-          <Button type="button" variant="gold" className="w-full" onClick={saveAppointment}>
-            <Save className="size-4" />
-            Salvar agendamento
-          </Button>
+          <div className="space-y-2">
+            <Button type="button" variant="gold" className="w-full" onClick={() => saveAppointment(true)}>
+              <MessageCircle className="size-4" />
+              Salvar e enviar WhatsApp
+            </Button>
+            <Button type="button" variant="outline" className="w-full" onClick={() => saveAppointment(false)}>
+              <Save className="size-4" />
+              Salvar sem enviar
+            </Button>
+          </div>
         </Card>
       </form>
     </div>

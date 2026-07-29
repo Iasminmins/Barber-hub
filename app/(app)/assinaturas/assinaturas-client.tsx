@@ -249,6 +249,24 @@ export function AssinaturasClient({
     setPlanDraftTab('basicos')
   }
 
+  function openSubscriptionEditor(subscription: Subscription) {
+    setSubscriptionStatus('')
+    setEditingSubscription({
+      id: subscription.id,
+      clientId: subscription.clientId,
+      planId: subscription.planId,
+      employeeId: subscription.employeeId,
+      price: String(subscription.price).replace('.', ','),
+      startDate: subscription.startDate,
+      dueDate: subscription.dueDate,
+      status: subscription.status,
+      creditsUsed: String(subscription.creditsUsed ?? ''),
+      creditsTotal: String(subscription.creditsTotal ?? ''),
+      registerPayment: false,
+      paymentMethod: 'pix',
+    })
+  }
+
   function openPlanDialog(plan?: Plan) {
     setDraft(plan ? toDraft(plan) : emptyDraft)
     setPlanDraftTab('basicos')
@@ -528,7 +546,65 @@ export function AssinaturasClient({
           {renewalStatus ? (
             <p className="border-b border-border px-4 py-2 text-sm text-muted-foreground">{renewalStatus}</p>
           ) : null}
-          <Table>
+          <div className="divide-y divide-border lg:hidden">
+            {filteredSubscriptions.map((sub) => {
+              const due = daysUntil(sub.dueDate)
+              return (
+                <div
+                  key={sub.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => openSubscriptionEditor(sub)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') openSubscriptionEditor(sub)
+                  }}
+                  className="block w-full p-4 text-left transition-colors hover:bg-muted/40 active:bg-muted/70"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-foreground">{sub.clientName}</p>
+                      <p className="truncate text-sm text-muted-foreground">{sub.planName}</p>
+                    </div>
+                    <StatusBadge status={sub.displayStatus} />
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Barbeiro</p>
+                      <p className="truncate font-medium text-foreground">{sub.employeeName || 'Não informado'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Valor</p>
+                      <p className="font-semibold tabular-nums text-foreground">{formatCurrency(sub.price)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Vencimento</p>
+                      <p className="text-foreground">{formatDate(sub.dueDate)}</p>
+                      <p className="text-xs text-muted-foreground">{due < 0 ? `${Math.abs(due)} dias atrás` : `em ${due} dias`}</p>
+                    </div>
+                    <div className="flex items-end justify-end">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={renewingSubscriptionId === sub.id}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          setRenewalDraft({ subscription: sub, method: 'pix' })
+                        }}
+                      >
+                        <Repeat className="size-4" />
+                        Renovar
+                      </Button>
+                    </div>
+                  </div>
+                  <p className="mt-3 text-xs font-medium text-primary">Toque para editar</p>
+                </div>
+              )
+            })}
+            {filteredSubscriptions.length === 0 ? (
+              <div className="p-8 text-center text-sm text-muted-foreground">Nenhuma assinatura encontrada neste filtro.</div>
+            ) : null}
+          </div>
+          <Table className="hidden lg:table">
             <TableHeader>
               <TableRow>
                 <TableHead>Cliente</TableHead>
@@ -546,7 +622,15 @@ export function AssinaturasClient({
                 const due = daysUntil(sub.dueDate)
                 const hasCredits = sub.creditsTotal && sub.creditsTotal > 0
                 return (
-                  <TableRow key={sub.id}>
+                  <TableRow
+                    key={sub.id}
+                    tabIndex={0}
+                    onClick={() => openSubscriptionEditor(sub)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') openSubscriptionEditor(sub)
+                    }}
+                    className="cursor-pointer transition-colors hover:bg-muted/40"
+                  >
                     <TableCell className="font-medium text-foreground">{sub.clientName}</TableCell>
                     <TableCell className="text-muted-foreground">{sub.planName}</TableCell>
                     <TableCell className="text-muted-foreground">{sub.employeeName || 'Não informado'}</TableCell>
@@ -583,12 +667,15 @@ export function AssinaturasClient({
                           variant="outline"
                           size="sm"
                           disabled={renewingSubscriptionId === sub.id}
-                          onClick={() => setRenewalDraft({ subscription: sub, method: 'pix' })}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            setRenewalDraft({ subscription: sub, method: 'pix' })
+                          }}
                         >
                           <Repeat className="size-4" />
                           {renewingSubscriptionId === sub.id ? 'Renovando...' : 'Renovar'}
                         </Button>
-                        <Button variant="ghost" size="icon-sm" aria-label={`Editar assinatura de ${sub.clientName}`} onClick={()=>{setSubscriptionStatus('');setEditingSubscription({id:sub.id,clientId:sub.clientId,planId:sub.planId,employeeId:sub.employeeId,price:String(sub.price).replace('.',','),startDate:sub.startDate,dueDate:sub.dueDate,status:sub.status,creditsUsed:String(sub.creditsUsed??''),creditsTotal:String(sub.creditsTotal??''),registerPayment:false,paymentMethod:'pix'})}}><Pencil className="size-4"/></Button>
+                        <Button variant="ghost" size="icon-sm" aria-label={`Editar assinatura de ${sub.clientName}`} onClick={(event)=>{event.stopPropagation();openSubscriptionEditor(sub)}}><Pencil className="size-4"/></Button>
                       </div>
                     </TableCell>
                   </TableRow>
