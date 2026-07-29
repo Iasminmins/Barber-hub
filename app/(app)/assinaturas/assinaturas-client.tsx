@@ -29,7 +29,19 @@ import { useAppData } from '@/components/data/app-data-provider'
 
 type View = 'assinaturas' | 'planos' | 'financeiro'
 type SubscriptionFilter = 'ativas' | 'vencendo' | 'vencidas' | 'todas'
-type SubscriptionDraft = { id:string; clientId:string; planId:string; price:string; startDate:string; dueDate:string; status:SubscriptionStatus; creditsUsed:string; creditsTotal:string }
+type SubscriptionDraft = {
+  id: string
+  clientId: string
+  planId: string
+  price: string
+  startDate: string
+  dueDate: string
+  status: SubscriptionStatus
+  creditsUsed: string
+  creditsTotal: string
+  registerPayment: boolean
+  paymentMethod: PaymentMethod
+}
 
 type PlanDraft = {
   id?: string
@@ -309,15 +321,55 @@ export function AssinaturasClient({
 
   async function saveSubscription() {
     if (!editingSubscription) return
+    const original = subscriptionRecords.find((item) => item.id === editingSubscription.id)
     const client = clients.find((item) => item.id === editingSubscription.clientId)
     const plan = plans.find((item) => item.id === editingSubscription.planId)
     const price = parseMoney(editingSubscription.price)
-    if (!client || !plan || !editingSubscription.startDate || !editingSubscription.dueDate) { setSubscriptionStatus('Preencha cliente, plano e datas.'); return }
+    if (!original || !client || !plan || !editingSubscription.startDate || !editingSubscription.dueDate) { setSubscriptionStatus('Preencha cliente, plano e datas.'); return }
     const creditsUsed = Number(editingSubscription.creditsUsed || 0), creditsTotal = Number(editingSubscription.creditsTotal || 0)
     if (price < 0 || creditsUsed < 0 || creditsTotal < 0) { setSubscriptionStatus('Informe valores válidos.'); return }
+    const paymentDescription = `Renovação - ${client.name} - ${plan.name}`
+    const paymentDate = toLocalDateKey(new Date())
+    if (editingSubscription.registerPayment && financialEntries.some((entry) => (
+      entry.type === 'entrada'
+      && entry.date === paymentDate
+      && entry.description === paymentDescription
+      && entry.amount === price
+    ))) {
+      setSubscriptionStatus('Este pagamento já foi lançado na receita de hoje.')
+      return
+    }
     const result = await updateRecord('subscriptions', editingSubscription.id, { client_id:client.id, client_name:client.name, plan_id:plan.id, plan_name:plan.name, price, start_date:editingSubscription.startDate, due_date:editingSubscription.dueDate, status:editingSubscription.status, credits_used:creditsTotal ? creditsUsed : null, credits_total:creditsTotal || null })
     if (result.error) { setSubscriptionStatus(result.error); return }
+    if (editingSubscription.registerPayment) {
+      const financialResult = await insertRecord('financial_entries', {
+        barbershop_id: barbershop.id,
+        type: 'entrada',
+        category: 'Assinaturas',
+        description: paymentDescription,
+        amount: price,
+        method: editingSubscription.paymentMethod,
+        date: paymentDate,
+      })
+      if (financialResult.error) {
+        await updateRecord('subscriptions', original.id, {
+          client_id: original.clientId,
+          client_name: original.clientName,
+          plan_id: original.planId,
+          plan_name: original.planName,
+          price: original.price,
+          start_date: original.startDate,
+          due_date: original.dueDate,
+          status: original.status,
+          credits_used: original.creditsUsed ?? null,
+          credits_total: original.creditsTotal ?? null,
+        })
+        setSubscriptionStatus(`Não foi possível registrar o pagamento; as alterações foram desfeitas: ${financialResult.error}`)
+        return
+      }
+    }
     setSubscriptionRecords((current) => current.map((sub) => sub.id === editingSubscription.id ? { ...sub, clientId:client.id, clientName:client.name, planId:plan.id, planName:plan.name, price, startDate:editingSubscription.startDate, dueDate:editingSubscription.dueDate, status:editingSubscription.status, creditsUsed:creditsTotal?creditsUsed:undefined, creditsTotal:creditsTotal||undefined } : sub))
+    setRenewalStatus(editingSubscription.registerPayment ? `Pagamento de ${client.name} lançado na receita de hoje.` : '')
     setEditingSubscription(null)
   }
 
@@ -529,7 +581,7 @@ export function AssinaturasClient({
                           <Repeat className="size-4" />
                           {renewingSubscriptionId === sub.id ? 'Renovando...' : 'Renovar'}
                         </Button>
-                        <Button variant="ghost" size="icon-sm" aria-label={`Editar assinatura de ${sub.clientName}`} onClick={()=>{setSubscriptionStatus('');setEditingSubscription({id:sub.id,clientId:sub.clientId,planId:sub.planId,price:String(sub.price).replace('.',','),startDate:sub.startDate,dueDate:sub.dueDate,status:sub.status,creditsUsed:String(sub.creditsUsed??''),creditsTotal:String(sub.creditsTotal??'')})}}><Pencil className="size-4"/></Button>
+                        <Button variant="ghost" size="icon-sm" aria-label={`Editar assinatura de ${sub.clientName}`} onClick={()=>{setSubscriptionStatus('');setEditingSubscription({id:sub.id,clientId:sub.clientId,planId:sub.planId,price:String(sub.price).replace('.',','),startDate:sub.startDate,dueDate:sub.dueDate,status:sub.status,creditsUsed:String(sub.creditsUsed??''),creditsTotal:String(sub.creditsTotal??''),registerPayment:false,paymentMethod:'pix'})}}><Pencil className="size-4"/></Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -940,11 +992,19 @@ export function AssinaturasClient({
           <Field label="Cliente"><Select value={editingSubscription.clientId} onChange={e=>setEditingSubscription({...editingSubscription,clientId:e.target.value})}>{clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</Select></Field>
           <Field label="Plano"><Select value={editingSubscription.planId} onChange={e=>setEditingSubscription({...editingSubscription,planId:e.target.value})}>{plans.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field>
           <Field label="Início"><Input type="date" value={editingSubscription.startDate} onChange={e=>setEditingSubscription({...editingSubscription,startDate:e.target.value})}/></Field>
-          <Field label="Próximo vencimento"><Input type="date" value={editingSubscription.dueDate} onChange={e=>setEditingSubscription({...editingSubscription,dueDate:e.target.value})}/></Field>
+          <Field label="Próximo vencimento"><Input type="date" value={editingSubscription.dueDate} onChange={e=>{const original=subscriptionRecords.find(item=>item.id===editingSubscription.id);setEditingSubscription({...editingSubscription,dueDate:e.target.value,registerPayment:Boolean(original&&e.target.value>original.dueDate)})}}/></Field>
           <Field label="Valor"><Input inputMode="decimal" value={editingSubscription.price} onChange={e=>setEditingSubscription({...editingSubscription,price:e.target.value})}/></Field>
           <Field label="Status"><Select value={editingSubscription.status} onChange={e=>setEditingSubscription({...editingSubscription,status:e.target.value as SubscriptionStatus})}><option value="ativo">Ativo</option><option value="vencendo">Vencendo</option><option value="vencido">Vencido</option><option value="cancelado">Cancelado</option></Select></Field>
           <Field label="Créditos usados"><Input type="number" min="0" value={editingSubscription.creditsUsed} onChange={e=>setEditingSubscription({...editingSubscription,creditsUsed:e.target.value})}/></Field>
           <Field label="Créditos totais"><Input type="number" min="0" value={editingSubscription.creditsTotal} onChange={e=>setEditingSubscription({...editingSubscription,creditsTotal:e.target.value})}/></Field>
+          <label className="flex items-center gap-3 rounded-md border border-border bg-muted/40 px-3 py-3 text-sm sm:col-span-2">
+            <input type="checkbox" checked={editingSubscription.registerPayment} onChange={e=>setEditingSubscription({...editingSubscription,registerPayment:e.target.checked})} className="size-4 accent-[var(--primary)]"/>
+            <span>
+              <span className="block font-medium text-foreground">Lançar este valor na receita de hoje</span>
+              <span className="block text-xs text-muted-foreground">Marque também para registrar uma renovação que já teve as datas alteradas.</span>
+            </span>
+          </label>
+          {editingSubscription.registerPayment ? <div className="sm:col-span-2"><Field label="Forma de pagamento"><Select value={editingSubscription.paymentMethod} onChange={e=>setEditingSubscription({...editingSubscription,paymentMethod:e.target.value as PaymentMethod})}>{Object.entries(PAYMENT_METHOD_LABEL).map(([value,label])=><option key={value} value={value}>{label}</option>)}</Select></Field></div> : null}
         </div>{subscriptionStatus?<p className="mt-4 text-sm text-destructive">{subscriptionStatus}</p>:null}<div className="mt-5 flex justify-end gap-2"><Button variant="outline" onClick={()=>setEditingSubscription(null)}>Cancelar</Button><Button variant="gold" onClick={saveSubscription}><Save className="size-4"/>Salvar alterações</Button></div></>:null}
       </Dialog>
       <Dialog open={Boolean(renewalDraft)} onClose={()=>setRenewalDraft(null)} className="sm:max-w-md">
