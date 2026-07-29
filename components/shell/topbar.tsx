@@ -3,6 +3,7 @@
 import * as React from 'react'
 import {
   Bell,
+  CalendarClock,
   Cake,
   Check,
   CheckCheck,
@@ -28,7 +29,7 @@ import { daysUntil, formatCurrency } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { birthdayMessage, normalizeWhatsAppPhone, renewalMessage, whatsappUrl } from '@/lib/whatsapp'
 
-type NotificationTab = 'aniversarios' | 'estoque' | 'comandas' | 'planos'
+type NotificationTab = 'agendamentos' | 'aniversarios' | 'estoque' | 'comandas' | 'planos'
 
 interface NotificationItem {
   id: string
@@ -49,6 +50,7 @@ const tabConfig: Record<
   estoque: { label: 'Estoque', shortLabel: 'Estoque', icon: Package },
   comandas: { label: 'Comandas', shortLabel: 'Comandas', icon: ShoppingCart },
   planos: { label: 'Planos', shortLabel: 'Planos', icon: Crown },
+  agendamentos: { label: 'Agendamentos', shortLabel: 'Agenda', icon: CalendarClock },
 }
 
 const toneClass = {
@@ -76,7 +78,14 @@ function isBirthdayToday(birthDate: string) {
   return date.getMonth() === today.getMonth() && date.getDate() === today.getDate()
 }
 
-function buildNotifications(clients: ReturnType<typeof useAppData>['clients'], catalog: ReturnType<typeof useAppData>['catalog'], orders: ReturnType<typeof useAppData>['orders'], subscriptions: ReturnType<typeof useAppData>['subscriptions']): Record<NotificationTab, NotificationItem[]> {
+function buildNotifications(
+  clients: ReturnType<typeof useAppData>['clients'],
+  catalog: ReturnType<typeof useAppData>['catalog'],
+  orders: ReturnType<typeof useAppData>['orders'],
+  subscriptions: ReturnType<typeof useAppData>['subscriptions'],
+  appointments: ReturnType<typeof useAppData>['appointments'],
+  readAppointmentIds: Set<string>,
+): Record<NotificationTab, NotificationItem[]> {
   const lowStock = catalog.filter((item) => item.type === 'produto' && (item.stock ?? 0) <= (item.minStock ?? 0))
   const expiringSubscriptions = subscriptions
     .map((subscription) => ({ subscription, due: daysUntil(subscription.dueDate) }))
@@ -89,6 +98,20 @@ function buildNotifications(clients: ReturnType<typeof useAppData>['clients'], c
     })
 
   return {
+    agendamentos: appointments
+      .filter((appointment) => {
+        if (readAppointmentIds.has(appointment.id) || appointment.status === 'cancelado') return false
+        if (!appointment.createdAt) return false
+        const createdAt = new Date(appointment.createdAt).getTime()
+        return Number.isFinite(createdAt) && Date.now() - createdAt <= 7 * 24 * 60 * 60 * 1000
+      })
+      .sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))
+      .map((appointment) => ({
+        id: `appointment-${appointment.id}`,
+        title: `${appointment.clientName} agendou`,
+        description: `${new Intl.DateTimeFormat('pt-BR').format(new Date(`${appointment.date}T12:00:00`))} às ${appointment.start} · ${appointment.employeeName} · ${appointment.serviceName}`,
+        tone: 'green' as const,
+      })),
     aniversarios: clients
       .filter((client) => isBirthdayToday(client.birthDate))
       .flatMap((client) => {
@@ -138,9 +161,13 @@ function buildNotifications(clients: ReturnType<typeof useAppData>['clients'], c
 }
 
 export function Topbar({ onMenu }: { onMenu: () => void }) {
-  const { barbershop, catalog, clients, member, orders, subscriptions } = useAppData()
+  const { appointments, barbershop, catalog, clients, member, orders, subscriptions } = useAppData()
   const barbershops = [barbershop]
-  const notifications = React.useMemo(() => buildNotifications(clients, catalog, orders, subscriptions), [catalog, clients, orders, subscriptions])
+  const [readAppointmentIds, setReadAppointmentIds] = React.useState<Set<string>>(new Set())
+  const notifications = React.useMemo(
+    () => buildNotifications(clients, catalog, orders, subscriptions, appointments, readAppointmentIds),
+    [appointments, catalog, clients, orders, readAppointmentIds, subscriptions],
+  )
   const [active, setActive] = React.useState(barbershop)
   const [open, setOpen] = React.useState(false)
   const [notificationsOpen, setNotificationsOpen] = React.useState(false)
@@ -152,10 +179,65 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
   const [preparedBirthdayIds, setPreparedBirthdayIds] = React.useState<Set<string>>(new Set())
   const barbershopRef = React.useRef<HTMLDivElement>(null)
   const notificationRef = React.useRef<HTMLDivElement>(null)
+  const appointmentStorageKey = `barberhub:read-appointments:${barbershop.id}`
 
   React.useEffect(() => {
     setActive(barbershop)
   }, [barbershop])
+
+  React.useEffect(() => {
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(appointmentStorageKey) ?? '[]')
+      setReadAppointmentIds(new Set(Array.isArray(saved) ? saved : []))
+    } catch {
+      setReadAppointmentIds(new Set())
+    }
+  }, [appointmentStorageKey])
+
+  React.useEffect(() => {
+    const handleNewAppointment = (event: Event) => {
+      const appointment = (event as CustomEvent<Record<string, unknown>>).detail
+      setActiveTab('agendamentos')
+      setNotificationsOpen(true)
+
+      try {
+        const AudioContextClass = window.AudioContext
+        const audioContext = new AudioContextClass()
+        const oscillator = audioContext.createOscillator()
+        const gain = audioContext.createGain()
+        oscillator.type = 'sine'
+        oscillator.frequency.setValueAtTime(880, audioContext.currentTime)
+        gain.gain.setValueAtTime(0.0001, audioContext.currentTime)
+        gain.gain.exponentialRampToValueAtTime(0.18, audioContext.currentTime + 0.02)
+        gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.45)
+        oscillator.connect(gain)
+        gain.connect(audioContext.destination)
+        oscillator.start()
+        oscillator.stop(audioContext.currentTime + 0.45)
+        oscillator.addEventListener('ended', () => void audioContext.close())
+      } catch {
+        // Some browsers block audio until the first user interaction; the visual alert remains active.
+      }
+
+      if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+        new Notification('Novo agendamento', {
+          body: `${String(appointment.client_name ?? 'Um cliente')} agendou para ${String(appointment.date ?? '')} às ${String(appointment.start ?? '').slice(0, 5)} com ${String(appointment.employee_name ?? 'a equipe')}.`,
+          icon: '/favicon.ico',
+        })
+      }
+    }
+
+    window.addEventListener('barberhub:new-appointment', handleNewAppointment)
+    return () => window.removeEventListener('barberhub:new-appointment', handleNewAppointment)
+  }, [])
+
+  function markNotificationsAsRead() {
+    const appointmentIds = notifications.agendamentos.map((item) => item.id.replace('appointment-', ''))
+    if (appointmentIds.length === 0) return
+    const next = new Set([...readAppointmentIds, ...appointmentIds])
+    setReadAppointmentIds(next)
+    window.localStorage.setItem(appointmentStorageKey, JSON.stringify([...next]))
+  }
 
   const preparedStorageKey = React.useMemo(() => {
     const date = new Date()
@@ -316,7 +398,7 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
                   <span className="rounded-md bg-muted px-2.5 py-1 text-xs font-semibold text-foreground">
                     {totalNotifications} novas
                   </span>
-                  <Button variant="ghost" size="icon-sm" aria-label="Marcar como lidas">
+                  <Button variant="ghost" size="icon-sm" aria-label="Marcar agendamentos como lidos" onClick={markNotificationsAsRead}>
                     <CheckCheck className="size-4" />
                   </Button>
                   <Button
@@ -371,7 +453,9 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
                       )}
                     >
                       <span className={cn('flex size-10 shrink-0 items-center justify-center rounded-md', toneClass[item.tone])}>
-                        {activeTab === 'planos' ? (
+                        {activeTab === 'agendamentos' ? (
+                          <CalendarClock className="size-5" />
+                        ) : activeTab === 'planos' ? (
                           <Clock3 className="size-5" />
                         ) : activeTab === 'comandas' ? (
                           <ShoppingCart className="size-5" />

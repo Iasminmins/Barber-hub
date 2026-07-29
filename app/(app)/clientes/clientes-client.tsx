@@ -97,7 +97,7 @@ function toClientDraft(client: Client): ClientDraft {
 
 export function ClientesClient({ clients }: { clients: Client[] }) {
   const router = useRouter()
-  const { appointments, catalog, employees, imports, orders, deleteRecord, updateRecord } = useAppData()
+  const { appointments, barbershop, catalog, employees, imports, orders, deleteRecord, updateRecord } = useAppData()
   const [records, setRecords] = useState(clients)
   const [query, setQuery] = useState("")
   const [filter, setFilter] = useState<Filter>("todos")
@@ -176,7 +176,9 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
 
   function openWhatsappComposer(client: Client) {
     setWhatsappClient(client)
-    setWhatsappMessage(`Olá, ${client.name}! Tudo bem? Aqui é da Duke Barber.`)
+    setWhatsappMessage(
+      `Olá, ${client.name}! Tudo bem? Passando para lembrar que aqui na ${barbershop.name || "Duke Barber"} temos horários disponíveis hoje e nos próximos dias. Será um prazer receber você novamente!`,
+    )
   }
 
   const filtered = useMemo(() => {

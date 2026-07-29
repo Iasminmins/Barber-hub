@@ -121,6 +121,7 @@ export interface Appointment {
   status: AppointmentStatus
   price: number
   notes?: string
+  createdAt?: string
 }
 
 export type OrderStatus = 'aberta' | 'paga' | 'pendente' | 'cancelada'
