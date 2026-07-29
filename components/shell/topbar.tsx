@@ -46,11 +46,11 @@ const tabConfig: Record<
   NotificationTab,
   { label: string; shortLabel: string; icon: React.ComponentType<{ className?: string }> }
 > = {
+  agendamentos: { label: 'Agendamentos', shortLabel: 'Agenda', icon: CalendarClock },
   aniversarios: { label: 'Aniversários', shortLabel: 'Anivers.', icon: Cake },
   estoque: { label: 'Estoque', shortLabel: 'Estoque', icon: Package },
   comandas: { label: 'Comandas', shortLabel: 'Comandas', icon: ShoppingCart },
   planos: { label: 'Planos', shortLabel: 'Planos', icon: Crown },
-  agendamentos: { label: 'Agendamentos', shortLabel: 'Agenda', icon: CalendarClock },
 }
 
 const toneClass = {
@@ -412,7 +412,7 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
                 </div>
               </div>
 
-              <div className="flex gap-1 overflow-x-auto border-b border-border bg-muted/30 px-3 py-2 no-scrollbar">
+              <div className="grid grid-cols-3 gap-1.5 border-b border-border bg-muted/30 px-3 py-2 sm:grid-cols-5">
                 {(Object.keys(tabConfig) as NotificationTab[]).map((tab) => {
                   const Icon = tabConfig[tab].icon
                   const activeItem = tab === activeTab
@@ -422,14 +422,14 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
                       key={tab}
                       onClick={() => setActiveTab(tab)}
                       className={cn(
-                        'flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition-colors',
+                        'flex min-w-0 items-center justify-center gap-1.5 rounded-md px-1.5 py-2 text-xs font-semibold transition-colors sm:text-sm',
                         activeItem
                           ? 'bg-background text-foreground shadow-sm ring-1 ring-border'
                           : 'text-muted-foreground hover:bg-background hover:text-foreground',
                       )}
                     >
-                      <Icon className="size-4" />
-                      {tabConfig[tab].shortLabel}
+                      <Icon className="size-4 shrink-0" />
+                      <span className="truncate">{tabConfig[tab].shortLabel}</span>
                       {count > 0 ? (
                         <span className="flex size-5 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">
                           {count}
