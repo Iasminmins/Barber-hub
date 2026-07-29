@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from 'react'
+import { useRouter } from 'next/navigation'
 import {
   Bell,
   CalendarClock,
@@ -40,6 +41,8 @@ interface NotificationItem {
   phone?: string
   planName?: string
   dueInDays?: number
+  appointmentId?: string
+  appointmentDate?: string
 }
 
 const tabConfig: Record<
@@ -111,6 +114,8 @@ function buildNotifications(
         title: `${appointment.clientName} agendou`,
         description: `${new Intl.DateTimeFormat('pt-BR').format(new Date(`${appointment.date}T12:00:00`))} às ${appointment.start} · ${appointment.employeeName} · ${appointment.serviceName}`,
         tone: 'green' as const,
+        appointmentId: appointment.id,
+        appointmentDate: appointment.date,
       })),
     aniversarios: clients
       .filter((client) => isBirthdayToday(client.birthDate))
@@ -161,6 +166,7 @@ function buildNotifications(
 }
 
 export function Topbar({ onMenu }: { onMenu: () => void }) {
+  const router = useRouter()
   const { appointments, barbershop, catalog, clients, member, orders, subscriptions } = useAppData()
   const barbershops = [barbershop]
   const [readAppointmentIds, setReadAppointmentIds] = React.useState<Set<string>>(new Set())
@@ -237,6 +243,15 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
     const next = new Set([...readAppointmentIds, ...appointmentIds])
     setReadAppointmentIds(next)
     window.localStorage.setItem(appointmentStorageKey, JSON.stringify([...next]))
+  }
+
+  function openAppointmentNotification(item: NotificationItem) {
+    if (!item.appointmentId || !item.appointmentDate) return
+    const next = new Set(readAppointmentIds).add(item.appointmentId)
+    setReadAppointmentIds(next)
+    window.localStorage.setItem(appointmentStorageKey, JSON.stringify([...next]))
+    setNotificationsOpen(false)
+    router.push(`/agenda?data=${encodeURIComponent(item.appointmentDate)}&agendamento=${encodeURIComponent(item.appointmentId)}`)
   }
 
   const preparedStorageKey = React.useMemo(() => {
@@ -445,8 +460,19 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
                   activeNotifications.map((item) => (
                     <div
                       key={item.id}
+                      role={activeTab === 'agendamentos' ? 'button' : undefined}
+                      tabIndex={activeTab === 'agendamentos' ? 0 : undefined}
+                      onClick={() => {
+                        if (activeTab === 'agendamentos') openAppointmentNotification(item)
+                      }}
+                      onKeyDown={(event) => {
+                        if (activeTab !== 'agendamentos' || (event.key !== 'Enter' && event.key !== ' ')) return
+                        event.preventDefault()
+                        openAppointmentNotification(item)
+                      }}
                       className={cn(
                         'flex items-center gap-3 rounded-lg border p-3 transition-colors',
+                        activeTab === 'agendamentos' && 'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                         item.clientId && preparedBirthdayIds.has(item.clientId)
                           ? 'border-emerald-200 bg-emerald-50/70'
                           : 'border-border bg-background hover:bg-muted/50',

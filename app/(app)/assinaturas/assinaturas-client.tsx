@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import Link from 'next/link'
-import { CalendarDays, CreditCard, DollarSign, Edit3, ListChecks, Pencil, Plus, ReceiptText, Repeat, Save, Search, TrendingUp, Users } from 'lucide-react'
+import { CalendarDays, CreditCard, DollarSign, Edit3, ListChecks, Pencil, Plus, ReceiptText, Repeat, Save, Search, Trash2, TrendingUp, Users } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { StatusBadge } from '@/components/status-badge'
 import { Badge } from '@/components/ui/badge'
@@ -57,6 +57,15 @@ type PlanDraft = {
   cycleDays: string
   globalServiceLimit: string
   includedServices: Array<{ serviceId: string; limit: string }>
+}
+
+type FinancialDraft = {
+  id: string
+  date: string
+  description: string
+  category: string
+  method: PaymentMethod
+  amount: string
 }
 
 const emptyDraft: PlanDraft = {
@@ -175,7 +184,7 @@ export function AssinaturasClient({
   plans: Plan[]
   subscriptions: Subscription[]
 }) {
-  const { barbershop, clients, employees, insertRecord, updateRecord } = useAppData()
+  const { barbershop, clients, employees, deleteRecord, insertRecord, updateRecord } = useAppData()
   const [view, setView] = React.useState<View>('assinaturas')
   const [plans, setPlans] = React.useState(initialPlans)
   const [subscriptionRecords, setSubscriptionRecords] = React.useState(subscriptions)
@@ -187,6 +196,9 @@ export function AssinaturasClient({
   const [subscriptionFilter, setSubscriptionFilter] = React.useState<SubscriptionFilter>('ativas')
   const [subscriptionSearch, setSubscriptionSearch] = React.useState('')
   const [saleSearch, setSaleSearch] = React.useState('')
+  const [editingSale, setEditingSale] = React.useState<FinancialDraft | null>(null)
+  const [saleStatus, setSaleStatus] = React.useState('')
+  const [savingSale, setSavingSale] = React.useState(false)
   const [draft, setDraft] = React.useState<PlanDraft>(emptyDraft)
   const [planDialogOpen, setPlanDialogOpen] = React.useState(false)
   const [planDraftTab, setPlanDraftTab] = React.useState<'basicos' | 'regras'>('basicos')
@@ -271,6 +283,50 @@ export function AssinaturasClient({
     setDraft(plan ? toDraft(plan) : emptyDraft)
     setPlanDraftTab('basicos')
     setPlanDialogOpen(true)
+  }
+
+  function openSaleEditor(entry: FinancialEntry) {
+    setSaleStatus('')
+    setEditingSale({
+      id: entry.id,
+      date: entry.date,
+      description: entry.description,
+      category: entry.category,
+      method: entry.method ?? 'outro',
+      amount: String(entry.amount).replace('.', ','),
+    })
+  }
+
+  async function saveSale() {
+    if (!editingSale) return
+    const amount = parseMoney(editingSale.amount)
+    if (!editingSale.date || !editingSale.description.trim() || amount <= 0) {
+      setSaleStatus('Preencha data, descrição e um valor maior que zero.')
+      return
+    }
+
+    setSavingSale(true)
+    setSaleStatus('')
+    const result = await updateRecord('financial_entries', editingSale.id, {
+      date: editingSale.date,
+      description: editingSale.description.trim(),
+      category: editingSale.category.trim() || 'Assinaturas',
+      method: editingSale.method,
+      amount,
+    })
+    setSavingSale(false)
+
+    if (result.error) {
+      setSaleStatus(result.error)
+      return
+    }
+    setEditingSale(null)
+  }
+
+  async function deleteSale(entry: FinancialEntry) {
+    if (!window.confirm(`Excluir este lançamento de ${formatCurrency(entry.amount)}? Esta ação atualizará a receita do Dashboard.`)) return
+    const result = await deleteRecord('financial_entries', entry.id)
+    if (result.error) window.alert(result.error)
   }
 
   function toggleDraftService(serviceId: string, checked: boolean) {
@@ -880,6 +936,7 @@ export function AssinaturasClient({
                   <TableHead>Plano</TableHead>
                   <TableHead>Metodo</TableHead>
                   <TableHead className="text-right">Valor</TableHead>
+                  <TableHead className="w-24 text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -896,11 +953,34 @@ export function AssinaturasClient({
                     <TableCell className="text-right font-semibold tabular-nums text-success">
                       {formatCurrency(entry.amount)}
                     </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`Editar lançamento de ${entry.description}`}
+                          onClick={() => openSaleEditor(entry)}
+                        >
+                          <Pencil className="size-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          className="text-destructive hover:text-destructive"
+                          aria-label={`Excluir lançamento de ${entry.description}`}
+                          onClick={() => void deleteSale(entry)}
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))}
                 {filteredSubscriptionSales.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="h-28 text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={6} className="h-28 text-center text-sm text-muted-foreground">
                       <ReceiptText className="mx-auto mb-2 size-5" />
                       Nenhuma receita de assinatura encontrada.
                     </TableCell>
@@ -911,6 +991,65 @@ export function AssinaturasClient({
           </Card>
         </div>
       )}
+      <Dialog open={Boolean(editingSale)} onClose={() => setEditingSale(null)} className="sm:max-w-xl">
+        <DialogHeader
+          title="Editar lançamento"
+          description="Corrija os dados desta venda ou renovação de assinatura."
+        />
+        {editingSale ? (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Data">
+              <Input
+                type="date"
+                value={editingSale.date}
+                onChange={(event) => setEditingSale((current) => current ? { ...current, date: event.target.value } : current)}
+              />
+            </Field>
+            <Field label="Método de pagamento">
+              <Select
+                value={editingSale.method}
+                onChange={(event) => setEditingSale((current) => current ? { ...current, method: event.target.value as PaymentMethod } : current)}
+              >
+                <option value="pix">Pix</option>
+                <option value="credito">Crédito</option>
+                <option value="debito">Débito</option>
+                <option value="dinheiro">Dinheiro</option>
+                <option value="outro">Outro</option>
+              </Select>
+            </Field>
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="sale-description">Descrição</Label>
+              <Input
+                id="sale-description"
+                value={editingSale.description}
+                onChange={(event) => setEditingSale((current) => current ? { ...current, description: event.target.value } : current)}
+              />
+            </div>
+            <Field label="Categoria">
+              <Input
+                value={editingSale.category}
+                onChange={(event) => setEditingSale((current) => current ? { ...current, category: event.target.value } : current)}
+              />
+            </Field>
+            <Field label="Valor (R$)">
+              <Input
+                inputMode="decimal"
+                value={editingSale.amount}
+                onChange={(event) => setEditingSale((current) => current ? { ...current, amount: event.target.value } : current)}
+              />
+            </Field>
+            {saleStatus ? <p className="text-sm text-destructive sm:col-span-2">{saleStatus}</p> : null}
+            <div className="flex justify-end gap-2 sm:col-span-2">
+              <Button type="button" variant="outline" onClick={() => setEditingSale(null)}>Cancelar</Button>
+              <Button type="button" variant="gold" disabled={savingSale} onClick={() => void saveSale()}>
+                <Save className="size-4" />
+                {savingSale ? 'Salvando...' : 'Salvar alterações'}
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </Dialog>
+
       <Dialog open={planDialogOpen} onClose={()=>setPlanDialogOpen(false)} className="sm:max-w-3xl">
         <DialogHeader title={editing ? 'Editar Plano' : 'Novo Plano'} description="Configure os detalhes do seu plano de assinatura." />
         <Tabs

@@ -267,6 +267,10 @@ export function DashboardClient({
   const filteredAppointments = dashboardAppointments.filter((appointment) => isInsideRange(appointment.date, range))
   const orderRevenue = paidOrders.reduce((sum, order) => sum + order.total, 0)
   const revenue = orderRevenue + extraRevenue.reduce((sum, entry) => sum + entry.amount, 0)
+  const subscriptionRevenueEntries = extraRevenue.filter((entry) => normalizeText(entry.category).includes('assinatura'))
+  const otherRevenueEntries = extraRevenue.filter((entry) => !normalizeText(entry.category).includes('assinatura'))
+  const subscriptionRevenue = subscriptionRevenueEntries.reduce((sum, entry) => sum + entry.amount, 0)
+  const otherRevenue = otherRevenueEntries.reduce((sum, entry) => sum + entry.amount, 0)
   const avgTicket = paidOrders.length > 0 ? orderRevenue / paidOrders.length : 0
   const openOrders = filteredOrders.filter((order) => order.status === 'aberta').length
   const pendingOrders = filteredOrders.filter((order) => order.status === 'pendente').length
@@ -321,8 +325,25 @@ export function DashboardClient({
           value={formatCurrency(revenue)}
           icon={DollarSign}
           accent="primary"
-          trend={{ value: revenue > 0 ? '12%' : '0%', positive: true }}
-          hint="vs. período anterior"
+          details={
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
+              <span className="inline-flex items-center gap-1 font-medium text-foreground">
+                <span className="size-2 rounded-full bg-primary" />
+                PDV {formatCurrency(orderRevenue)}
+              </span>
+              <span className="text-muted-foreground">·</span>
+              <span className="inline-flex items-center gap-1 font-medium text-foreground">
+                <span className="size-2 rounded-full bg-gold" />
+                Assinaturas {formatCurrency(subscriptionRevenue)}
+              </span>
+              {otherRevenue > 0 ? (
+                <>
+                  <span className="text-muted-foreground">·</span>
+                  <span className="font-medium text-foreground">Outras {formatCurrency(otherRevenue)}</span>
+                </>
+              ) : null}
+            </div>
+          }
         />
         <StatCard
           label="Ticket médio"

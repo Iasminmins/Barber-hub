@@ -11,6 +11,7 @@ interface StatCardProps {
   icon: LucideIcon
   hint?: string
   trend?: { value: string; positive: boolean }
+  details?: React.ReactNode
   accent?: 'primary' | 'gold' | 'success' | 'warning' | 'destructive'
   href?: string
 }
@@ -23,7 +24,7 @@ const accentMap: Record<NonNullable<StatCardProps['accent']>, string> = {
   destructive: 'bg-destructive/12 text-destructive',
 }
 
-export function StatCard({ label, value, icon: Icon, hint, trend, accent = 'primary', href }: StatCardProps) {
+export function StatCard({ label, value, icon: Icon, hint, trend, details, accent = 'primary', href }: StatCardProps) {
   const content = (
     <Card className={cn(
       'h-full p-4',
@@ -38,7 +39,9 @@ export function StatCard({ label, value, icon: Icon, hint, trend, accent = 'prim
           <Icon className="size-5" />
         </span>
       </div>
-      {(hint || trend) && (
+      {details ? (
+        <div className="mt-3">{details}</div>
+      ) : (hint || trend) && (
         <div className="mt-3 flex items-center gap-2 text-xs">
           {trend && (
             <span

@@ -93,7 +93,28 @@ export function AgendaClient({
   const [deletingAppointment, setDeletingAppointment] = React.useState(false)
   const [confirmingDelete, setConfirmingDelete] = React.useState(false)
   const [appointmentError, setAppointmentError] = React.useState('')
+  const handledAgendaLink = React.useRef(false)
   const agendaAppointments = appointments
+
+  React.useEffect(() => {
+    if (handledAgendaLink.current) return
+    handledAgendaLink.current = true
+    const params = new URLSearchParams(window.location.search)
+    const requestedDate = params.get('data') ?? ''
+    if (/^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) {
+      setSelectedDate(requestedDate)
+      setView('dia')
+    }
+    const requestedAppointmentId = params.get('agendamento')
+    const requestedAppointment = appointments.find((appointment) => appointment.id === requestedAppointmentId)
+    if (requestedAppointment) {
+      const client = clients.find((item) => item.id === requestedAppointment.clientId)
+      setEditingAppointment({ ...requestedAppointment })
+      setEditingPhone(client?.phone ?? '')
+      setAppointmentError('')
+      setConfirmingDelete(false)
+    }
+  }, [appointments, clients])
 
   React.useEffect(() => {
     setPublicBookingUrl(`${window.location.origin}/agendar/${encodeURIComponent(publicSlug.trim())}`)
