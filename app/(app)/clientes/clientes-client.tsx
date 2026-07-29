@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect, useMemo, useState } from "react"
-import { AlertTriangle, Cake, CalendarDays, Mail, MessageCircle, Monitor, Pencil, Phone, Plus, Save, Scissors, Search, Smartphone, Star, Trash2, X } from "lucide-react"
+import { AlertTriangle, Cake, CalendarDays, Mail, MessageCircle, Pencil, Phone, Plus, Save, Scissors, Search, Send, Star, Trash2, X } from "lucide-react"
 import type { Client, ClientTag } from "@/lib/types"
 import { formatCurrency, formatDate } from "@/lib/format"
 import { Input } from "@/components/ui/input"
@@ -78,18 +78,10 @@ function currentMonthRange() {
   }
 }
 
-function whatsappAppUrl(phone: string, name: string) {
+function whatsappUrl(phone: string, message: string) {
   const digits = normalizePhone(phone)
   const brNumber = digits.length <= 11 ? `55${digits}` : digits
-  const text = encodeURIComponent(`Olá, ${name}! Tudo bem? Aqui é da Duke Barber.`)
-  return `whatsapp://send?phone=${brNumber}&text=${text}`
-}
-
-function whatsappWebUrl(phone: string, name: string) {
-  const digits = normalizePhone(phone)
-  const brNumber = digits.length <= 11 ? `55${digits}` : digits
-  const text = encodeURIComponent(`Olá, ${name}! Tudo bem? Aqui é da Duke Barber.`)
-  return `https://web.whatsapp.com/send?phone=${brNumber}&text=${text}`
+  return `https://wa.me/${brNumber}?text=${encodeURIComponent(message)}`
 }
 
 function toClientDraft(client: Client): ClientDraft {
@@ -114,6 +106,7 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
   const [historyOpen, setHistoryOpen] = useState(false)
   const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false)
   const [whatsappClient, setWhatsappClient] = useState<Client | null>(null)
+  const [whatsappMessage, setWhatsappMessage] = useState("")
   const [editing, setEditing] = useState<ClientDraft | null>(null)
   const [editStatus, setEditStatus] = useState("")
 
@@ -179,6 +172,11 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
   function openClientDetails(id: string) {
     setSelectedId(id)
     if (window.matchMedia("(max-width: 1279px)").matches) setMobileDetailsOpen(true)
+  }
+
+  function openWhatsappComposer(client: Client) {
+    setWhatsappClient(client)
+    setWhatsappMessage(`Olá, ${client.name}! Tudo bem? Aqui é da Duke Barber.`)
   }
 
   const filtered = useMemo(() => {
@@ -470,7 +468,7 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" size="icon" aria-label={`Editar ${selected.name}`} onClick={() => { setEditStatus(""); setEditing(toClientDraft(selected)) }}><Pencil className="size-4" /></Button>
                 <Button variant="outline" className="min-w-24 flex-1" onClick={() => setHistoryOpen(true)}>Histórico</Button>
-                {normalizePhone(selected.phone) ? <Button variant="outline" size="icon" aria-label={`WhatsApp ${selected.name}`} onClick={() => setWhatsappClient(selected)}><MessageCircle className="size-4" /></Button> : null}
+                {normalizePhone(selected.phone) ? <Button variant="outline" size="icon" aria-label={`WhatsApp ${selected.name}`} onClick={() => openWhatsappComposer(selected)}><MessageCircle className="size-4" /></Button> : null}
                 <Button variant="gold" className="min-w-24 flex-1" onClick={() => router.push(`/agenda/novo?cliente=${encodeURIComponent(selected.id)}`)}>Agendar</Button>
                 <Button variant="destructive" size="icon" aria-label="Excluir cliente" onClick={() => deleteClient(selected.id)}>
                   <Trash2 className="size-4" />
@@ -512,7 +510,7 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
               {selected.notes ? <div><p className="mb-1 text-sm font-medium">Observações</p><p className="text-sm text-muted-foreground">{selected.notes}</p></div> : null}
 
               <div className="grid grid-cols-2 gap-2">
-                {normalizePhone(selected.phone) ? <Button variant="gold" className="col-span-2" onClick={() => setWhatsappClient(selected)}><MessageCircle className="size-4" />Conversar no WhatsApp</Button> : null}
+                {normalizePhone(selected.phone) ? <Button variant="gold" className="col-span-2" onClick={() => openWhatsappComposer(selected)}><MessageCircle className="size-4" />Conversar no WhatsApp</Button> : null}
                 <Button variant="outline" onClick={() => { setMobileDetailsOpen(false); setHistoryOpen(true) }}>Histórico</Button>
                 <Button variant="outline" onClick={() => { setMobileDetailsOpen(false); setEditStatus(""); setEditing(toClientDraft(selected)) }}><Pencil className="size-4" />Editar</Button>
                 <Button variant="gold" className="col-span-2" onClick={() => router.push(`/agenda/novo?cliente=${encodeURIComponent(selected.id)}`)}>Agendar horário</Button>
@@ -525,24 +523,31 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
       <Dialog open={Boolean(whatsappClient)} onClose={() => setWhatsappClient(null)} className="sm:max-w-sm">
         {whatsappClient ? (
           <>
-            <DialogHeader title="Abrir conversa" description={`Escolha onde conversar com ${whatsappClient.name}.`} />
-            <div className="grid gap-2">
-              <a
-                href={whatsappAppUrl(whatsappClient.phone, whatsappClient.name)}
-                className={buttonVariants({ variant: "gold" })}
-                onClick={() => setWhatsappClient(null)}
-              >
-                <Smartphone className="size-4" />Aplicativo do WhatsApp
-              </a>
-              <a
-                href={whatsappWebUrl(whatsappClient.phone, whatsappClient.name)}
-                target="_blank"
-                rel="noreferrer"
-                className={buttonVariants({ variant: "outline" })}
-                onClick={() => setWhatsappClient(null)}
-              >
-                <Monitor className="size-4" />WhatsApp Web
-              </a>
+            <DialogHeader title="Enviar mensagem WhatsApp" description={`Enviar para ${whatsappClient.name} · ${whatsappClient.phone}`} />
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="whatsappMessage">Mensagem</Label>
+                <Textarea
+                  id="whatsappMessage"
+                  autoFocus
+                  value={whatsappMessage}
+                  onChange={(event) => setWhatsappMessage(event.target.value)}
+                  placeholder="Digite a mensagem para o cliente..."
+                  className="min-h-32"
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setWhatsappClient(null)}>Cancelar</Button>
+                <a
+                  href={whatsappUrl(whatsappClient.phone, whatsappMessage)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={buttonVariants({ variant: "gold" })}
+                  onClick={() => setWhatsappClient(null)}
+                >
+                  <Send className="size-4" />Enviar WhatsApp
+                </a>
+              </div>
             </div>
           </>
         ) : null}
