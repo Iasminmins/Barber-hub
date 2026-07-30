@@ -170,7 +170,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       plans: plans.map((r:any)=>({ id:r.id, barbershopId:r.barbershop_id, name:r.name, price:num(r.price), type:r.type, credits:r.credits??undefined, description:r.description??'', active:r.active, rules:normalizePlanRules(r.rules) })),
       subscriptions: subscriptions.map((r:any)=>({ id:r.id, barbershopId:r.barbershop_id, planId:r.plan_id??'', planName:r.plan_name, clientId:r.client_id??'', clientName:r.client_name, employeeId:r.employee_id??'', employeeName:r.employee_name??'', price:num(r.price), startDate:r.start_date, dueDate:r.due_date, status:r.status, creditsUsed:r.credits_used??undefined, creditsTotal:r.credits_total??undefined })),
       commissions: commissions.map((r:any)=>({ id:r.id, barbershopId:r.barbershop_id, employeeId:r.employee_id??'', employeeName:r.employee_name, origin:r.origin, reference:r.reference, base:num(r.base), rate:num(r.rate), amount:num(r.amount), status:r.status, date:r.date })),
-      financialEntries: financial.map((r:any)=>({ id:r.id, barbershopId:r.barbershop_id, type:r.type, category:r.category, description:r.description, amount:num(r.amount), method:r.method??undefined, date:r.date })),
+      financialEntries: financial.map((r:any)=>({ id:r.id, barbershopId:r.barbershop_id, orderId:r.order_id??undefined, type:r.type, category:r.category, description:r.description, amount:num(r.amount), method:r.method??undefined, date:r.date })),
       imports: imports.map((r:any)=>({ id:r.id, barbershopId:r.barbershop_id, entity:r.entity, fileName:r.file_name, totalRows:num(r.total_rows), importedRows:num(r.imported_rows), errorRows:num(r.error_rows), status:r.status, createdAt:r.created_at, createdBy:r.created_by })),
     })
   }, [])

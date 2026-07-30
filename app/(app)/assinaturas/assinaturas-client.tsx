@@ -61,6 +61,7 @@ type PlanDraft = {
 
 type FinancialDraft = {
   id: string
+  orderId?: string
   date: string
   description: string
   category: string
@@ -184,7 +185,7 @@ export function AssinaturasClient({
   plans: Plan[]
   subscriptions: Subscription[]
 }) {
-  const { barbershop, clients, employees, deleteRecord, insertRecord, updateRecord } = useAppData()
+  const { barbershop, clients, employees, orders, deleteRecord, insertRecord, updateRecord } = useAppData()
   const [view, setView] = React.useState<View>('assinaturas')
   const [plans, setPlans] = React.useState(initialPlans)
   const [subscriptionRecords, setSubscriptionRecords] = React.useState(subscriptions)
@@ -289,6 +290,7 @@ export function AssinaturasClient({
     setSaleStatus('')
     setEditingSale({
       id: entry.id,
+      orderId: entry.orderId,
       date: entry.date,
       description: entry.description,
       category: entry.category,
@@ -307,6 +309,30 @@ export function AssinaturasClient({
 
     setSavingSale(true)
     setSaleStatus('')
+    const linkedOrder = editingSale.orderId
+      ? orders.find((order) => order.id === editingSale.orderId)
+      : undefined
+    if (linkedOrder) {
+      const orderResult = await updateRecord('orders', linkedOrder.id, {
+        method: editingSale.method,
+        total: amount,
+        created_at: `${editingSale.date}T12:00:00-03:00`,
+      })
+      if (orderResult.error) {
+        setSavingSale(false)
+        setSaleStatus(`Não foi possível atualizar a comanda vinculada: ${orderResult.error}`)
+        return
+      }
+      const linkedItem = linkedOrder.items.find((item) => item.name.startsWith('[Assinatura]'))
+      if (linkedItem) {
+        const itemResult = await updateRecord('order_items', linkedItem.id, { unit_price: amount })
+        if (itemResult.error) {
+          setSavingSale(false)
+          setSaleStatus(`Não foi possível atualizar o item da comanda: ${itemResult.error}`)
+          return
+        }
+      }
+    }
     const result = await updateRecord('financial_entries', editingSale.id, {
       date: editingSale.date,
       description: editingSale.description.trim(),
@@ -325,7 +351,9 @@ export function AssinaturasClient({
 
   async function deleteSale(entry: FinancialEntry) {
     if (!window.confirm(`Excluir este lançamento de ${formatCurrency(entry.amount)}? Esta ação atualizará a receita do Dashboard.`)) return
-    const result = await deleteRecord('financial_entries', entry.id)
+    const result = entry.orderId
+      ? await deleteRecord('orders', entry.orderId)
+      : await deleteRecord('financial_entries', entry.id)
     if (result.error) window.alert(result.error)
   }
 
@@ -481,8 +509,59 @@ export function AssinaturasClient({
       return
     }
 
+    const nextOrderNumber = orders.length > 0 ? Math.max(...orders.map((order) => order.number)) + 1 : 1
+    const orderResult = await insertRecord('orders', {
+      barbershop_id: barbershop.id,
+      number: nextOrderNumber,
+      client_id: subscription.clientId || null,
+      client_name: subscription.clientName,
+      employee_id: subscription.employeeId || null,
+      employee_name: subscription.employeeName || 'Não informado',
+      discount: 0,
+      surcharge: 0,
+      status: 'paga',
+      method,
+      total: subscription.price,
+    })
+
+    if (orderResult.error || !orderResult.data) {
+      await updateRecord('subscriptions', subscription.id, {
+        start_date: subscription.startDate,
+        due_date: subscription.dueDate,
+        status: subscription.status,
+        credits_used: subscription.creditsUsed ?? null,
+      })
+      setRenewingSubscriptionId(null)
+      setRenewalStatus(`Não foi possível criar a comanda; a renovação foi desfeita: ${orderResult.error ?? 'erro inesperado'}`)
+      return
+    }
+
+    const itemResult = await insertRecord('order_items', {
+      order_id: orderResult.data.id,
+      barbershop_id: barbershop.id,
+      ref_id: subscription.planId || null,
+      type: 'produto',
+      name: `[Assinatura] ${subscription.planName}`,
+      quantity: 1,
+      unit_price: subscription.price,
+    })
+
+    if (itemResult.error) {
+      await deleteRecord('orders', orderResult.data.id)
+      await updateRecord('subscriptions', subscription.id, {
+        start_date: subscription.startDate,
+        due_date: subscription.dueDate,
+        status: subscription.status,
+        credits_used: subscription.creditsUsed ?? null,
+      })
+      setRenewingSubscriptionId(null)
+      setRenewalStatus(`Não foi possível criar o item da comanda; a renovação foi desfeita: ${itemResult.error}`)
+      return
+    }
+
     const financialResult = await insertRecord('financial_entries', {
       barbershop_id: barbershop.id,
+      order_id: orderResult.data.id,
       type: 'entrada',
       category: 'Assinaturas',
       description: `Renovação - ${subscription.clientName} - ${subscription.planName}`,
@@ -492,6 +571,7 @@ export function AssinaturasClient({
     })
 
     if (financialResult.error) {
+      await deleteRecord('orders', orderResult.data.id)
       await updateRecord('subscriptions', subscription.id, {
         start_date: subscription.startDate,
         due_date: subscription.dueDate,
@@ -515,7 +595,7 @@ export function AssinaturasClient({
           }
         : item
     )))
-    setRenewalStatus(`Assinatura de ${subscription.clientName} renovada até ${formatDate(dueDate)} e lançada na receita de hoje.`)
+    setRenewalStatus(`Assinatura de ${subscription.clientName} renovada até ${formatDate(dueDate)} e registrada na comanda #${nextOrderNumber}.`)
   }
 
   return (

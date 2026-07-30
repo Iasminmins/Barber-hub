@@ -218,6 +218,7 @@ export type FinancialType = 'entrada' | 'saida'
 export interface FinancialEntry {
   id: string
   barbershopId: string
+  orderId?: string
   type: FinancialType
   category: string
   description: string

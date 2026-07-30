@@ -84,7 +84,7 @@ function normalizeText(value: string) {
 }
 
 function isStandaloneRevenue(entry: FinancialEntry) {
-  return entry.type === 'entrada' && normalizeText(entry.category) !== 'comandas'
+  return entry.type === 'entrada' && !entry.orderId && normalizeText(entry.category) !== 'comandas'
 }
 
 function buildRevenueSeries(orders: Order[], financialEntries: FinancialEntry[], range: DateRange, period: Period) {
@@ -226,6 +226,10 @@ function buildRanking(orders: Order[], employees: Employee[], range: DateRange) 
   return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue)
 }
 
+function isSubscriptionOrder(order: Order) {
+  return order.items.some((item) => item.name.startsWith('[Assinatura]'))
+}
+
 export function DashboardClient({
   appointments,
   catalog,
@@ -267,10 +271,14 @@ export function DashboardClient({
   const filteredAppointments = dashboardAppointments.filter((appointment) => isInsideRange(appointment.date, range))
   const orderRevenue = paidOrders.reduce((sum, order) => sum + order.total, 0)
   const revenue = orderRevenue + extraRevenue.reduce((sum, entry) => sum + entry.amount, 0)
+  const subscriptionOrderRevenue = paidOrders
+    .filter(isSubscriptionOrder)
+    .reduce((sum, order) => sum + order.total, 0)
   const subscriptionRevenueEntries = extraRevenue.filter((entry) => normalizeText(entry.category).includes('assinatura'))
   const otherRevenueEntries = extraRevenue.filter((entry) => !normalizeText(entry.category).includes('assinatura'))
-  const subscriptionRevenue = subscriptionRevenueEntries.reduce((sum, entry) => sum + entry.amount, 0)
+  const subscriptionRevenue = subscriptionRevenueEntries.reduce((sum, entry) => sum + entry.amount, 0) + subscriptionOrderRevenue
   const otherRevenue = otherRevenueEntries.reduce((sum, entry) => sum + entry.amount, 0)
+  const pdvRevenue = orderRevenue - subscriptionOrderRevenue
   const avgTicket = paidOrders.length > 0 ? orderRevenue / paidOrders.length : 0
   const openOrders = filteredOrders.filter((order) => order.status === 'aberta').length
   const pendingOrders = filteredOrders.filter((order) => order.status === 'pendente').length
@@ -329,7 +337,7 @@ export function DashboardClient({
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
               <span className="inline-flex items-center gap-1 font-medium text-foreground">
                 <span className="size-2 rounded-full bg-primary" />
-                PDV {formatCurrency(orderRevenue)}
+                PDV {formatCurrency(pdvRevenue)}
               </span>
               <span className="text-muted-foreground">·</span>
               <span className="inline-flex items-center gap-1 font-medium text-foreground">

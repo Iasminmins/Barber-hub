@@ -271,14 +271,25 @@ export default function ComandasPage() {
     if (orderResult.error) { setSavingOrder(false); setEditError(orderResult.error); return }
 
     const description = `Comanda #${editingOrder.number}`
-    const { data: financeEntry, error: financeLookupError } = await supabase
+    const { data: linkedFinanceEntry, error: linkedFinanceLookupError } = await supabase
       .from('financial_entries')
-      .select('id')
+      .select('id, category, description')
       .eq('barbershop_id', barbershop.id)
-      .eq('category', 'Comandas')
-      .eq('description', description)
+      .eq('order_id', editingOrder.id)
       .maybeSingle()
-    if (financeLookupError) { setSavingOrder(false); setEditError(`Comanda salva, mas o financeiro falhou: ${financeLookupError.message}`); return }
+    if (linkedFinanceLookupError) { setSavingOrder(false); setEditError(`Comanda salva, mas o financeiro falhou: ${linkedFinanceLookupError.message}`); return }
+    let financeEntry = linkedFinanceEntry
+    if (!financeEntry) {
+      const legacyLookup = await supabase
+        .from('financial_entries')
+        .select('id, category, description')
+        .eq('barbershop_id', barbershop.id)
+        .eq('category', 'Comandas')
+        .eq('description', description)
+        .maybeSingle()
+      if (legacyLookup.error) { setSavingOrder(false); setEditError(`Comanda salva, mas o financeiro falhou: ${legacyLookup.error.message}`); return }
+      financeEntry = legacyLookup.data
+    }
 
     if (editingOrder.status === 'paga') {
       const financeValues = {
@@ -290,6 +301,7 @@ export default function ComandasPage() {
         ? await supabase.from('financial_entries').update(financeValues).eq('id', financeEntry.id)
         : await supabase.from('financial_entries').insert({
             barbershop_id: barbershop.id,
+            order_id: editingOrder.id,
             type: 'entrada',
             category: 'Comandas',
             description,
