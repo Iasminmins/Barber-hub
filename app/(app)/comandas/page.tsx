@@ -12,6 +12,7 @@ import { Dialog, DialogHeader } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Table,
   TableBody,
@@ -116,6 +117,12 @@ export default function ComandasPage() {
   const [editingDate, setEditingDate] = useState('')
   const [editError, setEditError] = useState('')
   const [savingOrder, setSavingOrder] = useState(false)
+  const [whatsAppDraft, setWhatsAppDraft] = useState<{
+    orderNumber: number
+    clientName: string
+    phone: string
+    message: string
+  } | null>(null)
 
   useEffect(() => {
     const nextOrders = sortOrdersByDate(databaseOrders)
@@ -188,7 +195,7 @@ export default function ComandasPage() {
       return
     }
 
-    const url = whatsappUrl(client.phone, orderMessage({
+    const message = orderMessage({
       clientName: order.clientName,
       orderNumber: order.number,
       items: order.items,
@@ -198,12 +205,24 @@ export default function ComandasPage() {
       payment: order.method ? METHOD_LABEL[order.method] : 'A definir',
       status: STATUS_LABEL[order.status],
       barbershopName: barbershop.name,
-    }))
+    })
+    setWhatsAppDraft({
+      orderNumber: order.number,
+      clientName: order.clientName,
+      phone: client.phone,
+      message,
+    })
+  }
+
+  function confirmWhatsAppSend() {
+    if (!whatsAppDraft?.message.trim()) return
+    const url = whatsappUrl(whatsAppDraft.phone, whatsAppDraft.message.trim())
     if (!url) {
-      window.alert(`O telefone cadastrado para ${order.clientName} é inválido.`)
+      window.alert(`O telefone cadastrado para ${whatsAppDraft.clientName} é inválido.`)
       return
     }
     window.open(url, '_blank', 'noopener,noreferrer')
+    setWhatsAppDraft(null)
   }
 
   function updateEditingItem(index: number, values: Partial<OrderItem>) {
@@ -530,6 +549,46 @@ export default function ComandasPage() {
           </TableBody>
         </Table>
       </Card>
+
+      <Dialog open={Boolean(whatsAppDraft)} onClose={() => setWhatsAppDraft(null)} className="sm:max-w-xl">
+        {whatsAppDraft ? (
+          <>
+            <DialogHeader
+              title={`Enviar comanda #${whatsAppDraft.orderNumber}`}
+              description={`Revise a mensagem para ${whatsAppDraft.clientName} antes de abrir o WhatsApp.`}
+            />
+            <div className="space-y-2">
+              <Label htmlFor="whatsapp-order-message">Mensagem</Label>
+              <Textarea
+                id="whatsapp-order-message"
+                value={whatsAppDraft.message}
+                onChange={(event) => setWhatsAppDraft({
+                  ...whatsAppDraft,
+                  message: event.target.value,
+                })}
+                className="min-h-72 resize-y"
+                autoFocus
+              />
+              <p className="text-xs text-muted-foreground">
+                Você ainda poderá revisar a mensagem novamente dentro do WhatsApp.
+              </p>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setWhatsAppDraft(null)}>
+                Cancelar
+              </Button>
+              <Button
+                className="bg-emerald-600 text-white hover:bg-emerald-700"
+                disabled={!whatsAppDraft.message.trim()}
+                onClick={confirmWhatsAppSend}
+              >
+                <MessageCircle className="size-4" />
+                Enviar pelo WhatsApp
+              </Button>
+            </div>
+          </>
+        ) : null}
+      </Dialog>
 
       <Dialog open={Boolean(editingOrder)} onClose={() => !savingOrder && setEditingOrder(null)} className="sm:max-w-3xl">
         {editingOrder ? (
