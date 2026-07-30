@@ -81,7 +81,9 @@ export default function FuncionariosPage() {
   const [accessLoading, setAccessLoading] = useState(false)
   const [editStatus, setEditStatus] = useState('')
   const [section, setSection] = useState<'cadastro' | 'equipe' | 'semanal'>('equipe')
+  const [reportPeriod, setReportPeriod] = useState<'diario' | 'semanal'>('semanal')
   const [weekOffset, setWeekOffset] = useState(0)
+  const [dayOffset, setDayOffset] = useState(0)
   const [accessForm, setAccessForm] = useState<{ employeeId:string; email:string; password:string; confirmPassword:string; permissions:StaffPermission[] }>({ employeeId:'', email:'', password:'', confirmPassword:'', permissions:['dashboard','agenda'] })
   const [newEmployeeStatus, setNewEmployeeStatus] = useState('')
   const [creatingEmployee, setCreatingEmployee] = useState(false)
@@ -131,15 +133,23 @@ export default function FuncionariosPage() {
     const key = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
     return { start: key(start), end: key(end), startDate: start, endDate: end }
   }, [weekOffset])
-  const weeklyPaidOrders = useMemo(() => appData.orders
-    .filter((order) => order.status === 'paga' && order.createdAt.slice(0, 10) >= weekRange.start && order.createdAt.slice(0, 10) <= weekRange.end)
+  const dayRange = useMemo(() => {
+    const date = new Date()
+    date.setHours(0, 0, 0, 0)
+    date.setDate(date.getDate() + dayOffset)
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+    return { start: key, end: key, startDate: date, endDate: date }
+  }, [dayOffset])
+  const reportRange = reportPeriod === 'diario' ? dayRange : weekRange
+  const reportPaidOrders = useMemo(() => appData.orders
+    .filter((order) => order.status === 'paga' && order.createdAt.slice(0, 10) >= reportRange.start && order.createdAt.slice(0, 10) <= reportRange.end)
     .map((order) => ({
       order,
       resolvedEmployeeId: resolveOrderEmployeeId(order, employees),
       value: paidOrderValue(order),
-    })), [appData.orders, employees, weekRange])
-  const weeklyValues = useMemo(() => new Map(employees.map((employee) => {
-    const orders = weeklyPaidOrders.filter((item) => item.resolvedEmployeeId === employee.id)
+    })), [appData.orders, employees, reportRange])
+  const reportValues = useMemo(() => new Map(employees.map((employee) => {
+    const orders = reportPaidOrders.filter((item) => item.resolvedEmployeeId === employee.id)
     const revenue = orders.reduce((sum, item) => sum + item.value, 0)
     const salesCommission = orders.reduce((sum, item) => sum + item.order.items.reduce(
       (itemSum, orderItem) => itemSum + orderItem.quantity * orderItem.unitPrice
@@ -147,20 +157,20 @@ export default function FuncionariosPage() {
       0,
     ), 0)
     const subscriptionCommission = commissions
-      .filter((item) => item.employeeId === employee.id && item.origin === 'assinatura' && item.date >= weekRange.start && item.date <= weekRange.end)
+      .filter((item) => item.employeeId === employee.id && item.origin === 'assinatura' && item.date >= reportRange.start && item.date <= reportRange.end)
       .reduce((sum, item) => sum + item.amount, 0)
     const paid = commissions
-      .filter((item) => item.employeeId === employee.id && item.status === 'paga' && item.date >= weekRange.start && item.date <= weekRange.end)
+      .filter((item) => item.employeeId === employee.id && item.status === 'paga' && item.date >= reportRange.start && item.date <= reportRange.end)
       .reduce((sum, item) => sum + item.amount, 0)
     const generated = salesCommission + subscriptionCommission
     return [employee.id, { revenue, generated, paid, pending: Math.max(0, generated - paid), orders: orders.length }]
-  })), [commissions, employees, weeklyPaidOrders, weekRange])
-  const weeklyRevenue = [...weeklyValues.values()].reduce((sum, item) => sum + item.revenue, 0)
-  const weeklyGenerated = [...weeklyValues.values()].reduce((sum, item) => sum + item.generated, 0)
-  const weeklyPaid = [...weeklyValues.values()].reduce((sum, item) => sum + item.paid, 0)
-  const weeklyPending = [...weeklyValues.values()].reduce((sum, item) => sum + item.pending, 0)
-  const weeklyEmployees = employees
-    .map((employee) => ({ employee, values: weeklyValues.get(employee.id)! }))
+  })), [commissions, employees, reportPaidOrders, reportRange])
+  const reportRevenue = [...reportValues.values()].reduce((sum, item) => sum + item.revenue, 0)
+  const reportGenerated = [...reportValues.values()].reduce((sum, item) => sum + item.generated, 0)
+  const reportPaid = [...reportValues.values()].reduce((sum, item) => sum + item.paid, 0)
+  const reportPending = [...reportValues.values()].reduce((sum, item) => sum + item.pending, 0)
+  const reportEmployees = employees
+    .map((employee) => ({ employee, values: reportValues.get(employee.id)! }))
     .sort((left, right) => right.values.revenue - left.values.revenue)
 
   useEffect(() => {
@@ -310,7 +320,7 @@ export default function FuncionariosPage() {
           onClick={() => setSection('semanal')}
           className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors ${section === 'semanal' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
         >
-          <CalendarDays className="size-4" /> Relatório semanal
+          <CalendarDays className="size-4" /> Relatórios
         </button>
       </div>
 
@@ -384,23 +394,49 @@ export default function FuncionariosPage() {
         <div className="space-y-4">
           <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-blue-800">
             <p className="flex items-center gap-2 font-semibold"><CalendarDays className="size-4" /> Período de comissões</p>
-            <p className="mt-1 text-sm">As comissões são calculadas de domingo a sábado de cada semana.</p>
+            <p className="mt-1 text-sm">
+              {reportPeriod === 'diario'
+                ? 'Confira as vendas e comissões geradas em um dia específico.'
+                : 'As comissões são calculadas de domingo a sábado de cada semana.'}
+            </p>
           </div>
 
           <Card className="p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h2 className="text-lg font-semibold text-foreground">Relatório semanal da equipe</h2>
+                <h2 className="text-lg font-semibold text-foreground">
+                  Relatório {reportPeriod === 'diario' ? 'diário' : 'semanal'} da equipe
+                </h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {new Intl.DateTimeFormat('pt-BR').format(weekRange.startDate)} – {new Intl.DateTimeFormat('pt-BR').format(weekRange.endDate)}
+                  {reportPeriod === 'diario'
+                    ? new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' }).format(reportRange.startDate)
+                    : `${new Intl.DateTimeFormat('pt-BR').format(reportRange.startDate)} – ${new Intl.DateTimeFormat('pt-BR').format(reportRange.endDate)}`}
                 </p>
               </div>
-              <div className="flex items-center gap-1">
-                <Button variant="outline" size="icon-sm" onClick={() => setWeekOffset((value) => value - 1)} aria-label="Semana anterior">
+              <div className="flex flex-wrap items-center justify-end gap-1">
+                <div className="mr-2 flex rounded-md border border-border bg-muted/30 p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setReportPeriod('diario')}
+                    className={`rounded px-3 py-1.5 text-sm font-medium transition-colors ${reportPeriod === 'diario' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'}`}
+                  >
+                    Diário
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setReportPeriod('semanal')}
+                    className={`rounded px-3 py-1.5 text-sm font-medium transition-colors ${reportPeriod === 'semanal' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'}`}
+                  >
+                    Semanal
+                  </button>
+                </div>
+                <Button variant="outline" size="icon-sm" onClick={() => reportPeriod === 'diario' ? setDayOffset((value) => value - 1) : setWeekOffset((value) => value - 1)} aria-label={reportPeriod === 'diario' ? 'Dia anterior' : 'Semana anterior'}>
                   <ChevronLeft className="size-4" />
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => setWeekOffset(0)}>Semana atual</Button>
-                <Button variant="outline" size="icon-sm" onClick={() => setWeekOffset((value) => value + 1)} aria-label="Próxima semana">
+                <Button variant="outline" size="sm" onClick={() => reportPeriod === 'diario' ? setDayOffset(0) : setWeekOffset(0)}>
+                  {reportPeriod === 'diario' ? 'Hoje' : 'Semana atual'}
+                </Button>
+                <Button variant="outline" size="icon-sm" onClick={() => reportPeriod === 'diario' ? setDayOffset((value) => value + 1) : setWeekOffset((value) => value + 1)} aria-label={reportPeriod === 'diario' ? 'Próximo dia' : 'Próxima semana'}>
                   <ChevronRight className="size-4" />
                 </Button>
               </div>
@@ -408,10 +444,10 @@ export default function FuncionariosPage() {
 
             <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
               {[
-                ['Comissões pendentes', weeklyPending, 'text-amber-700'],
-                ['Comissões pagas', weeklyPaid, 'text-emerald-700'],
-                ['Comissões geradas', weeklyGenerated, 'text-foreground'],
-                ['Vendas totais', weeklyRevenue, 'text-foreground'],
+                ['Comissões pendentes', reportPending, 'text-amber-700'],
+                ['Comissões pagas', reportPaid, 'text-emerald-700'],
+                ['Comissões geradas', reportGenerated, 'text-foreground'],
+                ['Vendas totais', reportRevenue, 'text-foreground'],
               ].map(([label, value, color]) => (
                 <div key={String(label)} className="rounded-xl border border-border bg-muted/20 p-4">
                   <p className="text-sm text-muted-foreground">{label}</p>
@@ -423,7 +459,7 @@ export default function FuncionariosPage() {
             <div className="mt-6 border-t border-border pt-5">
               <h3 className="mb-3 flex items-center gap-2 font-semibold"><Users className="size-4" /> Detalhamento por funcionário</h3>
               <div className="space-y-3">
-                {weeklyEmployees.map(({ employee, values }) => (
+                {reportEmployees.map(({ employee, values }) => (
                   <div key={employee.id} className="flex flex-col gap-4 rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-50/70 to-blue-50/70 p-4 sm:flex-row sm:items-center">
                     <Avatar name={employee.name} color={employee.avatarColor} className="size-10" />
                     <div className="min-w-0 flex-1">

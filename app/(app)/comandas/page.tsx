@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { CalendarDays, CreditCard, Crown, Minus, Pencil, Plus, Printer, Receipt, Save, Trash2, Upload } from 'lucide-react'
+import { CalendarDays, CreditCard, Crown, MessageCircle, Minus, Pencil, Plus, Printer, Receipt, Save, Trash2, Upload } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { PageHeader } from '@/components/page-header'
 import { StatusBadge } from '@/components/status-badge'
@@ -24,6 +24,7 @@ import { useAppData } from '@/components/data/app-data-provider'
 import { formatCurrency, formatDate } from '@/lib/format'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import type { Order, OrderItem, OrderStatus, PaymentMethod } from '@/lib/types'
+import { orderMessage, whatsappUrl } from '@/lib/whatsapp'
 
 type EditableOrder = Omit<Order, 'items'> & { items: OrderItem[] }
 
@@ -33,6 +34,13 @@ const METHOD_LABEL: Record<string, string> = {
   credito: 'Crédito',
   debito: 'Débito',
   outro: 'Outro',
+}
+
+const STATUS_LABEL: Record<OrderStatus, string> = {
+  aberta: 'Aberta',
+  pendente: 'Pendente',
+  paga: 'Paga',
+  cancelada: 'Cancelada',
 }
 
 function toDateKey(value: string | null | undefined) {
@@ -168,6 +176,34 @@ export default function ComandasPage() {
     setEditError('')
     setEditingDate(toDateTimeLocal(order.createdAt))
     setEditingOrder({ ...order, items: order.items.map((item) => ({ ...item })) })
+  }
+
+  function sendOrderByWhatsApp(order: Order) {
+    const client = clients.find((item) => (
+      item.id === order.clientId
+      || normalizeName(item.name) === normalizeName(order.clientName)
+    ))
+    if (!client?.phone) {
+      window.alert(`O cliente ${order.clientName} não possui telefone cadastrado.`)
+      return
+    }
+
+    const url = whatsappUrl(client.phone, orderMessage({
+      clientName: order.clientName,
+      orderNumber: order.number,
+      items: order.items,
+      discount: order.discount,
+      surcharge: order.surcharge,
+      total: order.total,
+      payment: order.method ? METHOD_LABEL[order.method] : 'A definir',
+      status: STATUS_LABEL[order.status],
+      barbershopName: barbershop.name,
+    }))
+    if (!url) {
+      window.alert(`O telefone cadastrado para ${order.clientName} é inválido.`)
+      return
+    }
+    window.open(url, '_blank', 'noopener,noreferrer')
   }
 
   function updateEditingItem(index: number, values: Partial<OrderItem>) {
@@ -464,6 +500,16 @@ export default function ComandasPage() {
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
+                      aria-label={`Enviar comanda #${order.number} pelo WhatsApp`}
+                      title="Enviar pelo WhatsApp"
+                      onClick={() => sendOrderByWhatsApp(order)}
+                    >
+                      <MessageCircle className="size-4" />
+                    </Button>
                     <Button variant="ghost" size="icon-sm" aria-label="Editar comanda" onClick={() => openOrderEditor(order)}>
                       <Pencil className="size-4" />
                     </Button>

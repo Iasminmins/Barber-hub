@@ -193,7 +193,7 @@ export function AssinaturasClient({
   const [subscriptionStatus, setSubscriptionStatus] = React.useState('')
   const [renewalStatus, setRenewalStatus] = React.useState('')
   const [renewingSubscriptionId, setRenewingSubscriptionId] = React.useState<string | null>(null)
-  const [renewalDraft, setRenewalDraft] = React.useState<{ subscription: Subscription; method: PaymentMethod } | null>(null)
+  const [renewalDraft, setRenewalDraft] = React.useState<{ subscription: Subscription; method: PaymentMethod; employeeId: string } | null>(null)
   const [subscriptionFilter, setSubscriptionFilter] = React.useState<SubscriptionFilter>('ativas')
   const [subscriptionSearch, setSubscriptionSearch] = React.useState('')
   const [saleSearch, setSaleSearch] = React.useState('')
@@ -480,8 +480,13 @@ export function AssinaturasClient({
     setEditingSubscription(null)
   }
 
-  async function renewSubscription(subscription: Subscription, method: PaymentMethod) {
+  async function renewSubscription(subscription: Subscription, method: PaymentMethod, employeeId: string) {
     const plan = plans.find((item) => item.id === subscription.planId)
+    const employee = employees.find((item) => item.id === employeeId)
+    if (!employee) {
+      setRenewalStatus('Selecione o barbeiro responsável por esta renovação.')
+      return
+    }
     const cycleDays = plan?.rules?.cycleDays ?? 30
     const today = new Date()
     today.setHours(0, 0, 0, 0)
@@ -501,6 +506,8 @@ export function AssinaturasClient({
       due_date: dueDate,
       status: 'ativo',
       credits_used: subscription.creditsTotal ? 0 : null,
+      employee_id: employee.id,
+      employee_name: employee.name,
     })
 
     if (result.error) {
@@ -515,8 +522,8 @@ export function AssinaturasClient({
       number: nextOrderNumber,
       client_id: subscription.clientId || null,
       client_name: subscription.clientName,
-      employee_id: subscription.employeeId || null,
-      employee_name: subscription.employeeName || 'Não informado',
+      employee_id: employee.id,
+      employee_name: employee.name,
       discount: 0,
       surcharge: 0,
       status: 'paga',
@@ -530,6 +537,8 @@ export function AssinaturasClient({
         due_date: subscription.dueDate,
         status: subscription.status,
         credits_used: subscription.creditsUsed ?? null,
+        employee_id: subscription.employeeId || null,
+        employee_name: subscription.employeeName || null,
       })
       setRenewingSubscriptionId(null)
       setRenewalStatus(`Não foi possível criar a comanda; a renovação foi desfeita: ${orderResult.error ?? 'erro inesperado'}`)
@@ -553,6 +562,8 @@ export function AssinaturasClient({
         due_date: subscription.dueDate,
         status: subscription.status,
         credits_used: subscription.creditsUsed ?? null,
+        employee_id: subscription.employeeId || null,
+        employee_name: subscription.employeeName || null,
       })
       setRenewingSubscriptionId(null)
       setRenewalStatus(`Não foi possível criar o item da comanda; a renovação foi desfeita: ${itemResult.error}`)
@@ -577,6 +588,8 @@ export function AssinaturasClient({
         due_date: subscription.dueDate,
         status: subscription.status,
         credits_used: subscription.creditsUsed ?? null,
+        employee_id: subscription.employeeId || null,
+        employee_name: subscription.employeeName || null,
       })
       setRenewingSubscriptionId(null)
       setRenewalStatus(`Não foi possível registrar o pagamento; a renovação foi desfeita: ${financialResult.error}`)
@@ -592,6 +605,8 @@ export function AssinaturasClient({
             dueDate,
             status: 'ativo',
             creditsUsed: item.creditsTotal ? 0 : item.creditsUsed,
+            employeeId: employee.id,
+            employeeName: employee.name,
           }
         : item
     )))
@@ -724,7 +739,7 @@ export function AssinaturasClient({
                         disabled={renewingSubscriptionId === sub.id}
                         onClick={(event) => {
                           event.stopPropagation()
-                          setRenewalDraft({ subscription: sub, method: 'pix' })
+                          setRenewalDraft({ subscription: sub, method: 'pix', employeeId: sub.employeeId || '' })
                         }}
                       >
                         <Repeat className="size-4" />
@@ -805,7 +820,7 @@ export function AssinaturasClient({
                           disabled={renewingSubscriptionId === sub.id}
                           onClick={(event) => {
                             event.stopPropagation()
-                            setRenewalDraft({ subscription: sub, method: 'pix' })
+                            setRenewalDraft({ subscription: sub, method: 'pix', employeeId: sub.employeeId || '' })
                           }}
                         >
                           <Repeat className="size-4" />
@@ -1335,6 +1350,22 @@ export function AssinaturasClient({
                   {formatCurrency(renewalDraft.subscription.price)}
                 </p>
               </div>
+              <Field label="Barbeiro responsável">
+                <Select
+                  value={renewalDraft.employeeId}
+                  onChange={(event) => setRenewalDraft({
+                    ...renewalDraft,
+                    employeeId: event.target.value,
+                  })}
+                >
+                  <option value="">Selecione o barbeiro</option>
+                  {employees
+                    .filter((employee) => employee.active && isBarberRole(employee.role))
+                    .map((employee) => (
+                      <option key={employee.id} value={employee.id}>{employee.name}</option>
+                    ))}
+                </Select>
+              </Field>
               <Field label="Forma de pagamento">
                 <Select
                   value={renewalDraft.method}
@@ -1353,7 +1384,8 @@ export function AssinaturasClient({
               <Button variant="outline" onClick={() => setRenewalDraft(null)}>Cancelar</Button>
               <Button
                 variant="gold"
-                onClick={() => renewSubscription(renewalDraft.subscription, renewalDraft.method)}
+                disabled={!renewalDraft.employeeId}
+                onClick={() => renewSubscription(renewalDraft.subscription, renewalDraft.method, renewalDraft.employeeId)}
               >
                 <Repeat className="size-4" />
                 Renovar e lançar receita
