@@ -148,32 +148,26 @@ export function NovaComandaClient({
       return
     }
 
-    if (!payment) {
+    if (total > 0 && !payment) {
       setSaveError('Selecione a forma de pagamento.')
       return
     }
 
-    if (selectedItems.length === 0 || subtotal <= 0) {
-      setSaveError('Adicione pelo menos um item à comanda.')
-      return
-    }
-    if (total <= 0) {
-      setSaveError('Informe um total válido para a comanda.')
-      return
-    }
     if (selectedItems.some((item) => parseMoney(prices[item.id] ?? '') <= 0)) {
       setSaveError('Informe um valor válido para todos os itens selecionados.')
       return
     }
 
     const client = clients.find((item) => item.id === clientId)
-    const orderResult = await insertRecord('orders', { barbershop_id: barbershopId, number: nextOrderNumber, client_id: client?.id ?? null, client_name: client?.name ?? 'Cliente avulso', employee_id: employee.id, employee_name: employee.name, discount, surcharge, status: payment === 'pendente' ? 'pendente' : 'paga', method: payment === 'pendente' ? null : payment, total })
+    const orderStatus = total === 0 ? 'aberta' : payment === 'pendente' ? 'pendente' : 'paga'
+    const paymentMethod = total === 0 || payment === 'pendente' ? null : payment
+    const orderResult = await insertRecord('orders', { barbershop_id: barbershopId, number: nextOrderNumber, client_id: client?.id ?? null, client_name: client?.name ?? 'Cliente avulso', employee_id: employee.id, employee_name: employee.name, discount, surcharge, status: orderStatus, method: paymentMethod, total })
     if (orderResult.error || !orderResult.data) { setSaveError(orderResult.error ?? 'Não foi possível criar a comanda.'); return }
     for (const item of selectedItems) {
       const itemResult = await insertRecord('order_items', { order_id: orderResult.data.id, barbershop_id: barbershopId, ref_id: item.id, type: item.type, name: item.name, quantity: quantities[item.id] ?? 1, unit_price: parseMoney(prices[item.id] ?? '') })
       if (itemResult.error) { await deleteRecord('orders', orderResult.data.id); setSaveError(itemResult.error); return }
     }
-    if (payment !== 'pendente') {
+    if (total > 0 && payment && payment !== 'pendente') {
       const financialResult = await insertRecord('financial_entries', { barbershop_id: barbershopId, order_id:orderResult.data.id, type:'entrada', category:'Comandas', description:`Comanda #${nextOrderNumber}`, amount:total, method:payment, date:todayKey() })
       if (financialResult.error) { setSaveError(`Comanda salva, mas o financeiro falhou: ${financialResult.error}`); return }
     }
@@ -453,7 +447,7 @@ export function NovaComandaClient({
               )}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="method">Pagamento</Label>
+              <Label htmlFor="method">Pagamento {total === 0 ? '(opcional)' : ''}</Label>
               <Select
                 id="method"
                 value={payment}
@@ -472,7 +466,6 @@ export function NovaComandaClient({
               type="button"
               variant="gold"
               className="mt-4 w-full"
-              disabled={subtotal <= 0 || total <= 0}
               onClick={saveOrder}
             >
               <Save className="size-4" />

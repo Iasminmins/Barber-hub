@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import { defaultAgendaSettings, defaultPaymentMethods, normalizeAgendaSettings, normalizePaymentMethods } from '@/lib/barbershop-settings'
-import type { Appointment, Barbershop, CatalogItem, Client, Commission, Employee, FinancialEntry, ImportRecord, Member, Order, Plan, PlanRules, Subscription } from '@/lib/types'
+import type { Appointment, Barbershop, CatalogItem, Client, Commission, Employee, FinancialEntry, ImportRecord, Member, Order, Plan, PlanRules, ScheduleBlock, Subscription } from '@/lib/types'
 
 type AppData = {
   barbershop: Barbershop
@@ -13,6 +13,7 @@ type AppData = {
   clients: Client[]
   catalog: CatalogItem[]
   appointments: Appointment[]
+  scheduleBlocks: ScheduleBlock[]
   orders: Order[]
   plans: Plan[]
   subscriptions: Subscription[]
@@ -125,6 +126,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         fetchAllRows((from, to) => supabase.from('clients').select('*').eq('barbershop_id', shopId).order('name').range(from, to)),
         supabase.from('catalog_items').select('*').eq('barbershop_id', shopId).order('name'),
         supabase.from('appointments').select('*').eq('barbershop_id', shopId).order('date').order('start'),
+        supabase.from('schedule_blocks').select('*').eq('barbershop_id', shopId).order('date'),
         fetchAllRows((from, to) => supabase.from('orders').select('*').eq('barbershop_id', shopId).order('created_at', { ascending: false }).range(from, to)),
         fetchAllRows((from, to) => supabase.from('order_items').select('*').eq('barbershop_id', shopId).range(from, to)),
         supabase.from('plans').select('*').eq('barbershop_id', shopId).order('name'),
@@ -137,7 +139,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     )
     const failed = results.find((result) => result.error)
     if (failed?.error) { setError(failed.error.message); return }
-    const [staffMembers, employees, clients, catalog, appointments, orders, orderItems, plans, subscriptions, commissions, financial, imports] = results.map((result) => result.data ?? [])
+    const [staffMembers, employees, clients, catalog, appointments, scheduleBlocks, orders, orderItems, plans, subscriptions, commissions, financial, imports] = results.map((result) => result.data ?? [])
     const currentMembership = memberships[0]
     const linkedEmployeeId = currentMembership.employee_id ?? ''
     const visibleEmployees = currentMembership.role === 'barber'
@@ -166,6 +168,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       clients: clients.map((r: any) => ({ id:r.id, barbershopId:r.barbershop_id, name:r.name, phone:r.phone??'', email:r.email??'', birthDate:r.birth_date??'', postalCode:r.postal_code??'', address:r.address??'', addressNumber:r.address_number??'', addressComplement:r.address_complement??'', neighborhood:r.neighborhood??'', city:r.city??'', state:r.state??'', preferredDay:r.preferred_day??'', notes:r.notes??'', tags:r.tags??[], totalSpent:num(r.total_spent), visits:num(r.visits), lastVisit:r.last_visit??'', favoriteService:r.favorite_service??'', preferredBarber:r.preferred_barber??'', createdAt:r.created_at })),
       catalog: catalog.map((r: any) => ({ id:r.id, barbershopId:r.barbershop_id, type:r.type, name:r.name, category:r.category??'', price:num(r.price), cost:num(r.cost), durationMin:r.duration_min??undefined, stock:r.stock??undefined, minStock:r.min_stock??undefined, commission:num(r.commission), active:r.active })),
       appointments: appointments.map((r: any) => ({ id:r.id, barbershopId:r.barbershop_id, clientId:r.client_id??'', clientName:r.client_name, employeeId:r.employee_id??'', employeeName:r.employee_name, serviceId:r.service_id??'', serviceName:r.service_name, date:r.date, start:String(r.start).slice(0,5), durationMin:num(r.duration_min), status:r.status, price:num(r.price), notes:r.notes??'', createdAt:r.created_at })),
+      scheduleBlocks: scheduleBlocks.map((r: any) => ({ id:r.id, barbershopId:r.barbershop_id, employeeId:r.employee_id, date:r.date, createdAt:r.created_at })),
       orders: orders.map((r: any) => ({ id:r.id, barbershopId:r.barbershop_id, number:num(r.number), clientId:r.client_id??undefined, clientName:r.client_name, employeeId:r.employee_id??'', employeeName:r.employee_name, items:orderItems.filter((i:any)=>i.order_id===r.id).map((i:any)=>({ id:i.id, refId:i.ref_id??'', type:i.type, name:i.name, quantity:num(i.quantity), unitPrice:num(i.unit_price) })), discount:num(r.discount), surcharge:num(r.surcharge), status:r.status, method:r.method??undefined, total:num(r.total), createdAt:r.created_at })),
       plans: plans.map((r:any)=>({ id:r.id, barbershopId:r.barbershop_id, name:r.name, price:num(r.price), type:r.type, credits:r.credits??undefined, description:r.description??'', active:r.active, rules:normalizePlanRules(r.rules) })),
       subscriptions: subscriptions.map((r:any)=>({ id:r.id, barbershopId:r.barbershop_id, planId:r.plan_id??'', planName:r.plan_name, clientId:r.client_id??'', clientName:r.client_name, employeeId:r.employee_id??'', employeeName:r.employee_name??'', price:num(r.price), startDate:r.start_date, dueDate:r.due_date, status:r.status, creditsUsed:r.credits_used??undefined, creditsTotal:r.credits_total??undefined })),

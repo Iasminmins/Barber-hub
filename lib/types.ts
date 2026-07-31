@@ -124,6 +124,14 @@ export interface Appointment {
   createdAt?: string
 }
 
+export interface ScheduleBlock {
+  id: string
+  barbershopId: string
+  employeeId: string
+  date: string // YYYY-MM-DD
+  createdAt?: string
+}
+
 export type OrderStatus = 'aberta' | 'paga' | 'pendente' | 'cancelada'
 
 export interface OrderItem {

@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { formatCurrency } from '@/lib/format'
-import type { Appointment, Employee } from '@/lib/types'
+import type { Appointment, Employee, ScheduleBlock } from '@/lib/types'
 import { isBarberRole } from '@/lib/employees'
 import { useAppData } from '@/components/data/app-data-provider'
 
@@ -72,15 +72,19 @@ function getWeekRange(value: string) {
 export function AgendaClient({
   appointments,
   employees,
+  scheduleBlocks,
   publicSlug,
   barbershopName,
+  barbershopId,
 }: {
   appointments: Appointment[]
   employees: Employee[]
+  scheduleBlocks: ScheduleBlock[]
   publicSlug: string
   barbershopName: string
+  barbershopId: string
 }) {
-  const { catalog, clients, updateRecord, deleteRecord } = useAppData()
+  const { catalog, clients, insertRecord, updateRecord, deleteRecord } = useAppData()
   const [view, setView] = React.useState('dia')
   const [barberFilter, setBarberFilter] = React.useState<string>('todos')
   const [selectedDate, setSelectedDate] = React.useState(() => toDateKey(new Date()))
@@ -93,6 +97,9 @@ export function AgendaClient({
   const [deletingAppointment, setDeletingAppointment] = React.useState(false)
   const [confirmingDelete, setConfirmingDelete] = React.useState(false)
   const [appointmentError, setAppointmentError] = React.useState('')
+  const [blockBarber, setBlockBarber] = React.useState<Employee | null>(null)
+  const [savingBlock, setSavingBlock] = React.useState(false)
+  const [blockError, setBlockError] = React.useState('')
   const handledAgendaLink = React.useRef(false)
   const agendaAppointments = appointments
 
@@ -232,6 +239,31 @@ export function AgendaClient({
     setConfirmingDelete(false)
   }
 
+  function openBlockDialog(barber: Employee) {
+    setBlockBarber(barber)
+    setBlockError('')
+  }
+
+  async function toggleDayBlock() {
+    if (!blockBarber) return
+    const existingBlock = scheduleBlocks.find((block) => block.employeeId === blockBarber.id && block.date === selectedDate)
+    setSavingBlock(true)
+    setBlockError('')
+    const result = existingBlock
+      ? await deleteRecord('schedule_blocks', existingBlock.id)
+      : await insertRecord('schedule_blocks', {
+          barbershop_id: barbershopId,
+          employee_id: blockBarber.id,
+          date: selectedDate,
+        })
+    setSavingBlock(false)
+    if (result.error) {
+      setBlockError(result.error)
+      return
+    }
+    setBlockBarber(null)
+  }
+
   const barbers = employees.filter((e) => e.active && isBarberRole(e.role))
   const columns = barberFilter === 'todos' ? barbers : barbers.filter((b) => b.id === barberFilter)
 
@@ -280,7 +312,15 @@ export function AgendaClient({
           <Share2 className="size-4" />
           Link de agendamento
         </Button>
-        <Button variant="outline" size="sm">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            const barber = barberFilter === 'todos' ? barbers[0] : barbers.find((item) => item.id === barberFilter)
+            if (barber) openBlockDialog(barber)
+          }}
+          disabled={barbers.length === 0}
+        >
           <Ban className="size-4" />
           Bloquear horário
         </Button>
@@ -371,13 +411,23 @@ export function AgendaClient({
             <div className="flex min-w-0 flex-1">
               {columns.map((barber) => {
                 const appts = selectedDayAppointments.filter((a) => a.employeeId === barber.id)
+                const dayBlocked = scheduleBlocks.some((block) => block.employeeId === barber.id && block.date === selectedDate)
                 return (
                   <div key={barber.id} className="min-w-40 flex-1 border-r border-border last:border-r-0">
-                    <div className="flex h-12 items-center gap-2 border-b border-border bg-muted/40 px-3">
+                    <button
+                      type="button"
+                      onClick={() => openBlockDialog(barber)}
+                      className={cn(
+                        'flex h-12 w-full items-center gap-2 border-b border-border px-3 text-left transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                        dayBlocked ? 'bg-destructive/10' : 'bg-muted/40',
+                      )}
+                      aria-label={`${dayBlocked ? 'Desbloquear' : 'Bloquear'} agenda de ${barber.name} em ${selectedDate}`}
+                    >
                       <Avatar name={barber.name} className="size-6 text-[10px]" />
                       <span className="truncate text-xs font-semibold text-foreground">{barber.name}</span>
-                    </div>
-                    <div className="relative" style={{ height: HOURS.length * 64 }}>
+                      {dayBlocked ? <Ban className="ml-auto size-3.5 text-destructive" /> : null}
+                    </button>
+                    <div className={cn('relative', dayBlocked && 'bg-destructive/[0.04]')} style={{ height: HOURS.length * 64 }}>
                       {HOURS.map((h) => (
                         <div key={h} className="h-16 border-b border-border/60" />
                       ))}
@@ -397,6 +447,11 @@ export function AgendaClient({
                           <p className="truncate text-[11px] text-muted-foreground">{a.serviceName}</p>
                         </button>
                       ))}
+                      {dayBlocked ? (
+                        <div className="pointer-events-none absolute inset-x-2 top-3 z-10 rounded-md border border-destructive/30 bg-background/95 px-2 py-1.5 text-center text-xs font-semibold text-destructive shadow-sm">
+                          Agenda bloqueada neste dia
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 )
@@ -441,6 +496,38 @@ export function AgendaClient({
           </div>
         </Card>
       )}
+
+      <Dialog open={Boolean(blockBarber)} onClose={() => !savingBlock && setBlockBarber(null)} className="sm:max-w-md">
+        {blockBarber ? (
+          <>
+            <DialogHeader
+              title={scheduleBlocks.some((block) => block.employeeId === blockBarber.id && block.date === selectedDate) ? 'Desbloquear agenda' : 'Bloquear agenda'}
+              description={`${blockBarber.name} · ${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long' }).format(fromDateKey(selectedDate))}`}
+            />
+            <p className="text-sm text-muted-foreground">
+              {scheduleBlocks.some((block) => block.employeeId === blockBarber.id && block.date === selectedDate)
+                ? 'O profissional voltará a aparecer com horários disponíveis para este dia.'
+                : 'Nenhum novo agendamento poderá ser feito para este profissional neste dia. Agendamentos já existentes serão mantidos.'}
+            </p>
+            {blockError ? <p role="alert" className="mt-4 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{blockError}</p> : null}
+            <div className="mt-6 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setBlockBarber(null)} disabled={savingBlock}>Cancelar</Button>
+              <Button
+                variant={scheduleBlocks.some((block) => block.employeeId === blockBarber.id && block.date === selectedDate) ? 'default' : 'destructive'}
+                onClick={toggleDayBlock}
+                disabled={savingBlock}
+              >
+                <Ban className="size-4" />
+                {savingBlock
+                  ? 'Salvando...'
+                  : scheduleBlocks.some((block) => block.employeeId === blockBarber.id && block.date === selectedDate)
+                    ? 'Desbloquear dia'
+                    : 'Bloquear dia'}
+              </Button>
+            </div>
+          </>
+        ) : null}
+      </Dialog>
 
       <Dialog open={shareOpen} onClose={() => setShareOpen(false)} className="sm:max-w-xl">
         <DialogHeader

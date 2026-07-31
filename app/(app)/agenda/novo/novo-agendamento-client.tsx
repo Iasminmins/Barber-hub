@@ -52,7 +52,7 @@ export function NovoAgendamentoClient({
 }: NovoAgendamentoClientProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { barbershop, appointments: liveAppointments, insertRecord } = useAppData()
+  const { barbershop, appointments: liveAppointments, scheduleBlocks, insertRecord } = useAppData()
   const [clientId, setClientId] = useState(() => searchParams.get('cliente') ?? '')
   const [barberId, setBarberId] = useState('')
   const [serviceId, setServiceId] = useState('')
@@ -94,6 +94,11 @@ export function NovoAgendamentoClient({
 
     if (!date || !start) {
       setSaveError('Informe data e horário.')
+      return
+    }
+
+    if (scheduleBlocks.some((block) => block.employeeId === barber.id && block.date === date)) {
+      setSaveError('A agenda deste barbeiro está bloqueada neste dia.')
       return
     }
 
