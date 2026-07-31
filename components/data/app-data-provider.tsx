@@ -137,9 +137,15 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       ]),
       'Os dados da plataforma demoraram demais para carregar. Atualize a página e tente novamente.',
     )
-    const failed = results.find((result) => result.error)
+    const normalizedResults = results.map((result, index) => {
+      if (index === 5 && result.error && ['PGRST205', '42P01'].includes(result.error.code ?? '')) {
+        return { data: [], error: null }
+      }
+      return result
+    })
+    const failed = normalizedResults.find((result) => result.error)
     if (failed?.error) { setError(failed.error.message); return }
-    const [staffMembers, employees, clients, catalog, appointments, scheduleBlocks, orders, orderItems, plans, subscriptions, commissions, financial, imports] = results.map((result) => result.data ?? [])
+    const [staffMembers, employees, clients, catalog, appointments, scheduleBlocks, orders, orderItems, plans, subscriptions, commissions, financial, imports] = normalizedResults.map((result) => result.data ?? [])
     const currentMembership = memberships[0]
     const linkedEmployeeId = currentMembership.employee_id ?? ''
     const visibleEmployees = currentMembership.role === 'barber'
