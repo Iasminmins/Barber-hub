@@ -15,9 +15,9 @@ alter table public.schedule_blocks enable row level security;
 create policy "schedule_blocks_manage_own_barbershop"
 on public.schedule_blocks for all
 to authenticated
-using (public.user_has_barbershop_access(barbershop_id))
+using (private.user_has_barbershop_access(barbershop_id))
 with check (
-  public.user_has_barbershop_access(barbershop_id)
+  private.user_has_barbershop_access(barbershop_id)
   and exists (
     select 1
     from public.employees e
@@ -49,6 +49,7 @@ $$;
 
 revoke all on function public.prevent_appointment_on_blocked_day() from public;
 
+drop trigger if exists prevent_appointment_on_blocked_day on public.appointments;
 create trigger prevent_appointment_on_blocked_day
 before insert or update of employee_id, date on public.appointments
 for each row execute function public.prevent_appointment_on_blocked_day();
@@ -179,3 +180,5 @@ revoke all on function public.get_public_available_slots(text, uuid, date, uuid)
 revoke all on function public.create_public_appointment(text, uuid, date, time, text, text, text, uuid) from public;
 grant execute on function public.get_public_available_slots(text, uuid, date, uuid) to anon, authenticated;
 grant execute on function public.create_public_appointment(text, uuid, date, time, text, text, text, uuid) to anon, authenticated;
+
+notify pgrst, 'reload schema';
