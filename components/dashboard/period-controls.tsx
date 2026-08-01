@@ -129,8 +129,8 @@ export function DashboardPeriodControls({
         })}
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <div ref={customRangeRef} className="relative min-w-0 flex-1 sm:flex-none">
+      <div className="grid grid-cols-2 items-center gap-2 sm:flex sm:flex-wrap">
+        <div ref={customRangeRef} className="relative col-span-2 min-w-0 sm:col-auto sm:flex-none">
           <button
             type="button"
             onClick={() => {
@@ -148,7 +148,7 @@ export function DashboardPeriodControls({
           </button>
 
           {customRangeOpen ? (
-            <div className="absolute right-0 top-full z-40 mt-2 w-[min(22rem,calc(100vw-2rem))] rounded-lg border border-border bg-popover p-4 shadow-xl">
+            <div className="absolute left-0 top-full z-50 mt-2 w-[min(22rem,calc(100vw-3rem))] rounded-lg border border-border bg-popover p-4 shadow-xl sm:left-auto sm:right-0">
               <p className="mb-3 text-sm font-semibold text-foreground">Período personalizado</p>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <label className="space-y-1.5 text-xs font-medium text-muted-foreground">
@@ -181,11 +181,11 @@ export function DashboardPeriodControls({
           ) : null}
         </div>
 
-        <Button variant="outline" className="h-10 shrink-0">
+        <Button variant="outline" className="h-10 w-full shrink-0 sm:w-auto">
           <FileSpreadsheet className="size-4" />
           Excel
         </Button>
-        <Button variant="outline" className="h-10 shrink-0">
+        <Button variant="outline" className="h-10 w-full shrink-0 sm:w-auto">
           <FileText className="size-4" />
           PDF
         </Button>
