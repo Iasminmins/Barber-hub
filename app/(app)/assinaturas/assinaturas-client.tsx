@@ -433,30 +433,41 @@ export function AssinaturasClient({
     if (!original || !client || !plan || !editingSubscription.startDate || !editingSubscription.dueDate) { setSubscriptionStatus('Preencha cliente, plano e datas.'); return }
     const creditsUsed = Number(editingSubscription.creditsUsed || 0), creditsTotal = Number(editingSubscription.creditsTotal || 0)
     if (price < 0 || creditsUsed < 0 || creditsTotal < 0) { setSubscriptionStatus('Informe valores válidos.'); return }
+    if (editingSubscription.registerPayment && !employee) {
+      setSubscriptionStatus('Selecione o barbeiro responsável para registrar a renovação na comanda.')
+      return
+    }
     const paymentDescription = `Renovação - ${client.name} - ${plan.name}`
     const paymentDate = toLocalDateKey(new Date())
-    if (editingSubscription.registerPayment && financialEntries.some((entry) => (
+    const existingPayment = financialEntries.find((entry) => (
       entry.type === 'entrada'
       && entry.date === paymentDate
       && entry.description === paymentDescription
       && entry.amount === price
-    ))) {
-      setSubscriptionStatus('Este pagamento já foi lançado na receita de hoje.')
+    ))
+    if (editingSubscription.registerPayment && existingPayment?.orderId) {
+      setSubscriptionStatus('Este pagamento já foi lançado e está vinculado a uma comanda.')
       return
     }
     const result = await updateRecord('subscriptions', editingSubscription.id, { client_id:client.id, client_name:client.name, plan_id:plan.id, plan_name:plan.name, employee_id:employee?.id??null, employee_name:employee?.name??null, price, start_date:editingSubscription.startDate, due_date:editingSubscription.dueDate, status:editingSubscription.status, credits_used:creditsTotal ? creditsUsed : null, credits_total:creditsTotal || null })
     if (result.error) { setSubscriptionStatus(result.error); return }
     if (editingSubscription.registerPayment) {
-      const financialResult = await insertRecord('financial_entries', {
+      const nextOrderNumber = orders.length > 0 ? Math.max(...orders.map((order) => order.number)) + 1 : 1
+      const orderResult = await insertRecord('orders', {
         barbershop_id: barbershop.id,
-        type: 'entrada',
-        category: 'Assinaturas',
-        description: paymentDescription,
-        amount: price,
+        number: nextOrderNumber,
+        client_id: client.id,
+        client_name: client.name,
+        employee_id: employee!.id,
+        employee_name: employee!.name,
+        discount: 0,
+        surcharge: 0,
+        status: 'paga',
         method: editingSubscription.paymentMethod,
-        date: paymentDate,
+        total: price,
       })
-      if (financialResult.error) {
+
+      if (orderResult.error || !orderResult.data) {
         await updateRecord('subscriptions', original.id, {
           client_id: original.clientId,
           client_name: original.clientName,
@@ -471,12 +482,80 @@ export function AssinaturasClient({
           credits_used: original.creditsUsed ?? null,
           credits_total: original.creditsTotal ?? null,
         })
-        setSubscriptionStatus(`Não foi possível registrar o pagamento; as alterações foram desfeitas: ${financialResult.error}`)
+        setSubscriptionStatus(`Não foi possível criar a comanda; as alterações foram desfeitas: ${orderResult.error ?? 'erro inesperado'}`)
         return
       }
+
+      const itemResult = await insertRecord('order_items', {
+        order_id: orderResult.data.id,
+        barbershop_id: barbershop.id,
+        ref_id: plan.id,
+        type: 'produto',
+        name: `[Assinatura] ${plan.name}`,
+        quantity: 1,
+        unit_price: price,
+      })
+
+      if (itemResult.error) {
+        await deleteRecord('orders', orderResult.data.id)
+        await updateRecord('subscriptions', original.id, {
+          client_id: original.clientId,
+          client_name: original.clientName,
+          plan_id: original.planId,
+          plan_name: original.planName,
+          employee_id: original.employeeId || null,
+          employee_name: original.employeeName || null,
+          price: original.price,
+          start_date: original.startDate,
+          due_date: original.dueDate,
+          status: original.status,
+          credits_used: original.creditsUsed ?? null,
+          credits_total: original.creditsTotal ?? null,
+        })
+        setSubscriptionStatus(`Não foi possível criar o item da comanda; as alterações foram desfeitas: ${itemResult.error}`)
+        return
+      }
+
+      const financialResult = existingPayment
+        ? await updateRecord('financial_entries', existingPayment.id, {
+            order_id: orderResult.data.id,
+            method: editingSubscription.paymentMethod,
+          })
+        : await insertRecord('financial_entries', {
+            barbershop_id: barbershop.id,
+            order_id: orderResult.data.id,
+            type: 'entrada',
+            category: 'Assinaturas',
+            description: paymentDescription,
+            amount: price,
+            method: editingSubscription.paymentMethod,
+            date: paymentDate,
+          })
+
+      if (financialResult.error) {
+        await deleteRecord('orders', orderResult.data.id)
+        await updateRecord('subscriptions', original.id, {
+          client_id: original.clientId,
+          client_name: original.clientName,
+          plan_id: original.planId,
+          plan_name: original.planName,
+          employee_id: original.employeeId || null,
+          employee_name: original.employeeName || null,
+          price: original.price,
+          start_date: original.startDate,
+          due_date: original.dueDate,
+          status: original.status,
+          credits_used: original.creditsUsed ?? null,
+          credits_total: original.creditsTotal ?? null,
+        })
+        setSubscriptionStatus(`Não foi possível vincular o pagamento à comanda; as alterações foram desfeitas: ${financialResult.error}`)
+        return
+      }
+
+      setRenewalStatus(`Pagamento de ${client.name} vinculado à comanda #${nextOrderNumber}.`)
     }
     setSubscriptionRecords((current) => current.map((sub) => sub.id === editingSubscription.id ? { ...sub, clientId:client.id, clientName:client.name, planId:plan.id, planName:plan.name, employeeId:employee?.id??'', employeeName:employee?.name??'', price, startDate:editingSubscription.startDate, dueDate:editingSubscription.dueDate, status:editingSubscription.status, creditsUsed:creditsTotal?creditsUsed:undefined, creditsTotal:creditsTotal||undefined } : sub))
-    setRenewalStatus(editingSubscription.registerPayment ? `Pagamento de ${client.name} lançado na receita de hoje.` : '')
+    if (!editingSubscription.registerPayment) setRenewalStatus('')
     setEditingSubscription(null)
   }
 
