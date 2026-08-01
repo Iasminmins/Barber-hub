@@ -140,16 +140,16 @@ const faqs = [
 export default function Home() {
   return (
     <main className="min-h-screen bg-background">
-      <section className="relative min-h-[92vh] overflow-hidden bg-primary text-primary-foreground">
-        <div className="absolute inset-0 opacity-95">
-          <div className="absolute left-1/2 top-20 w-[860px] -translate-x-1/2 rounded-2xl border border-primary-foreground/15 bg-primary-foreground/10 p-4 shadow-2xl lg:top-24">
+      <section className="relative overflow-hidden bg-primary text-primary-foreground">
+        <div className="pointer-events-none absolute inset-0 opacity-95">
+          <div className="absolute right-[-1rem] top-28 w-[680px] origin-top-right scale-[0.48] rotate-1 rounded-2xl border border-primary-foreground/15 bg-primary-foreground/10 p-4 opacity-40 shadow-2xl sm:right-0 sm:top-40 sm:scale-[0.7] sm:opacity-35 lg:right-[-5rem] lg:top-32 lg:scale-100 lg:opacity-80 xl:right-[max(2rem,calc((100vw-80rem)/2))]">
             <div className="mb-4 flex items-center justify-between border-b border-primary-foreground/10 pb-3">
               <div className="flex items-center gap-3">
                 <span className="flex size-10 items-center justify-center rounded-lg bg-gold text-gold-foreground">
                   <Scissors className="size-5" />
                 </span>
                 <div>
-                  <p className="font-bold">BarberHub</p>
+                  <p className="font-bold">MeuBarberHub</p>
                   <p className="text-xs text-primary-foreground/60">Painel da sua barbearia</p>
                 </div>
               </div>
@@ -206,16 +206,16 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(30,58,50,0.18),rgba(30,58,50,0.7)_48%,rgba(30,58,50,0.98))]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_82%_18%,rgba(212,169,51,0.18),transparent_30%),linear-gradient(180deg,rgba(24,52,44,0.48)_0%,rgba(24,52,44,0.82)_38%,rgba(24,52,44,0.96)_64%,rgba(24,52,44,1)_100%)] lg:bg-[radial-gradient(circle_at_80%_25%,rgba(212,169,51,0.13),transparent_34%),linear-gradient(90deg,rgba(30,58,50,1)_0%,rgba(30,58,50,0.96)_48%,rgba(30,58,50,0.3)_100%)]" />
 
-        <header className="relative z-10 mx-auto flex max-w-7xl items-center justify-between px-5 py-5">
+        <header className="relative z-10 mx-auto flex max-w-7xl items-center justify-between px-5 py-4 sm:py-5">
           <Link href="/" className="flex items-center gap-3">
-            <span className="flex size-10 items-center justify-center rounded-lg bg-primary-foreground/12 ring-1 ring-primary-foreground/15">
+            <span className="flex size-9 items-center justify-center rounded-lg bg-primary-foreground/12 ring-1 ring-primary-foreground/15 sm:size-10">
               <Scissors className="size-5" />
             </span>
             <div>
-              <p className="font-bold">BarberHub</p>
-              <p className="text-xs text-primary-foreground/65">Sua barbearia conectada</p>
+              <p className="font-bold">MeuBarberHub</p>
+              <p className="hidden text-xs text-primary-foreground/65 sm:block">Gestão simples. Barbearia forte.</p>
             </div>
           </Link>
           <nav className="hidden items-center gap-6 text-sm text-primary-foreground/75 md:flex">
@@ -229,33 +229,43 @@ export default function Home() {
           </Link>
         </header>
 
-        <div className="relative z-10 mx-auto flex min-h-[calc(92vh-84px)] max-w-5xl flex-col justify-end px-5 pb-10 pt-20">
-          <div className="max-w-3xl">
-            <p className="mb-4 inline-flex items-center gap-2 rounded-md bg-primary-foreground/12 px-3 py-1 text-sm font-semibold text-primary-foreground/85 ring-1 ring-primary-foreground/12">
-              <Sparkles className="size-4 text-gold" />
-              SaaS para barbearias que querem vender mais e operar melhor
+        <div className="relative z-10 mx-auto flex min-h-[calc(100svh-68px)] max-w-7xl flex-col justify-center px-5 pb-12 pt-10 sm:min-h-[calc(100svh-80px)] sm:py-14 lg:items-start lg:py-10">
+          <div className="max-w-3xl lg:w-[48%]">
+            <p className="mb-4 inline-flex max-w-full items-center gap-2 rounded-full bg-primary-foreground/10 px-3 py-1.5 text-[0.68rem] font-semibold leading-4 text-primary-foreground/85 ring-1 ring-primary-foreground/15 sm:mb-5 sm:px-4 sm:py-2 sm:text-sm sm:leading-5">
+              <Sparkles className="size-3.5 shrink-0 text-gold sm:size-4" />
+              30 dias grátis, sem cartão
             </p>
-            <h1 className="text-4xl font-bold tracking-tight text-balance sm:text-6xl">
-              Gestão completa para transformar atendimento em receita recorrente.
+            <h1 className="max-w-2xl text-[2.5rem] font-bold leading-[1.06] tracking-[-0.04em] text-balance sm:text-5xl lg:text-[3.65rem]">
+              Sua barbearia organizada para atender mais e faturar melhor.
             </h1>
-            <p className="mt-5 max-w-2xl text-lg leading-8 text-primary-foreground/78">
-              Agenda, comandas, clientes, planos, financeiro, comissões e alertas em uma plataforma simples para o dono acompanhar a operação sem planilhas soltas.
+            <p className="mt-4 max-w-2xl text-[0.94rem] leading-6 text-primary-foreground/78 sm:mt-6 sm:text-lg sm:leading-8">
+              Agenda, comandas, clientes, estoque e financeiro em um só lugar. Menos planilhas, mais controle para sua barbearia crescer.
             </p>
-            <div className="mt-7 flex flex-wrap gap-3">
-              <Link href="/cadastro" className={buttonVariants({ variant: 'gold', size: 'lg' })}>
-                Começar agora
+            <div className="mt-6 flex flex-col gap-3 sm:mt-8 sm:flex-row">
+              <Link href="/cadastro" className={buttonVariants({ variant: 'gold', size: 'lg', className: 'w-full shadow-lg shadow-black/15 sm:w-auto' })}>
+                Testar grátis por 30 dias
                 <ArrowRight className="size-4" />
               </Link>
-              <Link href="/login" className={buttonVariants({ variant: 'outline', size: 'lg', className: 'bg-primary-foreground/10 text-primary-foreground hover:bg-primary-foreground/15 hover:text-primary-foreground' })}>
-                Ver demonstração
-              </Link>
+              <span className="hidden sm:inline-flex">
+                <a href="#recursos" className={buttonVariants({ variant: 'outline', size: 'lg', className: 'bg-primary-foreground/5 text-primary-foreground hover:bg-primary-foreground/15 hover:text-primary-foreground' })}>
+                  Conhecer o sistema
+                </a>
+              </span>
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-x-3 gap-y-2 text-[0.68rem] text-primary-foreground/70 sm:mt-5 sm:flex sm:flex-wrap sm:gap-x-5 sm:text-sm">
+              {['Sem cartão', 'Cancele quando quiser', 'Suporte na implantação'].map((item) => (
+                <span key={item} className="inline-flex items-center gap-1.5">
+                  <CheckCircle2 className="size-4 text-gold" /> {item}
+                </span>
+              ))}
             </div>
           </div>
-          <div className="mt-10 grid gap-3 sm:grid-cols-3">
+
+          <div className="mt-8 hidden w-full gap-3 sm:grid sm:grid-cols-3 lg:w-[48%]">
             {proof.map((item) => (
-              <div key={item.label} className="rounded-lg bg-primary-foreground/10 p-4 ring-1 ring-primary-foreground/10">
-                <p className="text-2xl font-bold">{item.value}</p>
-                <p className="mt-1 text-sm text-primary-foreground/68">{item.label}</p>
+              <div key={item.label} className="rounded-xl bg-primary-foreground/[0.08] p-3.5 ring-1 ring-primary-foreground/10 backdrop-blur-sm">
+                <p className="text-lg font-bold text-gold">{item.value}</p>
+                <p className="mt-1 text-xs leading-5 text-primary-foreground/68 sm:text-sm">{item.label}</p>
               </div>
             ))}
           </div>
@@ -269,7 +279,7 @@ export default function Home() {
             A barbearia cresce, mas a gestão fica presa em improvisos.
           </h2>
           <p className="mt-4 leading-7 text-muted-foreground">
-            O BarberHub organiza a operação diária para que agenda, venda, cliente, estoque e financeiro conversem entre si. Menos conferência manual, mais clareza para decidir.
+            O MeuBarberHub organiza a operação diária para que agenda, venda, cliente, estoque e financeiro conversem entre si. Menos conferência manual, mais clareza para decidir.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <Link href="/login" className={buttonVariants({ variant: 'default' })}>
@@ -355,7 +365,7 @@ export default function Home() {
               Da agenda ao pagamento, sem perder informação.
             </h2>
             <p className="mt-4 leading-7 text-muted-foreground">
-              O BarberHub conecta atendimento, comanda, venda de produto, assinatura e comissão. Assim o dono enxerga o que entrou, o que ficou pendente e onde agir para crescer.
+              O MeuBarberHub conecta atendimento, comanda, venda de produto, assinatura e comissão. Assim o dono enxerga o que entrou, o que ficou pendente e onde agir para crescer.
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -468,7 +478,7 @@ export default function Home() {
           <div className="border-b p-5">
             <h3 className="text-lg font-semibold text-foreground">Comparativo dos planos</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              O núcleo do BarberHub entra em todos os planos. O que muda é o nível de operação.
+              O núcleo do MeuBarberHub entra em todos os planos. O que muda é o nível de operação.
             </p>
           </div>
           <div className="overflow-x-auto">
@@ -542,7 +552,7 @@ export default function Home() {
               <ShieldCheck className="size-4 text-gold" />
               Pronto para testar com seus dados
             </div>
-            <h2 className="text-3xl font-bold tracking-tight">Veja o BarberHub funcionando agora.</h2>
+            <h2 className="text-3xl font-bold tracking-tight">Veja o MeuBarberHub funcionando agora.</h2>
             <p className="mt-3 text-primary-foreground/72">
               Entre na demonstração, navegue pelo dashboard, crie clientes, comandas e planos para validar o fluxo completo.
             </p>

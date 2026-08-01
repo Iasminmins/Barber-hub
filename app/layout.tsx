@@ -3,10 +3,9 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'BarberHub - Gestão para Barbearias',
+  title: 'MeuBarberHub | Sistema de gestão para barbearias',
   description:
-    'Plataforma completa para gestão de barbearias: agenda, comandas, clientes, assinaturas, financeiro e muito mais.',
-  generator: 'v0.app',
+    'Organize agenda, comandas, clientes, planos, estoque e financeiro da sua barbearia. Teste o MeuBarberHub grátis por 30 dias.',
   icons: {
     icon: [{ url: '/icon.svg?v=2', type: 'image/svg+xml' }],
     apple: '/apple-icon.png',
