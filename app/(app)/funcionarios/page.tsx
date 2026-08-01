@@ -118,6 +118,9 @@ export default function FuncionariosPage() {
   const employeeValues = useMemo(() => new Map(employees.map((employee) => {
     const paidOrders = paidOrdersWithEmployee.filter((item) => item.resolvedEmployeeId === employee.id)
     const revenue = paidOrders.reduce((sum, item) => sum + item.value, 0)
+    const subscriptionRevenue = paidOrders
+      .filter((item) => item.order.items.some((orderItem) => orderItem.name.startsWith('[Assinatura]')))
+      .reduce((sum, item) => sum + item.value, 0)
     const services = paidOrders.reduce(
       (sum, item) => sum + item.order.items.filter((orderItem) => orderItem.type === 'servico').reduce((itemSum, orderItem) => itemSum + orderItem.quantity, 0),
       0,
@@ -130,7 +133,7 @@ export default function FuncionariosPage() {
     const subscriptionCommission = commissions
       .filter((item) => item.employeeId === employee.id && item.origin === 'assinatura' && item.date.slice(0, 7) === currentMonth)
       .reduce((sum, item) => sum + item.amount, 0)
-    return [employee.id, { revenue, services, commission: orderCommission + subscriptionCommission }]
+    return [employee.id, { revenue, subscriptionRevenue, services, commission: orderCommission + subscriptionCommission }]
   })), [commissions, currentMonth, employees, paidOrdersWithEmployee])
   const ranking = employees.map((employee) => ({
     id: employee.id,
@@ -174,6 +177,9 @@ export default function FuncionariosPage() {
   const reportValues = useMemo(() => new Map(employees.map((employee) => {
     const orders = reportPaidOrders.filter((item) => item.resolvedEmployeeId === employee.id)
     const revenue = orders.reduce((sum, item) => sum + item.value, 0)
+    const subscriptionRevenue = orders
+      .filter((item) => item.order.items.some((orderItem) => orderItem.name.startsWith('[Assinatura]')))
+      .reduce((sum, item) => sum + item.value, 0)
     const salesCommission = orders.reduce((sum, item) => sum + item.order.items.reduce(
       (itemSum, orderItem) => itemSum + orderItem.quantity * orderItem.unitPrice
         * orderItemCommissionRate(orderItem, employee) / 100,
@@ -186,7 +192,7 @@ export default function FuncionariosPage() {
       .filter((item) => item.employeeId === employee.id && item.status === 'paga' && item.date >= reportRange.start && item.date <= reportRange.end)
       .reduce((sum, item) => sum + item.amount, 0)
     const generated = salesCommission + subscriptionCommission
-    return [employee.id, { revenue, generated, paid, pending: Math.max(0, generated - paid), orders: orders.length }]
+    return [employee.id, { revenue, subscriptionRevenue, generated, paid, pending: Math.max(0, generated - paid), orders: orders.length }]
   })), [commissions, employees, reportPaidOrders, reportRange])
   const reportRevenue = [...reportValues.values()].reduce((sum, item) => sum + item.revenue, 0)
   const reportGenerated = [...reportValues.values()].reduce((sum, item) => sum + item.generated, 0)
@@ -490,6 +496,11 @@ export default function FuncionariosPage() {
                       <p className="mt-1 text-sm text-muted-foreground">
                         {values.orders} vendas · Faturamento {formatCurrency(values.revenue)}
                       </p>
+                      {values.subscriptionRevenue > 0 ? (
+                        <p className="mt-1 text-xs font-medium text-primary">
+                          Inclui {formatCurrency(values.subscriptionRevenue)} em assinaturas
+                        </p>
+                      ) : null}
                       <p className="mt-2 text-xs text-muted-foreground">
                         Gerada: {formatCurrency(values.generated)} · Paga: {formatCurrency(values.paid)}
                       </p>
@@ -547,6 +558,11 @@ export default function FuncionariosPage() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-semibold text-foreground">{item.name}</p>
                     <p className="text-xs text-muted-foreground">{item.services} serviços vendidos</p>
+                    {(values?.subscriptionRevenue ?? 0) > 0 ? (
+                      <p className="mt-0.5 text-xs font-medium text-primary">
+                        Assinaturas: {formatCurrency(values?.subscriptionRevenue ?? 0)}
+                      </p>
+                    ) : null}
                   </div>
                 </div>
                 <div className="mt-4 grid grid-cols-2 gap-3 border-t border-border pt-3">
