@@ -81,6 +81,38 @@ function isBirthdayToday(birthDate: string) {
   return date.getMonth() === today.getMonth() && date.getDate() === today.getDate()
 }
 
+function orderLocalDate(createdAt: string) {
+  const date = new Date(createdAt)
+  if (Number.isNaN(date.getTime())) return ''
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date)
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? ''
+  return `${part('year')}-${part('month')}-${part('day')}`
+}
+
+function isAppointmentSettled(
+  appointment: ReturnType<typeof useAppData>['appointments'][number],
+  orders: ReturnType<typeof useAppData>['orders'],
+) {
+  if (appointment.status === 'concluido' || appointment.status === 'cancelado' || appointment.status === 'faltou') {
+    return true
+  }
+
+  const normalizedClientName = appointment.clientName.trim().toLocaleLowerCase('pt-BR')
+  return orders.some((order) => {
+    if (order.status !== 'paga' || orderLocalDate(order.createdAt) !== appointment.date) return false
+    const sameClient = appointment.clientId
+      ? order.clientId === appointment.clientId
+      : order.clientName.trim().toLocaleLowerCase('pt-BR') === normalizedClientName
+    const sameEmployee = !appointment.employeeId || order.employeeId === appointment.employeeId
+    return sameClient && sameEmployee
+  })
+}
+
 function buildNotifications(
   clients: ReturnType<typeof useAppData>['clients'],
   catalog: ReturnType<typeof useAppData>['catalog'],
@@ -103,7 +135,7 @@ function buildNotifications(
   return {
     agendamentos: appointments
       .filter((appointment) => {
-        if (readAppointmentIds.has(appointment.id) || appointment.status === 'cancelado') return false
+        if (readAppointmentIds.has(appointment.id) || isAppointmentSettled(appointment, orders)) return false
         if (!appointment.createdAt) return false
         const createdAt = new Date(appointment.createdAt).getTime()
         return Number.isFinite(createdAt) && Date.now() - createdAt <= 7 * 24 * 60 * 60 * 1000
