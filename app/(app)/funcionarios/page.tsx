@@ -70,6 +70,25 @@ function paidOrderValue(order: ReturnType<typeof useAppData>['orders'][number]) 
   )
 }
 
+function localDateKey(value: string) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date(value))
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? ''
+  return `${part('year')}-${part('month')}-${part('day')}`
+}
+
+function orderItemCommissionRate(
+  item: ReturnType<typeof useAppData>['orders'][number]['items'][number],
+  employee: Employee,
+) {
+  if (item.name.startsWith('[Assinatura]')) return employee.subscriptionCommission
+  return item.type === 'servico' ? employee.serviceCommission : employee.productCommission
+}
+
 export default function FuncionariosPage() {
   const appData = useAppData()
   const [employees, setEmployees] = useState(() => appData.employees)
@@ -104,7 +123,8 @@ export default function FuncionariosPage() {
       0,
     )
     const orderCommission = paidOrders.reduce((sum, item) => sum + item.order.items.reduce(
-      (itemSum, item) => itemSum + item.quantity * item.unitPrice * (item.type === 'servico' ? employee.serviceCommission : employee.productCommission) / 100,
+      (itemSum, orderItem) => itemSum + orderItem.quantity * orderItem.unitPrice
+        * orderItemCommissionRate(orderItem, employee) / 100,
       0,
     ), 0)
     const subscriptionCommission = commissions
@@ -142,7 +162,10 @@ export default function FuncionariosPage() {
   }, [dayOffset])
   const reportRange = reportPeriod === 'diario' ? dayRange : weekRange
   const reportPaidOrders = useMemo(() => appData.orders
-    .filter((order) => order.status === 'paga' && order.createdAt.slice(0, 10) >= reportRange.start && order.createdAt.slice(0, 10) <= reportRange.end)
+    .filter((order) => {
+      const orderDate = localDateKey(order.createdAt)
+      return order.status === 'paga' && orderDate >= reportRange.start && orderDate <= reportRange.end
+    })
     .map((order) => ({
       order,
       resolvedEmployeeId: resolveOrderEmployeeId(order, employees),
@@ -153,7 +176,7 @@ export default function FuncionariosPage() {
     const revenue = orders.reduce((sum, item) => sum + item.value, 0)
     const salesCommission = orders.reduce((sum, item) => sum + item.order.items.reduce(
       (itemSum, orderItem) => itemSum + orderItem.quantity * orderItem.unitPrice
-        * (orderItem.type === 'servico' ? employee.serviceCommission : employee.productCommission) / 100,
+        * orderItemCommissionRate(orderItem, employee) / 100,
       0,
     ), 0)
     const subscriptionCommission = commissions
