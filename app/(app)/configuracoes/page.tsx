@@ -24,6 +24,7 @@ import { BillingCard } from '@/components/billing/billing-card'
 import { useAppData } from '@/components/data/app-data-provider'
 import { PageHeader } from '@/components/page-header'
 import { Badge } from '@/components/ui/badge'
+import { Avatar } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Dialog, DialogHeader } from '@/components/ui/dialog'
@@ -63,10 +64,9 @@ function getLogoFilePath(barbershopId: string, file: File) {
   return `${barbershopId}/logo-${Date.now()}.${ext}`
 }
 
-function getInitials(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  if (!parts.length) return 'BH'
-  return parts.slice(0, 2).map((part) => part[0]).join('').toUpperCase()
+function getEmployeePhotoPath(barbershopId: string, employeeId: string, file: File) {
+  const ext = file.name.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg'
+  return `${barbershopId}/employees/${employeeId}-${Date.now()}.${ext}`
 }
 
 export default function ConfiguracoesPage() {
@@ -84,6 +84,7 @@ export default function ConfiguracoesPage() {
   const [planSaving, setPlanSaving] = useState(false)
   const [planMessage, setPlanMessage] = useState('')
   const [employeeDrafts, setEmployeeDrafts] = useState<Record<string, string>>({})
+  const [employeePhotos, setEmployeePhotos] = useState<Record<string, { file: File; preview: string }>>({})
   const [employeeSaving, setEmployeeSaving] = useState('')
   const [employeeMessage, setEmployeeMessage] = useState('')
   const [shop, setShop] = useState({
@@ -294,13 +295,69 @@ export default function ConfiguracoesPage() {
 
     setEmployeeSaving(employeeId)
     setEmployeeMessage('')
-    const result = await updateRecord('employees', employeeId, { avatar_color: color })
+    const photo = employeePhotos[employeeId]
+    let avatarUrl = employees.find((employee) => employee.id === employeeId)?.avatarUrl
+    let uploadedPath = ''
+
+    if (photo) {
+      const supabase = createBrowserSupabaseClient()
+      uploadedPath = getEmployeePhotoPath(barbershop.id, employeeId, photo.file)
+      const { error: uploadError } = await supabase.storage
+        .from('barbershop-assets')
+        .upload(uploadedPath, photo.file, { contentType: photo.file.type, upsert: false })
+
+      if (uploadError) {
+        setEmployeeSaving('')
+        setEmployeeMessage(uploadError.message)
+        return
+      }
+
+      avatarUrl = supabase.storage.from('barbershop-assets').getPublicUrl(uploadedPath).data.publicUrl
+    }
+
+    const result = await updateRecord('employees', employeeId, {
+      avatar_color: color,
+      avatar_url: avatarUrl ?? null,
+    })
     setEmployeeSaving('')
     if (result.error) {
+      if (uploadedPath) {
+        await createBrowserSupabaseClient().storage.from('barbershop-assets').remove([uploadedPath])
+      }
       setEmployeeMessage(result.error)
       return
     }
-    setEmployeeMessage('Cor do funcionário salva.')
+    if (photo) {
+      URL.revokeObjectURL(photo.preview)
+      setEmployeePhotos((current) => {
+        const next = { ...current }
+        delete next[employeeId]
+        return next
+      })
+    }
+    setEmployeeMessage('Perfil do funcionário salvo.')
+  }
+
+  function handleEmployeePhotoChange(employeeId: string, event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+      setEmployeeMessage('Use uma foto PNG, JPG ou WEBP.')
+      return
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setEmployeeMessage('A foto precisa ter até 2 MB.')
+      return
+    }
+
+    setEmployeeMessage('')
+    setEmployeePhotos((current) => {
+      const previous = current[employeeId]
+      if (previous) URL.revokeObjectURL(previous.preview)
+      return { ...current, [employeeId]: { file, preview: URL.createObjectURL(file) } }
+    })
   }
 
   async function signOut() {
@@ -513,14 +570,18 @@ export default function ConfiguracoesPage() {
             <div className="grid gap-4 xl:grid-cols-2">
               {employees.map((employee) => {
                 const color = employeeDrafts[employee.id] ?? employee.avatarColor ?? '#64748B'
+                const photoPreview = employeePhotos[employee.id]?.preview
                 const isDefault = !employee.avatarColor
                 return (
                   <div key={employee.id} className="rounded-xl border border-border bg-card p-4 shadow-sm">
                     <div className="mb-4 flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3">
-                        <span className="flex size-11 items-center justify-center rounded-full bg-muted text-sm font-semibold text-foreground">
-                          {getInitials(employee.name)}
-                        </span>
+                        <Avatar
+                          name={employee.name}
+                          src={photoPreview || employee.avatarUrl}
+                          color={color}
+                          className="size-11 text-sm"
+                        />
                         <span className="size-3 rounded-full" style={{ backgroundColor: hexColorPattern.test(color) ? color : '#64748B' }} />
                         <div>
                           <p className="font-semibold text-foreground">{employee.name}</p>
@@ -549,10 +610,19 @@ export default function ConfiguracoesPage() {
                       </Button>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2">
-                      <Button type="button" variant="outline" size="sm" disabled title="Upload de foto por funcionário entra em uma próxima etapa.">
+                      <label className={cn(
+                        'inline-flex h-8 cursor-pointer items-center justify-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-muted',
+                        employeeSaving === employee.id && 'pointer-events-none opacity-50',
+                      )}>
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp"
+                          className="sr-only"
+                          onChange={(event) => handleEmployeePhotoChange(employee.id, event)}
+                        />
                         <Upload className="size-4" />
-                        Foto de perfil
-                      </Button>
+                        {photoPreview ? 'Trocar foto' : 'Foto de perfil'}
+                      </label>
                       {employeeColors.map((preset) => (
                         <button
                           key={preset}

@@ -461,7 +461,7 @@ export default function FuncionariosPage() {
               <div className="space-y-3">
                 {reportEmployees.map(({ employee, values }) => (
                   <div key={employee.id} className="flex flex-col gap-4 rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-50/70 to-blue-50/70 p-4 sm:flex-row sm:items-center">
-                    <Avatar name={employee.name} color={employee.avatarColor} className="size-10" />
+                    <Avatar name={employee.name} src={employee.avatarUrl} color={employee.avatarColor} className="size-10" />
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold text-foreground">{employee.name}</p>
                       <p className="mt-1 text-sm text-muted-foreground">
@@ -563,7 +563,7 @@ export default function FuncionariosPage() {
                 <TableRow key={employee.id}>
                   <TableCell>
                     <div className="flex items-center gap-3">
-                      <Avatar name={employee.name} color={employee.avatarColor} />
+                      <Avatar name={employee.name} src={employee.avatarUrl} color={employee.avatarColor} />
                       <div>
                         <p className="font-medium text-foreground">{employee.name}</p>
                         <p className="text-xs text-muted-foreground">{employee.role}</p>

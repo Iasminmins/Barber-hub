@@ -52,6 +52,7 @@ export interface Employee {
   productCommission: number // %
   subscriptionCommission: number // %
   avatarColor?: string
+  avatarUrl?: string
 }
 
 export type ClientTag = 'vip' | 'recorrente' | 'inativo' | 'inadimplente' | 'aniversariante'

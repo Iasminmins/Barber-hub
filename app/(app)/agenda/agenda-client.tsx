@@ -423,7 +423,7 @@ export function AgendaClient({
                       )}
                       aria-label={`${dayBlocked ? 'Desbloquear' : 'Bloquear'} agenda de ${barber.name} em ${selectedDate}`}
                     >
-                      <Avatar name={barber.name} className="size-6 text-[10px]" />
+                      <Avatar name={barber.name} src={barber.avatarUrl} color={barber.avatarColor} className="size-6 text-[10px]" />
                       <span className="truncate text-xs font-semibold text-foreground">{barber.name}</span>
                       {dayBlocked ? <Ban className="ml-auto size-3.5 text-destructive" /> : null}
                     </button>
