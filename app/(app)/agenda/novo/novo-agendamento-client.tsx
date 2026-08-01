@@ -2,8 +2,8 @@
 
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useState } from 'react'
-import { ArrowLeft, CalendarPlus, MessageCircle, Save } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { ArrowLeft, CalendarPlus, MessageCircle, Save, Search } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -54,6 +54,8 @@ export function NovoAgendamentoClient({
   const searchParams = useSearchParams()
   const { barbershop, appointments: liveAppointments, scheduleBlocks, insertRecord } = useAppData()
   const [clientId, setClientId] = useState(() => searchParams.get('cliente') ?? '')
+  const [clientQuery, setClientQuery] = useState('')
+  const [isClientSearchOpen, setIsClientSearchOpen] = useState(false)
   const [barberId, setBarberId] = useState('')
   const [serviceId, setServiceId] = useState('')
   const [status, setStatus] = useState<AppointmentStatus | ''>('')
@@ -61,6 +63,26 @@ export function NovoAgendamentoClient({
   const [start, setStart] = useState('')
   const [notes, setNotes] = useState('')
   const [saveError, setSaveError] = useState('')
+
+  const filteredClients = useMemo(() => {
+    const normalizedQuery = clientQuery
+      .trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+
+    if (!normalizedQuery) return clients.slice(0, 10)
+
+    return clients
+      .filter((client) =>
+        client.name
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toLowerCase()
+          .includes(normalizedQuery),
+      )
+      .slice(0, 10)
+  }, [clientQuery, clients])
 
   async function saveAppointment(sendWhatsapp = false) {
     setSaveError('')
@@ -160,15 +182,68 @@ export function NovoAgendamentoClient({
           </h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="client">Cliente</Label>
-              <Select id="client" value={clientId} onChange={(event) => setClientId(event.target.value)}>
-                <option value="">Selecionar cliente</option>
-                {clients.map((client) => (
-                  <option key={client.id} value={client.id}>
-                    {client.name}
-                  </option>
-                ))}
-              </Select>
+              <Label htmlFor="client-search">Cliente</Label>
+              <div
+                className="relative"
+                onBlur={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget)) {
+                    setIsClientSearchOpen(false)
+                    if (!clientId) setClientQuery('')
+                  }
+                }}
+              >
+                <Search className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="client-search"
+                  value={clientQuery}
+                  placeholder={
+                    clients.find((client) => client.id === clientId)?.name ?? 'Selecionar cliente'
+                  }
+                  autoComplete="off"
+                  role="combobox"
+                  aria-expanded={isClientSearchOpen}
+                  aria-controls="client-search-results"
+                  className="pl-9"
+                  onFocus={() => setIsClientSearchOpen(true)}
+                  onChange={(event) => {
+                    setClientQuery(event.target.value)
+                    setClientId('')
+                    setIsClientSearchOpen(true)
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Escape') setIsClientSearchOpen(false)
+                  }}
+                />
+                {isClientSearchOpen ? (
+                  <div
+                    id="client-search-results"
+                    role="listbox"
+                    className="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-md border border-border bg-card p-1 shadow-lg"
+                  >
+                    {filteredClients.map((client) => (
+                      <button
+                        key={client.id}
+                        type="button"
+                        role="option"
+                        aria-selected={client.id === clientId}
+                        className="w-full rounded-sm px-3 py-2 text-left text-sm hover:bg-muted focus:bg-muted focus:outline-none"
+                        onClick={() => {
+                          setClientId(client.id)
+                          setClientQuery('')
+                          setIsClientSearchOpen(false)
+                        }}
+                      >
+                        {client.name}
+                      </button>
+                    ))}
+                    {filteredClients.length === 0 ? (
+                      <p className="px-3 py-2 text-sm text-muted-foreground">
+                        Nenhum cliente encontrado.
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="barber">Barbeiro</Label>
