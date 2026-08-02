@@ -21,9 +21,9 @@ type BookingService = {
 }
 
 type BookingPage = {
-  barbershop: { name: string; slug: string; city: string; color: string }
+  barbershop: { name: string; slug: string; city: string; color: string; logoUrl?: string }
   services: BookingService[]
-  employees: Array<{ id: string; name: string }>
+  employees: Array<{ id: string; name: string; avatarUrl?: string }>
 }
 
 type BookingResult = {
@@ -192,7 +192,9 @@ export function PublicBookingClient({ slug }: { slug: string }) {
           <BrandMark
             name={page.barbershop.name}
             color={page.barbershop.color}
+            logoUrl={page.barbershop.logoUrl}
             className="size-12 rounded-xl"
+            imageClassName="object-contain bg-white"
           />
           <div>
             <h1 className="text-lg font-bold sm:text-xl">{page.barbershop.name}</h1>
@@ -256,8 +258,12 @@ export function PublicBookingClient({ slug }: { slug: string }) {
                       employeeId === employee.id ? 'border-primary bg-primary/5 ring-2 ring-primary/15' : 'hover:bg-muted/50',
                     )}
                   >
-                    <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted">
-                      <UserRound className="size-4" />
+                    <span className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted ring-1 ring-border">
+                      {employee.avatarUrl ? (
+                        <img src={employee.avatarUrl} alt={`Foto de ${employee.name}`} className="size-full object-cover" />
+                      ) : (
+                        <UserRound className="size-5" />
+                      )}
                     </span>
                     <span className="font-semibold">{employee.name}</span>
                   </button>
