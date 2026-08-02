@@ -7,6 +7,7 @@ import type { Appointment, Barbershop, CatalogItem, Client, Commission, Employee
 
 type AppData = {
   barbershop: Barbershop
+  barbershops: Barbershop[]
   member: Member
   staffMembers: Member[]
   employees: Employee[]
@@ -26,6 +27,7 @@ const fallbackShop: Barbershop = { id: '', name: '', slug: '', color: '#1E3A32',
 type MutationResult = { error?: string; data?: any }
 type AppDataContextValue = AppData & {
   refresh: () => Promise<void>
+  setActiveBarbershop: (barbershopId: string) => void
   insertRecord: (table: string, values: Record<string, unknown>) => Promise<MutationResult>
   insertMany: (table: string, values: Record<string, unknown>[]) => Promise<MutationResult>
   updateRecord: (table: string, id: string, values: Record<string, unknown>) => Promise<MutationResult>
@@ -71,6 +73,7 @@ function withTimeout<T>(promise: PromiseLike<T>, message: string) {
 
 export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [value, setValue] = React.useState<AppData | null>(null)
+  const [requestedShopId, setRequestedShopId] = React.useState('')
   const [error, setError] = React.useState('')
   const [loadingMessage, setLoadingMessage] = React.useState('Carregando dados da sua barbearia...')
 
@@ -94,17 +97,21 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         .select('id, barbershop_id, employee_id, name, email, role, active, permissions')
         .eq('user_id', user.id)
         .eq('active', true)
-        .limit(1),
+        .order('created_at'),
       'A barbearia demorou demais para carregar. Atualize a página e tente novamente.',
     )
     if (memberError) { setError(memberError.message); return }
 
-    const shopId = memberships?.[0]?.barbershop_id
+    const availableShopIds = memberships?.map((membership) => membership.barbershop_id) ?? []
+    const storedShopId = typeof window !== 'undefined' ? window.localStorage.getItem('barberhub:active-shop') ?? '' : ''
+    const preferredShopId = requestedShopId || storedShopId
+    const shopId = availableShopIds.includes(preferredShopId) ? preferredShopId : availableShopIds[0]
     if (!shopId) { setError('Esta conta não possui uma barbearia vinculada.'); return }
-    const { data: shop, error: shopError } = await withTimeout(
-      supabase.from('barbershops').select('*').eq('id', shopId).single(),
+    const { data: shops, error: shopError } = await withTimeout(
+      supabase.from('barbershops').select('*').in('id', availableShopIds).order('created_at'),
       'Os dados da unidade demoraram demais para carregar. Atualize a página e tente novamente.',
     )
+    const shop = shops?.find((candidate) => candidate.id === shopId)
     if (shopError || !shop) { setError(shopError?.message ?? 'Barbearia não encontrada.'); return }
 
     async function fetchAllRows(buildQuery: (from: number, to: number) => any) {
@@ -146,15 +153,32 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     const failed = normalizedResults.find((result) => result.error)
     if (failed?.error) { setError(failed.error.message); return }
     const [staffMembers, employees, clients, catalog, appointments, scheduleBlocks, orders, orderItems, plans, subscriptions, commissions, financial, imports] = normalizedResults.map((result) => result.data ?? [])
-    const currentMembership = memberships[0]
+    const currentMembership = memberships.find((membership) => membership.barbershop_id === shopId) ?? memberships[0]
     const linkedEmployeeId = currentMembership.employee_id ?? ''
     const visibleEmployees = currentMembership.role === 'barber'
       ? employees.filter((employee: any) => employee.id === linkedEmployeeId)
       : employees
 
     setValue({
+      barbershops: (shops ?? []).map((item) => ({
+        id: item.id,
+        networkId: item.network_id ?? undefined,
+        name: item.name,
+        slug: item.slug,
+        color: item.color,
+        city: item.city ?? '',
+        logoUrl: item.logo_url ?? '',
+        billingDocument: item.billing_document ?? '',
+        plan: item.plan,
+        billingStatus: item.billing_status ?? 'trialing',
+        trialEndsAt: item.trial_ends_at ?? item.created_at,
+        nextBillingDate: item.next_billing_date ?? undefined,
+        paymentMethods: normalizePaymentMethods(item.payment_methods),
+        agendaSettings: normalizeAgendaSettings(item.agenda_settings),
+      })),
       barbershop: {
         id: shopId,
+        networkId: shop.network_id ?? undefined,
         name: shop.name,
         slug: shop.slug,
         color: shop.color,
@@ -182,7 +206,13 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       financialEntries: financial.map((r:any)=>({ id:r.id, barbershopId:r.barbershop_id, orderId:r.order_id??undefined, type:r.type, category:r.category, description:r.description, amount:num(r.amount), method:r.method??undefined, date:r.date })),
       imports: imports.map((r:any)=>({ id:r.id, barbershopId:r.barbershop_id, entity:r.entity, fileName:r.file_name, totalRows:num(r.total_rows), importedRows:num(r.imported_rows), errorRows:num(r.error_rows), status:r.status, createdAt:r.created_at, createdBy:r.created_by })),
     })
-  }, [])
+  }, [requestedShopId])
+
+  const setActiveBarbershop = React.useCallback((barbershopId: string) => {
+    if (!value?.barbershops.some((shop) => shop.id === barbershopId)) return
+    window.localStorage.setItem('barberhub:active-shop', barbershopId)
+    setRequestedShopId(barbershopId)
+  }, [value?.barbershops])
 
   const insertRecord = React.useCallback(async (table: string, values: Record<string, unknown>) => {
     const supabase = createBrowserSupabaseClient()
@@ -265,7 +295,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     </main>
   )
   if (!value) return <main className="grid min-h-screen place-items-center text-sm text-muted-foreground">{loadingMessage}</main>
-  return <AppDataContext.Provider value={{ ...value, refresh: load, insertRecord, insertMany, updateRecord, deleteRecord }}>{children}</AppDataContext.Provider>
+  return <AppDataContext.Provider value={{ ...value, refresh: load, setActiveBarbershop, insertRecord, insertMany, updateRecord, deleteRecord }}>{children}</AppDataContext.Provider>
 }
 
 export function useAppData() {

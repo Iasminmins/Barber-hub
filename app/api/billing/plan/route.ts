@@ -13,13 +13,23 @@ function parsePlan(plan: unknown): SaasPlanId {
 
 export async function PATCH(request: Request) {
   try {
-    const { barbershop } = await getBillingContext(request)
+    const { barbershop, user } = await getBillingContext(request)
     const body = await request.json().catch(() => ({}))
     const planId = parsePlan(body.plan)
     const plan = getSaasPlan(planId)
+    const supabase = createAdminSupabaseClient()
 
     if (barbershop.plan === planId) {
       return NextResponse.json({ plan: planId, message: 'Este plano já está selecionado.' })
+    }
+
+    if (barbershop.network_id && planId !== 'premium') {
+      const { count, error: countError } = await supabase
+        .from('barbershops')
+        .select('id', { count: 'exact', head: true })
+        .eq('network_id', barbershop.network_id)
+      if (countError) throw new Error(countError.message)
+      if ((count ?? 0) > 1) throw new Error('Remova as unidades adicionais antes de sair do plano Premium.')
     }
 
     if (barbershop.asaas_subscription_id) {
@@ -34,13 +44,27 @@ export async function PATCH(request: Request) {
       })
     }
 
-    const supabase = createAdminSupabaseClient()
     const { error } = await supabase
       .from('barbershops')
       .update({ plan: planId })
       .eq('id', barbershop.id)
 
     if (error) throw new Error(error.message)
+
+    if (planId === 'premium' && !barbershop.network_id) {
+      const { data: network, error: networkError } = await supabase
+        .from('networks')
+        .insert({ name: barbershop.name, primary_barbershop_id: barbershop.id })
+        .select('id')
+        .single()
+      if (networkError || !network) throw new Error(networkError?.message ?? 'Não foi possível preparar a gestão multiunidade.')
+
+      const [{ error: shopNetworkError }, { error: memberNetworkError }] = await Promise.all([
+        supabase.from('barbershops').update({ network_id: network.id }).eq('id', barbershop.id),
+        supabase.from('network_members').insert({ network_id: network.id, user_id: user.id, role: 'owner' }),
+      ])
+      if (shopNetworkError || memberNetworkError) throw new Error(shopNetworkError?.message ?? memberNetworkError?.message ?? 'Não foi possível preparar a gestão multiunidade.')
+    }
 
     return NextResponse.json({
       plan: planId,

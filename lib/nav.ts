@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react'
 import {
   ArrowLeftRight,
+  Building2,
   CalendarDays,
   CreditCard,
   LayoutDashboard,
@@ -16,6 +17,7 @@ export interface NavItem {
   label: string
   href: string
   icon: LucideIcon
+  managementOnly?: boolean
 }
 
 export interface NavGroup {
@@ -46,6 +48,7 @@ export const navGroups: NavGroup[] = [
     items: [
       { label: 'Financeiro', href: '/financeiro', icon: Wallet },
       { label: 'Importar / Exportar', href: '/importacao', icon: ArrowLeftRight },
+      { label: 'Minha rede', href: '/rede', icon: Building2, managementOnly: true },
       { label: 'Configurações', href: '/configuracoes', icon: Settings },
     ],
   },

@@ -199,14 +199,12 @@ function buildNotifications(
 
 export function Topbar({ onMenu }: { onMenu: () => void }) {
   const router = useRouter()
-  const { appointments, barbershop, catalog, clients, member, orders, subscriptions } = useAppData()
-  const barbershops = [barbershop]
+  const { appointments, barbershop, barbershops, catalog, clients, member, orders, setActiveBarbershop, subscriptions } = useAppData()
   const [readAppointmentIds, setReadAppointmentIds] = React.useState<Set<string>>(new Set())
   const notifications = React.useMemo(
     () => buildNotifications(clients, catalog, orders, subscriptions, appointments, readAppointmentIds),
     [appointments, catalog, clients, orders, readAppointmentIds, subscriptions],
   )
-  const [active, setActive] = React.useState(barbershop)
   const [open, setOpen] = React.useState(false)
   const [notificationsOpen, setNotificationsOpen] = React.useState(false)
   const [activeTab, setActiveTab] = React.useState<NotificationTab>('aniversarios')
@@ -218,10 +216,6 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
   const barbershopRef = React.useRef<HTMLDivElement>(null)
   const notificationRef = React.useRef<HTMLDivElement>(null)
   const appointmentStorageKey = `barberhub:read-appointments:${barbershop.id}`
-
-  React.useEffect(() => {
-    setActive(barbershop)
-  }, [barbershop])
 
   React.useEffect(() => {
     try {
@@ -370,10 +364,10 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
           onClick={() => setOpen((value) => !value)}
           className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-border bg-background px-3 py-1.5 text-left transition-colors hover:bg-muted"
         >
-          <BrandMark name={active.name} color={active.color} logoUrl={active.logoUrl} className="size-8 rounded-md text-xs" />
+          <BrandMark name={barbershop.name} color={barbershop.color} logoUrl={barbershop.logoUrl} className="size-8 rounded-md text-xs" />
           <span className="hidden leading-tight sm:block">
-            <span className="block text-sm font-semibold text-foreground">{active.name}</span>
-            <span className="block text-[11px] text-muted-foreground">{active.city}</span>
+            <span className="block text-sm font-semibold text-foreground">{barbershop.name}</span>
+            <span className="block text-[11px] text-muted-foreground">{barbershop.city}</span>
           </span>
           <ChevronDown className="size-4 text-muted-foreground" />
         </button>
@@ -383,23 +377,23 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
             <p className="px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
               Suas barbearias
             </p>
-            {barbershops.map((barbershop) => (
+            {barbershops.map((shop) => (
               <button
-                key={barbershop.id}
+                key={shop.id}
                 onClick={() => {
-                  setActive(barbershop)
+                  setActiveBarbershop(shop.id)
                   setOpen(false)
                 }}
                 className="flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-muted"
               >
-                <BrandMark name={barbershop.name} color={barbershop.color} logoUrl={barbershop.logoUrl} className="size-8 rounded-md text-xs" />
+                <BrandMark name={shop.name} color={shop.color} logoUrl={shop.logoUrl} className="size-8 rounded-md text-xs" />
                 <span className="flex-1 leading-tight">
-                  <span className="block text-sm font-medium text-foreground">{barbershop.name}</span>
+                  <span className="block text-sm font-medium text-foreground">{shop.name}</span>
                   <span className="block text-[11px] text-muted-foreground capitalize">
-                    Plano {barbershop.plan} · {barbershop.city}
+                    Plano {shop.plan} · {shop.city}
                   </span>
                 </span>
-                {barbershop.id === active.id ? <Check className="size-4 text-primary" /> : null}
+                {shop.id === barbershop.id ? <Check className="size-4 text-primary" /> : null}
               </button>
             ))}
           </div>

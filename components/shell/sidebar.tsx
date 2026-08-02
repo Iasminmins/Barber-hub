@@ -2,9 +2,13 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { PanelLeftClose, Sparkles } from 'lucide-react'
+import * as React from 'react'
+import { Mail, MessageCircle, PanelLeftClose, Send, Sparkles } from 'lucide-react'
 import { BrandMark } from '@/components/brand-mark'
 import { useAppData } from '@/components/data/app-data-provider'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogHeader } from '@/components/ui/dialog'
+import { Textarea } from '@/components/ui/textarea'
 import { navGroups } from '@/lib/nav'
 import { getSaasPlan } from '@/lib/saas-plans'
 import { cn } from '@/lib/utils'
@@ -21,6 +25,8 @@ export function SidebarContent({
 }) {
   const pathname = usePathname()
   const { barbershop, member } = useAppData()
+  const [supportOpen, setSupportOpen] = React.useState(false)
+  const [supportMessage, setSupportMessage] = React.useState('')
   const currentPlan = getSaasPlan(barbershop.plan)
   const allowedPaths = member.role === 'barber'
     ? allowedPathsForPermissions(member.permissions)
@@ -73,7 +79,10 @@ export function SidebarContent({
               </p>
             ) : null}
             <ul className="flex flex-col gap-0.5">
-              {group.items.filter((item) => !allowedPaths || allowedPaths.includes(item.href)).map((item) => {
+              {group.items.filter((item) => {
+                if (item.managementOnly && !['owner', 'manager'].includes(member.role)) return false
+                return !allowedPaths || allowedPaths.includes(item.href)
+              }).map((item) => {
                 const active = pathname === item.href
                 const Icon = item.icon
                 return (
@@ -102,6 +111,19 @@ export function SidebarContent({
       </nav>
 
       <div className="border-t border-sidebar-border p-3">
+        <button
+          type="button"
+          onClick={() => setSupportOpen(true)}
+          className={cn(
+            'mb-2 flex w-full items-center rounded-lg border border-[#25D366]/30 bg-[#25D366]/10 text-sm font-semibold text-sidebar-foreground transition-colors hover:bg-[#25D366]/20',
+            collapsed ? 'justify-center p-2.5' : 'gap-3 px-3 py-2.5',
+          )}
+          aria-label="Fale conosco"
+          title={collapsed ? 'Fale conosco' : undefined}
+        >
+          <MessageCircle className="size-[18px] shrink-0 text-[#1b9b4b]" />
+          {!collapsed ? <span>Fale conosco</span> : null}
+        </button>
         <div
           className={cn(
             'flex rounded-lg bg-accent/60 p-3',
@@ -120,6 +142,59 @@ export function SidebarContent({
           ) : null}
         </div>
       </div>
+
+      <Dialog open={supportOpen} onClose={() => setSupportOpen(false)}>
+        <DialogHeader
+          title="Como podemos ajudar?"
+          description="Escreva sua dúvida e escolha por onde deseja falar com o suporte do MeuBarberHub."
+        />
+
+        <label htmlFor="support-message" className="text-sm font-medium text-foreground">
+          Sua mensagem
+        </label>
+        <Textarea
+          id="support-message"
+          value={supportMessage}
+          onChange={(event) => setSupportMessage(event.target.value)}
+          placeholder="Ex.: Preciso de ajuda para configurar minha agenda..."
+          className="mt-2 min-h-28 resize-none"
+        />
+        <p className="mt-2 text-xs text-muted-foreground">A mensagem será preenchida automaticamente no canal escolhido.</p>
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          <Button
+            type="button"
+            className="h-auto min-h-12 bg-[#25D366] px-4 py-3 text-[#10251f] hover:bg-[#20bd5a]"
+            disabled={!supportMessage.trim()}
+            onClick={() => {
+              const message = encodeURIComponent(`Olá, sou da ${barbershop.name}. ${supportMessage.trim()}`)
+              window.open(`https://wa.me/5524999327549?text=${message}`, '_blank', 'noopener,noreferrer')
+            }}
+          >
+            <MessageCircle className="size-5" />
+            Enviar pelo WhatsApp
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-auto min-h-12 px-4 py-3"
+            disabled={!supportMessage.trim()}
+            onClick={() => {
+              const subject = encodeURIComponent(`Dúvida sobre o MeuBarberHub — ${barbershop.name}`)
+              const body = encodeURIComponent(supportMessage.trim())
+              window.location.href = `mailto:suportemeubarberhub@gmail.com?subject=${subject}&body=${body}`
+            }}
+          >
+            <Mail className="size-5" />
+            Enviar por e-mail
+          </Button>
+        </div>
+
+        <div className="mt-4 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+          <Send className="size-3.5" />
+          WhatsApp: (24) 99932-7549
+        </div>
+      </Dialog>
     </div>
   )
 }

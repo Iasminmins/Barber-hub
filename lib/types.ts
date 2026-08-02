@@ -15,6 +15,7 @@ export type PaymentMethod = 'dinheiro' | 'pix' | 'credito' | 'debito' | 'outro'
 
 export interface Barbershop {
   id: string
+  networkId?: string
   name: string
   slug: string
   color: string
