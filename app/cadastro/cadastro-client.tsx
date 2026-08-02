@@ -108,6 +108,21 @@ export function CadastroClient({ selectedPlanId }: { selectedPlanId: SaasPlanId 
         return
       }
 
+      try {
+        const welcomeResponse = await fetch('/api/auth/welcome', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${data.session.access_token}`,
+          },
+        })
+
+        if (!welcomeResponse.ok) {
+          console.error('Welcome email could not be sent.')
+        }
+      } catch {
+        console.error('Welcome email could not be sent.')
+      }
+
       router.push('/dashboard')
       return
     }
