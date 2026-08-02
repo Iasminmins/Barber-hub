@@ -29,7 +29,9 @@ export function formatDateShort(iso?: string | null): string {
 
 export function daysUntil(iso?: string | null): number {
   if (!iso) return Number.POSITIVE_INFINITY
-  const target = new Date(`${iso}T00:00:00`).getTime()
+  const targetDate = new Date(iso.length <= 10 ? `${iso}T00:00:00` : iso)
+  targetDate.setHours(0, 0, 0, 0)
+  const target = targetDate.getTime()
   if (Number.isNaN(target)) return Number.POSITIVE_INFINITY
   const now = new Date()
   now.setHours(0, 0, 0, 0)

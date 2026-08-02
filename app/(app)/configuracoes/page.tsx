@@ -1,6 +1,7 @@
 'use client'
 
 import { type ChangeEvent, type ComponentType, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import {
   Bell,
   Building2,
@@ -72,14 +73,16 @@ function getEmployeePhotoPath(barbershopId: string, employeeId: string, file: Fi
 export default function ConfiguracoesPage() {
   const { barbershop, employees, updateRecord, refresh } = useAppData()
   const currentPlan = getSaasPlan(barbershop.plan)
+  const searchParams = useSearchParams()
 
   const [activeTab, setActiveTab] = useState<SettingsTab>('aparencia')
   useEffect(() => {
-    const requested = new URLSearchParams(window.location.search).get('tab') as SettingsTab | null
-    if (requested && settingsTabs.some((tab) => tab.id === requested)) {
-      setActiveTab(requested)
-    }
-  }, [])
+    const requested = searchParams.get('tab')
+    const nextTab = settingsTabs.some((tab) => tab.id === requested)
+      ? requested as SettingsTab
+      : 'aparencia'
+    setActiveTab(nextTab)
+  }, [searchParams])
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
   const [logoFile, setLogoFile] = useState<File | null>(null)
