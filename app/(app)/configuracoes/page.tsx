@@ -696,10 +696,24 @@ export default function ConfiguracoesPage() {
                       setSaved(false)
                     }}
                   >
-                    <option value="receita">Por receita — serviço coberto pelo plano NÃO gera comissão</option>
-                    <option value="servico">Por serviço — todo atendimento gera comissão</option>
+                    <option value="receita">Não pagar comissão a cada atendimento</option>
+                    <option value="servico">Pagar comissão por cada atendimento</option>
                   </Select>
-                  <p className="mt-2 text-xs text-muted-foreground">Define se o profissional ganha comissão quando o cliente usa um plano/assinatura já paga.</p>
+                  <div className="mt-3 rounded-lg border border-border bg-muted/30 p-3 text-xs leading-relaxed text-muted-foreground">
+                    {agendaSettings.planCommissionMode === 'servico' ? (
+                      <>
+                        <p className="font-semibold text-foreground">Pagar por atendimento</p>
+                        <p className="mt-1">O profissional recebe comissão sempre que realizar um serviço, mesmo que o cliente não pague no momento porque o serviço está incluído na assinatura.</p>
+                        <p className="mt-1"><strong>Exemplo:</strong> corte de R$ 40 com comissão de 30% gera R$ 12 para o profissional.</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="font-semibold text-foreground">Não pagar por atendimento</p>
+                        <p className="mt-1">O serviço usado pela assinatura não gera comissão automática. Use esta opção se você divide depois a receita das mensalidades por outra regra.</p>
+                        <p className="mt-1"><strong>Exemplo:</strong> o cliente usa um corte incluído no plano e nenhuma comissão é criada naquele atendimento.</p>
+                      </>
+                    )}
+                  </div>
                 </div>
 
                 <div className="space-y-3">
