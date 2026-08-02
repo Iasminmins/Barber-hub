@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogHeader } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
 import { navGroups } from '@/lib/nav'
+import { daysUntil } from '@/lib/format'
 import { getSaasPlan } from '@/lib/saas-plans'
 import { cn } from '@/lib/utils'
 import { allowedPathsForPermissions } from '@/lib/staff-permissions'
@@ -28,6 +29,17 @@ export function SidebarContent({
   const [supportOpen, setSupportOpen] = React.useState(false)
   const [supportMessage, setSupportMessage] = React.useState('')
   const currentPlan = getSaasPlan(barbershop.plan)
+  const trialing = barbershop.billingStatus === 'trialing'
+  const rawTrialDays = daysUntil(barbershop.trialEndsAt)
+  const trialDaysLeft = trialing && Number.isFinite(rawTrialDays) ? Math.max(0, rawTrialDays) : null
+  const trialLabel =
+    trialDaysLeft === null
+      ? null
+      : trialDaysLeft === 0
+        ? 'Teste grátis · último dia'
+        : trialDaysLeft === 1
+          ? 'Teste grátis · falta 1 dia'
+          : `Teste grátis · faltam ${trialDaysLeft} dias`
   const allowedPaths = member.role === 'barber'
     ? allowedPathsForPermissions(member.permissions)
     : member.role === 'reception'
@@ -124,23 +136,35 @@ export function SidebarContent({
           <MessageCircle className="size-[18px] shrink-0 text-[#1b9b4b]" />
           {!collapsed ? <span>Fale conosco</span> : null}
         </button>
-        <div
+        <Link
+          href="/configuracoes?tab=assinatura"
+          onClick={onNavigate}
           className={cn(
-            'flex rounded-lg bg-accent/60 p-3',
+            'flex rounded-lg p-3 transition-colors',
+            trialLabel ? 'bg-gold/15 ring-1 ring-gold/30 hover:bg-gold/25' : 'bg-accent/60 hover:bg-accent',
             collapsed ? 'justify-center' : 'items-start gap-2.5',
           )}
-          title={collapsed ? `Plano ${currentPlan.name}` : undefined}
+          title={collapsed ? (trialLabel ?? `Plano ${currentPlan.name}`) : undefined}
         >
           <Sparkles className="mt-0.5 size-4 shrink-0 text-gold-foreground" />
           {!collapsed ? (
             <div className="leading-tight">
-              <p className="text-xs font-semibold text-foreground">Plano {currentPlan.name}</p>
-              <p className="text-[11px] text-muted-foreground">
-                {currentPlan.users} · {currentPlan.reports}
-              </p>
+              {trialLabel ? (
+                <>
+                  <p className="text-xs font-semibold text-gold-foreground">{trialLabel}</p>
+                  <p className="text-[11px] text-muted-foreground">Plano {currentPlan.name} · ativar pagamento</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-xs font-semibold text-foreground">Plano {currentPlan.name}</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {currentPlan.users} · {currentPlan.reports}
+                  </p>
+                </>
+              )}
             </div>
           ) : null}
-        </div>
+        </Link>
       </div>
 
       <Dialog open={supportOpen} onClose={() => setSupportOpen(false)}>

@@ -74,6 +74,12 @@ export default function ConfiguracoesPage() {
   const currentPlan = getSaasPlan(barbershop.plan)
 
   const [activeTab, setActiveTab] = useState<SettingsTab>('aparencia')
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get('tab') as SettingsTab | null
+    if (requested && settingsTabs.some((tab) => tab.id === requested)) {
+      setActiveTab(requested)
+    }
+  }, [])
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
   const [logoFile, setLogoFile] = useState<File | null>(null)
