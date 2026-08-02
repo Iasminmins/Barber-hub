@@ -67,9 +67,58 @@ export default function FinanceiroPage() {
     setDeleting(null)
   }
   function exportFinance() {
+    const categoryMap = new Map<string, { entrada: number; saida: number }>()
+    for (const entry of entries) {
+      const bucket = categoryMap.get(entry.category) ?? { entrada: 0, saida: 0 }
+      if (entry.type === 'entrada') bucket.entrada += entry.amount
+      else bucket.saida += entry.amount
+      categoryMap.set(entry.category, bucket)
+    }
+    const byCategory = Array.from(categoryMap.entries())
+      .map(([categoria, v]) => ({ categoria, entradas: v.entrada, saidas: v.saida, saldo: v.entrada - v.saida }))
+      .sort((a, b) => b.saldo - a.saldo)
+    const incomeCount = entries.filter((e) => e.type === 'entrada').length
+    const ticketMedio = incomeCount ? income / incomeCount : 0
+    const period = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long' }).format(new Date())
+
     downloadExcelWorkbook(`financeiro-${barbershop.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${new Date().toISOString().slice(0, 10)}`, [
-      { name: 'Resumo', title: 'Resumo financeiro', subtitle: barbershop.name, columns: [{ key: 'indicador', label: 'Indicador', width: 170 }, { key: 'valor', label: 'Valor', width: 110, kind: 'currency' }], rows: [{ indicador: 'Entradas', valor: income }, { indicador: 'Saídas', valor: -outcome }, { indicador: 'Saldo', valor: balance }] },
-      { name: 'Lançamentos', title: 'Lançamentos financeiros', subtitle: `${barbershop.name} • ${entries.length} registros`, columns: [{ key: 'data', label: 'Data', width: 85, kind: 'date' }, { key: 'tipo', label: 'Tipo', width: 75 }, { key: 'descricao', label: 'Descrição', width: 220 }, { key: 'categoria', label: 'Categoria', width: 130 }, { key: 'metodo', label: 'Método', width: 90 }, { key: 'valor', label: 'Valor', width: 100, kind: 'currency' }], rows: entries.map((entry) => ({ data: entry.date, tipo: entry.type === 'entrada' ? 'Entrada' : 'Saída', descricao: entry.description, categoria: entry.category, metodo: entry.method ? METHOD_LABEL[entry.method] : 'A definir', valor: entry.type === 'entrada' ? entry.amount : -entry.amount })) },
+      {
+        name: 'Resumo', title: 'Resumo financeiro', subtitle: `${barbershop.name} • ${entries.length} lançamentos • ${period}`,
+        columns: [{ key: 'indicador', label: 'Indicador', width: 210 }, { key: 'valor', label: 'Valor', width: 120, kind: 'currency' }],
+        rows: [
+          { indicador: 'Entradas', valor: income },
+          { indicador: 'Saídas', valor: -outcome },
+          { indicador: 'Saldo', valor: balance },
+          { indicador: 'Ticket médio de entrada', valor: ticketMedio },
+        ],
+      },
+      {
+        name: 'Por método', title: 'Entradas por método de pagamento', subtitle: barbershop.name,
+        columns: [{ key: 'metodo', label: 'Método', width: 170 }, { key: 'valor', label: 'Entradas', width: 130, kind: 'currency' }],
+        rows: [...byMethod.map((m) => ({ metodo: m.method, valor: m.value })), { metodo: 'Total', valor: methodTotal }],
+      },
+      {
+        name: 'Por categoria', title: 'Movimentação por categoria', subtitle: barbershop.name,
+        columns: [
+          { key: 'categoria', label: 'Categoria', width: 170 },
+          { key: 'entradas', label: 'Entradas', width: 115, kind: 'currency' },
+          { key: 'saidas', label: 'Saídas', width: 115, kind: 'currency' },
+          { key: 'saldo', label: 'Saldo', width: 115, kind: 'currency' },
+        ],
+        rows: byCategory.map((c) => ({ categoria: c.categoria, entradas: c.entradas, saidas: -c.saidas, saldo: c.saldo })),
+      },
+      {
+        name: 'Lançamentos', title: 'Lançamentos financeiros', subtitle: `${barbershop.name} • ${entries.length} registros`,
+        columns: [
+          { key: 'data', label: 'Data', width: 85, kind: 'date' },
+          { key: 'tipo', label: 'Tipo', width: 75 },
+          { key: 'descricao', label: 'Descrição', width: 220 },
+          { key: 'categoria', label: 'Categoria', width: 130 },
+          { key: 'metodo', label: 'Método', width: 90 },
+          { key: 'valor', label: 'Valor', width: 100, kind: 'currency' },
+        ],
+        rows: entries.map((entry) => ({ data: entry.date, tipo: entry.type === 'entrada' ? 'Entrada' : 'Saída', descricao: entry.description, categoria: entry.category, metodo: entry.method ? METHOD_LABEL[entry.method] : 'A definir', valor: entry.type === 'entrada' ? entry.amount : -entry.amount })),
+      },
     ])
   }
 
