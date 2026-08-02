@@ -5,6 +5,7 @@ import { useMemo, useState } from "react"
 import { AlertTriangle, Clock, Package, Pencil, Plus, Save, Scissors, Search, Trash2, Upload } from "lucide-react"
 import type { CatalogItem, CatalogType } from "@/lib/types"
 import { useAppData } from '@/components/data/app-data-provider'
+import { getLowStockThreshold, isLowStock } from '@/lib/inventory'
 import { formatCurrency, formatPercent } from "@/lib/format"
 import { Input } from "@/components/ui/input"
 import { Button, buttonVariants } from "@/components/ui/button"
@@ -68,7 +69,7 @@ function parseDecimal(value: string) {
 }
 
 export function CatalogoClient({ items }: { items: CatalogItem[] }) {
-  const { deleteRecord, updateRecord } = useAppData()
+  const { barbershop, deleteRecord, updateRecord } = useAppData()
   const [records, setRecords] = useState(items)
   const [tab, setTab] = useState<CatalogType>("servico")
   const [query, setQuery] = useState("")
@@ -85,7 +86,7 @@ export function CatalogoClient({ items }: { items: CatalogItem[] }) {
 
   const services = records.filter((i) => i.type === "servico")
   const products = records.filter((i) => i.type === "produto")
-  const lowStock = products.filter((p) => (p.stock ?? 0) <= (p.minStock ?? 0)).length
+  const lowStock = products.filter((p) => isLowStock(p.stock, p.minStock, barbershop.agendaSettings.lowStockAlert)).length
   const inventoryValue = products.reduce((s, p) => s + (p.stock ?? 0) * p.cost, 0)
 
   async function deleteItem(id: string) {
@@ -217,7 +218,7 @@ export function CatalogoClient({ items }: { items: CatalogItem[] }) {
           </TableHeader>
           <TableBody>
             {filtered.map((i) => {
-              const low = i.type === "produto" && (i.stock ?? 0) <= (i.minStock ?? 0)
+              const low = i.type === "produto" && isLowStock(i.stock, i.minStock, barbershop.agendaSettings.lowStockAlert)
               return (
                 <TableRow key={i.id}>
                   <TableCell>
@@ -239,7 +240,7 @@ export function CatalogoClient({ items }: { items: CatalogItem[] }) {
                   ) : (
                     <TableCell className="text-right tabular-nums">
                       <span className={low ? "font-semibold text-destructive" : "text-foreground"}>{i.stock} un.</span>
-                      <span className="text-muted-foreground"> / mín {i.minStock}</span>
+                      <span className="text-muted-foreground"> / mín {getLowStockThreshold(i.minStock, barbershop.agendaSettings.lowStockAlert)}</span>
                     </TableCell>
                   )}
                   <TableCell className="text-right tabular-nums text-muted-foreground">{formatPercent(i.commission)}</TableCell>

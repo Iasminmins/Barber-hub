@@ -39,6 +39,7 @@ import type {
   Subscription,
 } from '@/lib/types'
 import { isBarberRole } from '@/lib/employees'
+import { isLowStock } from '@/lib/inventory'
 import { buildFirstClientActivity, getEffectiveClientStartDate } from '@/lib/client-start'
 
 const METHOD_LABEL: Record<string, string> = {
@@ -240,6 +241,7 @@ export function DashboardClient({
   imports,
   orders,
   subscriptions,
+  lowStockThreshold,
   isBarber = false,
 }: {
   appointments: Appointment[]
@@ -251,6 +253,7 @@ export function DashboardClient({
   imports: ImportRecord[]
   orders: Order[]
   subscriptions: Subscription[]
+  lowStockThreshold: number
   isBarber?: boolean
 }) {
   const dashboardOrders = orders
@@ -294,7 +297,7 @@ export function DashboardClient({
     return subscription.status === 'vencendo' || (due >= 0 && due <= 7)
   })
   const lowStock = catalog.filter(
-    (item) => item.type === 'produto' && (item.stock ?? 0) <= (item.minStock ?? 0),
+    (item) => item.type === 'produto' && isLowStock(item.stock, item.minStock, lowStockThreshold),
   )
   const pendingCommissions = commissions
     .filter((commission) => commission.status === 'pendente' && isInsideRange(commission.date, range))

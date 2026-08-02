@@ -84,7 +84,8 @@ export function AgendaClient({
   barbershopName: string
   barbershopId: string
 }) {
-  const { catalog, clients, insertRecord, updateRecord, deleteRecord } = useAppData()
+  const { barbershop, catalog, clients, insertRecord, updateRecord, deleteRecord } = useAppData()
+  const quickPreferences = barbershop.agendaSettings.quickPreferences
   const [view, setView] = React.useState('dia')
   const [barberFilter, setBarberFilter] = React.useState<string>('todos')
   const [selectedDate, setSelectedDate] = React.useState(() => toDateKey(new Date()))
@@ -183,7 +184,7 @@ export function AgendaClient({
       const appointmentEnd = appointmentStart + appointment.durationMin
       return appointmentStart < editedEnd && appointmentEnd > editedStart
     })
-    if (hasConflict) {
+    if (hasConflict && !quickPreferences.allowWalkIns) {
       setAppointmentError('Este barbeiro já possui outro agendamento nesse horário.')
       return
     }
@@ -265,7 +266,9 @@ export function AgendaClient({
   }
 
   const barbers = employees.filter((e) => e.active && isBarberRole(e.role))
-  const columns = barberFilter === 'todos' ? barbers : barbers.filter((b) => b.id === barberFilter)
+  const columns = quickPreferences.showByBarber && barberFilter === 'todos'
+    ? barbers
+    : barbers.filter((b) => b.id === (barberFilter === 'todos' ? barbers[0]?.id : barberFilter))
 
   const selectedDayAppointments = agendaAppointments.filter((a) => a.date === selectedDate)
   const weekRange = getWeekRange(selectedDate)
@@ -385,7 +388,7 @@ export function AgendaClient({
             onChange={(e) => setBarberFilter(e.target.value)}
             className="h-9 min-w-0 flex-1 rounded-lg border border-border bg-card px-3 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30 sm:flex-none"
           >
-            <option value="todos">Todos os barbeiros</option>
+            {quickPreferences.showByBarber ? <option value="todos">Todos os barbeiros</option> : null}
             {barbers.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.name}
@@ -428,9 +431,22 @@ export function AgendaClient({
                       {dayBlocked ? <Ban className="ml-auto size-3.5 text-destructive" /> : null}
                     </button>
                     <div className={cn('relative', dayBlocked && 'bg-destructive/[0.04]')} style={{ height: HOURS.length * 64 }}>
-                      {HOURS.map((h) => (
-                        <div key={h} className="h-16 border-b border-border/60" />
-                      ))}
+                      {HOURS.map((h) => {
+                        const hourIsFree = !appts.some((appointment) => {
+                          const start = timeToMinutes(appointment.start)
+                          const end = start + appointment.durationMin
+                          return start < (h + 1) * 60 && end > h * 60 && appointment.status !== 'cancelado'
+                        })
+                        return (
+                          <div
+                            key={h}
+                            className={cn(
+                              'h-16 border-b border-border/60',
+                              quickPreferences.highlightFreeSlots && hourIsFree && !dayBlocked && 'bg-success/[0.04]',
+                            )}
+                          />
+                        )
+                      })}
                       {appts.map((a) => (
                         <button
                           type="button"
@@ -440,6 +456,11 @@ export function AgendaClient({
                           className={cn(
                             'absolute left-1 right-1 cursor-pointer overflow-hidden rounded-md border-l-2 px-2 py-1 text-left shadow-sm transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                             statusColor[a.status],
+                            quickPreferences.alertDelays
+                              && selectedDate === toDateKey(new Date())
+                              && timeToMinutes(a.start) < new Date().getHours() * 60 + new Date().getMinutes()
+                              && ['agendado', 'confirmado'].includes(a.status)
+                              && 'ring-2 ring-warning',
                           )}
                           style={{ top: timeToTop(a.start), height: (a.durationMin / 60) * 64 - 4 }}
                         >

@@ -257,7 +257,9 @@ export default function ConfiguracoesPage() {
       payment_methods: cleanPaymentMethods,
       agenda_settings: {
         ...agendaSettings,
-        lowStockAlert: Math.max(0, Number(agendaSettings.lowStockAlert) || defaultAgendaSettings.lowStockAlert),
+        lowStockAlert: Number.isFinite(Number(agendaSettings.lowStockAlert))
+          ? Math.max(0, Number(agendaSettings.lowStockAlert))
+          : defaultAgendaSettings.lowStockAlert,
       },
     })
     setSaving(false)
@@ -680,7 +682,7 @@ export default function ConfiguracoesPage() {
                       setSaved(false)
                     }}
                   />
-                  <p className="mt-2 text-xs text-muted-foreground">Produtos com estoque igual ou menor a este valor aparecem nas notificações.</p>
+                  <p className="mt-2 text-xs text-muted-foreground">Este é o limite mínimo global. Se o produto tiver um mínimo maior, prevalece o valor do produto.</p>
                 </div>
 
                 <div className="rounded-xl border border-border bg-card p-4">
@@ -738,10 +740,26 @@ export default function ConfiguracoesPage() {
                   Preferências rápidas
                 </h3>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  {['Mostrar agenda por barbeiro', 'Permitir encaixes', 'Destacar horários livres', 'Avisar atraso no atendimento'].map((label, index) => (
-                    <label key={label} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card p-3 text-sm">
+                  {([
+                    ['showByBarber', 'Mostrar agenda por barbeiro'],
+                    ['allowWalkIns', 'Permitir encaixes'],
+                    ['highlightFreeSlots', 'Destacar horários livres'],
+                    ['alertDelays', 'Avisar atraso no atendimento'],
+                  ] as const).map(([key, label]) => (
+                    <label key={key} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card p-3 text-sm">
                       <span className="text-muted-foreground">{label}</span>
-                      <input type="checkbox" defaultChecked={index < 3} className="size-4 accent-[var(--primary)]" />
+                      <input
+                        type="checkbox"
+                        checked={agendaSettings.quickPreferences[key]}
+                        onChange={(event) => {
+                          setAgendaSettings((current) => ({
+                            ...current,
+                            quickPreferences: { ...current.quickPreferences, [key]: event.target.checked },
+                          }))
+                          setSaved(false)
+                        }}
+                        className="size-4 accent-[var(--primary)]"
+                      />
                     </label>
                   ))}
                 </div>
@@ -752,17 +770,30 @@ export default function ConfiguracoesPage() {
                   Notificações operacionais
                 </h3>
                 <div className="space-y-3">
-                  {[
-                    'Lembrar cliente antes do horário',
-                    'Avisar estoque abaixo do mínimo',
-                    'Alertar assinatura de cliente vencendo',
-                    'Enviar resumo financeiro diário',
-                  ].map((label, index) => (
-                    <label key={label} className="flex items-center justify-between gap-3 text-sm">
+                  {([
+                    ['clientReminders', 'Exibir lembretes de agendamentos'],
+                    ['lowStock', 'Avisar estoque abaixo do limite'],
+                    ['expiringSubscriptions', 'Alertar assinatura de cliente vencendo'],
+                  ] as const).map(([key, label]) => (
+                    <label key={key} className="flex items-center justify-between gap-3 text-sm">
                       <span className="text-muted-foreground">{label}</span>
-                      <input type="checkbox" defaultChecked={index < 3 || currentPlan.features.advancedReports} className="size-4 accent-[var(--primary)]" />
+                      <input
+                        type="checkbox"
+                        checked={agendaSettings.notifications[key]}
+                        onChange={(event) => {
+                          setAgendaSettings((current) => ({
+                            ...current,
+                            notifications: { ...current.notifications, [key]: event.target.checked },
+                          }))
+                          setSaved(false)
+                        }}
+                        className="size-4 accent-[var(--primary)]"
+                      />
                     </label>
                   ))}
+                  <div className="rounded-lg border border-dashed border-border bg-muted/30 p-3 text-xs text-muted-foreground">
+                    Resumo financeiro diário por mensagem: indisponível até a integração de um canal de envio e agendador.
+                  </div>
                 </div>
               </Card>
             </div>

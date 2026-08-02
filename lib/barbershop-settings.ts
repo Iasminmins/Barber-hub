@@ -16,6 +16,17 @@ export type BusinessDayConfig = {
 export type AgendaSettings = {
   lowStockAlert: number
   planCommissionMode: 'receita' | 'servico'
+  quickPreferences: {
+    showByBarber: boolean
+    allowWalkIns: boolean
+    highlightFreeSlots: boolean
+    alertDelays: boolean
+  }
+  notifications: {
+    clientReminders: boolean
+    lowStock: boolean
+    expiringSubscriptions: boolean
+  }
   businessHours: Record<BusinessDayKey, BusinessDayConfig>
 }
 
@@ -39,6 +50,17 @@ export const defaultPaymentMethods: PaymentMethodConfig[] = [
 export const defaultAgendaSettings: AgendaSettings = {
   lowStockAlert: 5,
   planCommissionMode: 'receita',
+  quickPreferences: {
+    showByBarber: true,
+    allowWalkIns: true,
+    highlightFreeSlots: true,
+    alertDelays: false,
+  },
+  notifications: {
+    clientReminders: true,
+    lowStock: true,
+    expiringSubscriptions: true,
+  },
   businessHours: {
     domingo: { closed: true, start: '09:00', end: '19:30' },
     segunda: { closed: false, start: '09:00', end: '19:30' },
@@ -88,10 +110,27 @@ export function normalizeAgendaSettings(value: unknown): AgendaSettings {
   const hours = record.businessHours && typeof record.businessHours === 'object'
     ? record.businessHours as Record<string, unknown>
     : {}
+  const quickPreferences = record.quickPreferences && typeof record.quickPreferences === 'object'
+    ? record.quickPreferences as Record<string, unknown>
+    : {}
+  const notifications = record.notifications && typeof record.notifications === 'object'
+    ? record.notifications as Record<string, unknown>
+    : {}
 
   return {
-    lowStockAlert: Number.isFinite(Number(record.lowStockAlert)) ? Number(record.lowStockAlert) : defaultAgendaSettings.lowStockAlert,
+    lowStockAlert: Number.isFinite(Number(record.lowStockAlert)) ? Math.max(0, Number(record.lowStockAlert)) : defaultAgendaSettings.lowStockAlert,
     planCommissionMode: record.planCommissionMode === 'servico' ? 'servico' : 'receita',
+    quickPreferences: {
+      showByBarber: quickPreferences.showByBarber !== false,
+      allowWalkIns: quickPreferences.allowWalkIns !== false,
+      highlightFreeSlots: quickPreferences.highlightFreeSlots !== false,
+      alertDelays: quickPreferences.alertDelays === true,
+    },
+    notifications: {
+      clientReminders: notifications.clientReminders !== false,
+      lowStock: notifications.lowStock !== false,
+      expiringSubscriptions: notifications.expiringSubscriptions !== false,
+    },
     businessHours: Object.fromEntries(
       businessDays.map(({ key }) => [
         key,

@@ -4,7 +4,7 @@ import { DashboardClient } from './dashboard-client'
 import { useAppData } from '@/components/data/app-data-provider'
 
 export default function DashboardPage() {
-  const { appointments, catalog, clients, commissions, employees, financialEntries, imports, member, orders, subscriptions } = useAppData()
+  const { appointments, barbershop, catalog, clients, commissions, employees, financialEntries, imports, member, orders, subscriptions } = useAppData()
   return (
     <DashboardClient
       appointments={appointments}
@@ -16,6 +16,7 @@ export default function DashboardPage() {
       imports={imports}
       orders={orders}
       subscriptions={subscriptions}
+      lowStockThreshold={barbershop.agendaSettings.lowStockAlert}
       isBarber={member.role === 'barber'}
     />
   )

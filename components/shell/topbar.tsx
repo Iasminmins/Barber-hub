@@ -28,6 +28,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { useAppData } from '@/components/data/app-data-provider'
 import { daysUntil, formatCurrency } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { getLowStockThreshold, isLowStock } from '@/lib/inventory'
+import type { AgendaSettings } from '@/lib/barbershop-settings'
 import { birthdayMessage, normalizeWhatsAppPhone, renewalMessage, whatsappUrl } from '@/lib/whatsapp'
 
 type NotificationTab = 'agendamentos' | 'aniversarios' | 'estoque' | 'comandas' | 'planos'
@@ -120,8 +122,11 @@ function buildNotifications(
   subscriptions: ReturnType<typeof useAppData>['subscriptions'],
   appointments: ReturnType<typeof useAppData>['appointments'],
   readAppointmentIds: Set<string>,
+  agendaSettings: AgendaSettings,
 ): Record<NotificationTab, NotificationItem[]> {
-  const lowStock = catalog.filter((item) => item.type === 'produto' && (item.stock ?? 0) <= (item.minStock ?? 0))
+  const lowStock = agendaSettings.notifications.lowStock
+    ? catalog.filter((item) => item.type === 'produto' && isLowStock(item.stock, item.minStock, agendaSettings.lowStockAlert))
+    : []
   const expiringSubscriptions = subscriptions
     .map((subscription) => ({ subscription, due: daysUntil(subscription.dueDate) }))
     .filter(({ due }) => due >= -30 && due <= 7)
@@ -165,7 +170,7 @@ function buildNotifications(
     estoque: lowStock.map((item) => ({
       id: `stock-${item.id}`,
       title: item.name,
-      description: `Estoque ${item.stock ?? 0}/${item.minStock ?? 0} un. - reposição recomendada`,
+      description: `Estoque ${item.stock ?? 0}/${getLowStockThreshold(item.minStock, agendaSettings.lowStockAlert)} un. - reposição recomendada`,
       tone: 'red',
     })),
     comandas: orders
@@ -176,7 +181,7 @@ function buildNotifications(
         description: `${order.clientName} - ${formatCurrency(order.total)} - ${order.status}`,
         tone: order.status === 'pendente' ? 'gold' : 'green',
       })),
-    planos: expiringSubscriptions.map(({ subscription, due }) => {
+    planos: (agendaSettings.notifications.expiringSubscriptions ? expiringSubscriptions : []).map(({ subscription, due }) => {
       const client = clients.find((item) =>
         item.id === subscription.clientId ||
         item.name.trim().toLocaleLowerCase('pt-BR') === subscription.clientName.trim().toLocaleLowerCase('pt-BR'),
@@ -202,8 +207,12 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
   const { appointments, barbershop, barbershops, catalog, clients, member, orders, setActiveBarbershop, subscriptions } = useAppData()
   const [readAppointmentIds, setReadAppointmentIds] = React.useState<Set<string>>(new Set())
   const notifications = React.useMemo(
-    () => buildNotifications(clients, catalog, orders, subscriptions, appointments, readAppointmentIds),
-    [appointments, catalog, clients, orders, readAppointmentIds, subscriptions],
+    () => {
+      const result = buildNotifications(clients, catalog, orders, subscriptions, appointments, readAppointmentIds, barbershop.agendaSettings)
+      if (!barbershop.agendaSettings.notifications.clientReminders) result.agendamentos = []
+      return result
+    },
+    [appointments, barbershop.agendaSettings, catalog, clients, orders, readAppointmentIds, subscriptions],
   )
   const [open, setOpen] = React.useState(false)
   const [notificationsOpen, setNotificationsOpen] = React.useState(false)

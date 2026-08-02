@@ -131,7 +131,7 @@ export function NovoAgendamentoClient({
         appointment.start === start &&
         appointment.status !== 'cancelado',
     )
-    if (hasConflict) {
+    if (hasConflict && !barbershop.agendaSettings.quickPreferences.allowWalkIns) {
       setSaveError('Já existe um agendamento para este barbeiro nesse horário.')
       return
     }
