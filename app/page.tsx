@@ -143,72 +143,8 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-background">
       <section className="relative overflow-hidden bg-primary text-primary-foreground">
-        <div className="pointer-events-none absolute inset-0 opacity-95">
-          <div className="absolute right-[-1rem] top-28 w-[680px] origin-top-right scale-[0.48] rotate-1 rounded-2xl border border-primary-foreground/15 bg-primary-foreground/10 p-4 opacity-40 shadow-2xl sm:right-0 sm:top-40 sm:scale-[0.7] sm:opacity-35 lg:right-[-5rem] lg:top-32 lg:scale-100 lg:opacity-80 xl:right-[max(2rem,calc((100vw-80rem)/2))]">
-            <div className="mb-4 flex items-center justify-between border-b border-primary-foreground/10 pb-3">
-              <div className="flex items-center gap-3">
-                <span className="flex size-10 items-center justify-center rounded-lg bg-gold text-gold-foreground">
-                  <Scissors className="size-5" />
-                </span>
-                <div>
-                  <p className="font-bold">MeuBarberHub</p>
-                  <p className="text-xs text-primary-foreground/60">Painel da sua barbearia</p>
-                </div>
-              </div>
-              <div className="hidden items-center gap-2 text-xs text-primary-foreground/65 sm:flex">
-                <span className="rounded-md bg-primary-foreground/10 px-3 py-1">Hoje</span>
-                <span className="rounded-md bg-primary-foreground/10 px-3 py-1">Semana</span>
-                <span className="rounded-md bg-gold px-3 py-1 font-semibold text-gold-foreground">Mês</span>
-              </div>
-            </div>
-            <div className="grid gap-3 md:grid-cols-4">
-              {[
-                ['Receita', 'R$ 12.840', BadgeDollarSign],
-                ['Agendamentos', '58', CalendarDays],
-                ['Clientes novos', '19', Users],
-                ['Planos ativos', '46', CreditCard],
-              ].map(([label, value, Icon]) => (
-                <div key={label as string} className="rounded-lg bg-background/95 p-4 text-foreground shadow-sm">
-                  <div className="mb-5 flex justify-between">
-                    <span className="text-xs font-medium text-muted-foreground">{label as string}</span>
-                    <Icon className="size-4 text-primary" />
-                  </div>
-                  <p className="text-2xl font-bold">{value as string}</p>
-                </div>
-              ))}
-            </div>
-            <div className="mt-3 grid gap-3 lg:grid-cols-[1.4fr_0.6fr]">
-              <div className="rounded-lg bg-background/95 p-4 text-foreground shadow-sm">
-                <div className="mb-4 flex items-center justify-between">
-                  <p className="font-semibold">Receita por dia</p>
-                  <p className="text-xs text-muted-foreground">Julho</p>
-                </div>
-                <div className="flex h-40 items-end gap-2">
-                  {[42, 58, 45, 72, 64, 88, 54, 76, 91, 68, 83, 61].map((height, index) => (
-                    <span
-                      key={index}
-                      className="flex-1 rounded-t-md bg-primary"
-                      style={{ height: `${height}%`, opacity: 0.45 + index * 0.035 }}
-                    />
-                  ))}
-                </div>
-              </div>
-              <div className="rounded-lg bg-background/95 p-4 text-foreground shadow-sm">
-                <p className="mb-4 font-semibold">Fila de alertas</p>
-                <div className="space-y-3 text-sm">
-                  {['3 planos vencendo', '6 produtos com estoque baixo', '2 comandas pendentes'].map((item) => (
-                    <div key={item} className="flex items-center gap-2">
-                      <CheckCircle2 className="size-4 text-success" />
-                      <span>{item}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_82%_18%,rgba(212,169,51,0.18),transparent_30%),linear-gradient(180deg,rgba(24,52,44,0.48)_0%,rgba(24,52,44,0.82)_38%,rgba(24,52,44,0.96)_64%,rgba(24,52,44,1)_100%)] lg:bg-[radial-gradient(circle_at_80%_25%,rgba(212,169,51,0.13),transparent_34%),linear-gradient(90deg,rgba(30,58,50,1)_0%,rgba(30,58,50,0.96)_48%,rgba(30,58,50,0.3)_100%)]" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_88%_10%,rgba(212,169,51,0.16),transparent_45%)]" />
+        <div className="pointer-events-none absolute -bottom-24 -left-24 size-[420px] rounded-full bg-primary-foreground/[0.04] blur-3xl" />
 
         <header className="relative z-10 mx-auto flex max-w-7xl items-center justify-between px-5 py-4 sm:py-5">
           <Link href="/" className="flex items-center gap-3">
@@ -231,30 +167,28 @@ export default function Home() {
           </Link>
         </header>
 
-        <div className="relative z-10 mx-auto flex min-h-[calc(100svh-68px)] max-w-7xl flex-col justify-center px-5 pb-12 pt-10 sm:min-h-[calc(100svh-80px)] sm:py-14 lg:items-start lg:py-10">
-          <div className="max-w-3xl lg:w-[48%]">
-            <p className="mb-4 inline-flex max-w-full items-center gap-2 rounded-full bg-primary-foreground/10 px-3 py-1.5 text-[0.68rem] font-semibold leading-4 text-primary-foreground/85 ring-1 ring-primary-foreground/15 sm:mb-5 sm:px-4 sm:py-2 sm:text-sm sm:leading-5">
-              <Sparkles className="size-3.5 shrink-0 text-gold sm:size-4" />
+        <div className="relative z-10 mx-auto grid max-w-7xl items-center gap-10 px-5 pb-16 pt-8 lg:grid-cols-[1fr_1.08fr] lg:gap-14 lg:pb-24 lg:pt-14">
+          <div className="max-w-xl">
+            <p className="mb-5 inline-flex items-center gap-2 rounded-full bg-primary-foreground/10 px-4 py-2 text-sm font-semibold text-primary-foreground/90 ring-1 ring-primary-foreground/15">
+              <Sparkles className="size-4 text-gold" />
               30 dias grátis, sem cartão
             </p>
-            <h1 className="max-w-2xl text-[2.5rem] font-bold leading-[1.06] tracking-[-0.04em] text-balance sm:text-5xl lg:text-[3.65rem]">
-              Sua barbearia organizada para atender mais e faturar melhor.
+            <h1 className="text-[2.6rem] font-bold leading-[1.04] tracking-[-0.04em] text-balance sm:text-5xl lg:text-[3.5rem]">
+              Sua barbearia organizada para <span className="text-gold">atender mais</span> e faturar melhor.
             </h1>
-            <p className="mt-4 max-w-2xl text-[0.94rem] leading-6 text-primary-foreground/78 sm:mt-6 sm:text-lg sm:leading-8">
+            <p className="mt-5 max-w-lg text-base leading-7 text-primary-foreground/78 sm:text-lg sm:leading-8">
               Agenda, comandas, clientes, estoque e financeiro em um só lugar. Menos planilhas, mais controle para sua barbearia crescer.
             </p>
-            <div className="mt-6 flex flex-col gap-3 sm:mt-8 sm:flex-row">
-              <Link href="/cadastro" className={buttonVariants({ variant: 'gold', size: 'lg', className: 'w-full shadow-lg shadow-black/15 sm:w-auto' })}>
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <Link href="/cadastro" className={buttonVariants({ variant: 'gold', size: 'lg', className: 'w-full shadow-lg shadow-black/20 sm:w-auto' })}>
                 Testar grátis por 30 dias
                 <ArrowRight className="size-4" />
               </Link>
-              <span className="hidden sm:inline-flex">
-                <a href="#recursos" className={buttonVariants({ variant: 'outline', size: 'lg', className: 'bg-primary-foreground/5 text-primary-foreground hover:bg-primary-foreground/15 hover:text-primary-foreground' })}>
-                  Conhecer o sistema
-                </a>
-              </span>
+              <a href="#recursos" className={buttonVariants({ variant: 'outline', size: 'lg', className: 'w-full border-primary-foreground/25 bg-primary-foreground/5 text-primary-foreground hover:bg-primary-foreground/15 hover:text-primary-foreground sm:w-auto' })}>
+                Conhecer o sistema
+              </a>
             </div>
-            <div className="mt-4 grid grid-cols-2 gap-x-3 gap-y-2 text-[0.68rem] text-primary-foreground/70 sm:mt-5 sm:flex sm:flex-wrap sm:gap-x-5 sm:text-sm">
+            <div className="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-sm text-primary-foreground/72">
               {['Sem cartão', 'Cancele quando quiser', 'Suporte na implantação'].map((item) => (
                 <span key={item} className="inline-flex items-center gap-1.5">
                   <CheckCircle2 className="size-4 text-gold" /> {item}
@@ -263,11 +197,77 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="mt-8 hidden w-full gap-3 sm:grid sm:grid-cols-3 lg:w-[48%]">
+          <div className="relative">
+            <div className="pointer-events-none absolute -inset-6 rounded-[2.5rem] bg-gold/10 blur-2xl" />
+            <div className="relative rounded-2xl border border-black/5 bg-card p-4 text-foreground shadow-2xl shadow-black/40 ring-1 ring-black/5 lg:-rotate-1">
+              <div className="mb-4 flex items-center justify-between border-b pb-3">
+                <div className="flex items-center gap-3">
+                  <span className="flex size-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                    <Scissors className="size-5" />
+                  </span>
+                  <div>
+                    <p className="font-bold">MeuBarberHub</p>
+                    <p className="text-xs text-muted-foreground">Painel da sua barbearia</p>
+                  </div>
+                </div>
+                <div className="hidden items-center gap-1.5 text-xs sm:flex">
+                  <span className="rounded-md bg-muted px-2.5 py-1 text-muted-foreground">Hoje</span>
+                  <span className="rounded-md bg-muted px-2.5 py-1 text-muted-foreground">Semana</span>
+                  <span className="rounded-md bg-gold px-2.5 py-1 font-semibold text-gold-foreground">Mês</span>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                {[
+                  ['Receita', 'R$ 12.840', BadgeDollarSign],
+                  ['Agendamentos', '58', CalendarDays],
+                  ['Clientes novos', '19', Users],
+                  ['Planos ativos', '46', CreditCard],
+                ].map(([label, value, Icon]) => (
+                  <div key={label as string} className="rounded-xl border bg-background p-3.5">
+                    <div className="mb-4 flex items-center justify-between">
+                      <span className="text-xs font-medium text-muted-foreground">{label as string}</span>
+                      <Icon className="size-4 text-primary" />
+                    </div>
+                    <p className="text-xl font-bold">{value as string}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 grid gap-3 lg:grid-cols-[1.5fr_1fr]">
+                <div className="rounded-xl border bg-background p-4">
+                  <div className="mb-4 flex items-center justify-between">
+                    <p className="text-sm font-semibold">Receita por dia</p>
+                    <p className="text-xs text-muted-foreground">Julho</p>
+                  </div>
+                  <div className="flex h-32 items-end gap-1.5">
+                    {[42, 58, 45, 72, 64, 88, 54, 76, 91, 68, 83, 61].map((height, index) => (
+                      <span key={index} className="flex-1 rounded-t bg-primary" style={{ height: `${height}%`, opacity: 0.5 + index * 0.03 }} />
+                    ))}
+                  </div>
+                </div>
+                <div className="rounded-xl border bg-background p-4">
+                  <p className="mb-4 text-sm font-semibold">Fila de alertas</p>
+                  <div className="space-y-3 text-sm">
+                    {['3 planos vencendo', '6 produtos c/ estoque baixo', '2 comandas pendentes'].map((item) => (
+                      <div key={item} className="flex items-start gap-2">
+                        <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" />
+                        <span className="leading-5">{item}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="border-b bg-card">
+        <div className="mx-auto max-w-7xl px-5 py-8">
+          <div className="grid grid-cols-3 gap-4 sm:gap-8">
             {proof.map((item) => (
-              <div key={item.label} className="rounded-xl bg-primary-foreground/[0.08] p-3.5 ring-1 ring-primary-foreground/10 backdrop-blur-sm">
-                <p className="text-lg font-bold text-gold">{item.value}</p>
-                <p className="mt-1 text-xs leading-5 text-primary-foreground/68 sm:text-sm">{item.label}</p>
+              <div key={item.label} className="text-center sm:text-left">
+                <p className="text-2xl font-bold text-primary sm:text-3xl">{item.value}</p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground sm:text-sm">{item.label}</p>
               </div>
             ))}
           </div>
@@ -296,7 +296,7 @@ export default function Home() {
 
         <div className="grid gap-3 sm:grid-cols-2">
           {painPoints.map((point) => (
-            <Card key={point} className="p-4">
+            <Card key={point} className="p-4 transition-shadow duration-200 hover:shadow-md">
               <div className="mb-3 flex size-9 items-center justify-center rounded-lg bg-warning/18 text-warning-foreground">
                 <BellRing className="size-4" />
               </div>
@@ -317,8 +317,8 @@ export default function Home() {
           {features.map((feature) => {
             const Icon = feature.icon
             return (
-              <Card key={feature.title} className="p-5">
-                <span className="mb-5 flex size-11 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Card key={feature.title} className="group p-5 transition duration-200 hover:-translate-y-1 hover:border-primary/25 hover:shadow-xl hover:shadow-primary/5">
+                <span className="mb-5 flex size-11 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
                   <Icon className="size-5" />
                 </span>
                 <h3 className="text-lg font-semibold text-foreground">{feature.title}</h3>
@@ -346,8 +346,8 @@ export default function Home() {
             {modules.map((module) => {
               const Icon = module.icon
               return (
-                <Card key={module.title} className="p-5">
-                  <span className="mb-5 flex size-11 items-center justify-center rounded-lg bg-gold/15 text-gold-foreground">
+                <Card key={module.title} className="group p-5 transition duration-200 hover:-translate-y-1 hover:border-gold/40 hover:shadow-xl hover:shadow-gold/10">
+                  <span className="mb-5 flex size-11 items-center justify-center rounded-lg bg-gold/15 text-gold-foreground transition-colors group-hover:bg-gold">
                     <Icon className="size-5" />
                   </span>
                   <h3 className="font-semibold text-foreground">{module.title}</h3>
@@ -377,7 +377,7 @@ export default function Home() {
               ['3', 'Pagamento fecha receita e comissão'],
               ['4', 'Dashboard mostra resultados e alertas'],
             ].map(([step, label]) => (
-              <div key={step} className="rounded-lg border bg-background p-4">
+              <div key={step} className="rounded-lg border bg-background p-4 transition-shadow duration-200 hover:shadow-md">
                 <span className="mb-4 flex size-8 items-center justify-center rounded-md bg-gold text-sm font-bold text-gold-foreground">
                   {step}
                 </span>
@@ -388,13 +388,13 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-5 py-16">
-        <div className="grid gap-4 md:grid-cols-4">
+      <section className="bg-primary text-primary-foreground">
+        <div className="mx-auto grid max-w-7xl gap-6 px-5 py-12 sm:grid-cols-2 md:grid-cols-4">
           {results.map((item) => (
-            <Card key={item.label} className="p-5 text-center">
-              <p className="text-2xl font-bold text-foreground">{item.value}</p>
-              <p className="mt-2 text-sm text-muted-foreground">{item.label}</p>
-            </Card>
+            <div key={item.label} className="border-l-2 border-gold/50 pl-4">
+              <p className="text-xl font-bold text-gold">{item.value}</p>
+              <p className="mt-1 text-sm leading-6 text-primary-foreground/75">{item.label}</p>
+            </div>
           ))}
         </div>
       </section>
@@ -421,13 +421,15 @@ export default function Home() {
             </Link>
           </div>
         </Card>
-        <div className="grid gap-4 lg:grid-cols-3">
+        <div className="grid gap-4 lg:grid-cols-3 lg:pt-6">
           {plans.map((plan) => (
             <Card
               key={plan.name}
               className={cn(
-                'p-6',
-                plan.featured ? 'border-primary bg-primary text-primary-foreground shadow-lg' : '',
+                'p-6 transition duration-200',
+                plan.featured
+                  ? 'border-primary bg-primary text-primary-foreground shadow-2xl shadow-primary/25 ring-2 ring-gold lg:-translate-y-1 lg:scale-[1.02]'
+                  : 'hover:-translate-y-1 hover:border-primary/25 hover:shadow-xl hover:shadow-primary/5',
               )}
             >
               <div className="mb-6 flex items-start justify-between gap-3">
@@ -518,11 +520,17 @@ export default function Home() {
           </div>
           <div className="grid gap-4 lg:grid-cols-3">
             {testimonials.map((testimonial) => (
-              <Card key={testimonial.name} className="p-5">
-                <p className="text-sm leading-7 text-foreground">“{testimonial.quote}”</p>
-                <div className="mt-5 border-t pt-4">
-                  <p className="font-semibold text-foreground">{testimonial.name}</p>
-                  <p className="text-sm text-muted-foreground">{testimonial.role}</p>
+              <Card key={testimonial.name} className="flex flex-col p-5 transition-shadow duration-200 hover:shadow-lg">
+                <div className="mb-3 text-sm tracking-[0.2em] text-gold">★★★★★</div>
+                <p className="flex-1 text-sm leading-7 text-foreground">“{testimonial.quote}”</p>
+                <div className="mt-5 flex items-center gap-3 border-t pt-4">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+                    {testimonial.name.split(' ').map((word) => word[0]).slice(0, 2).join('').toUpperCase()}
+                  </span>
+                  <div>
+                    <p className="font-semibold text-foreground">{testimonial.name}</p>
+                    <p className="text-sm text-muted-foreground">{testimonial.role}</p>
+                  </div>
                 </div>
               </Card>
             ))}
@@ -539,7 +547,7 @@ export default function Home() {
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           {faqs.map((faq) => (
-            <Card key={faq.question} className="p-5">
+            <Card key={faq.question} className="p-5 transition-shadow duration-200 hover:shadow-md">
               <h3 className="font-semibold text-foreground">{faq.question}</h3>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">{faq.answer}</p>
             </Card>
@@ -547,8 +555,9 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="contato" className="bg-primary text-primary-foreground">
-        <div className="mx-auto flex max-w-7xl flex-col gap-6 px-5 py-14 md:flex-row md:items-center md:justify-between">
+      <section id="contato" className="relative overflow-hidden bg-primary text-primary-foreground">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_130%,rgba(212,169,51,0.16),transparent_48%)]" />
+        <div className="relative z-10 mx-auto flex max-w-7xl flex-col gap-6 px-5 py-16 md:flex-row md:items-center md:justify-between">
           <div className="max-w-2xl">
             <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-primary-foreground/75">
               <ShieldCheck className="size-4 text-gold" />
