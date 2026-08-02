@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminSupabaseClient, createAuthenticatedServerClient } from '@/lib/supabase/server'
 import { staffPermissionOptions, type StaffPermission } from '@/lib/staff-permissions'
+import { readLimitedJson, RequestBodyError } from '@/lib/http-security'
 
 function bearerToken(request: Request) {
   const authorization = request.headers.get('authorization') ?? ''
@@ -29,7 +30,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Somente o proprietário pode gerenciar acessos.' }, { status: 403 })
     }
 
-    const body = await request.json() as { employeeId?: string; email?: string; password?: string; permissions?: string[]; enabled?: boolean }
+    const body = await readLimitedJson<{ employeeId?: string; email?: string; password?: string; permissions?: string[]; enabled?: boolean }>(request)
     const employeeId = String(body.employeeId ?? '')
     const email = String(body.email ?? '').trim().toLowerCase()
     const password = String(body.password ?? '')
@@ -126,8 +127,11 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ active: true, invited: !password })
   } catch (error) {
+    if (error instanceof RequestBodyError) {
+      return NextResponse.json({ error: error.message }, { status: error.status })
+    }
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Não foi possível gerenciar o acesso.' },
+      { error: 'Não foi possível gerenciar o acesso.' },
       { status: 500 },
     )
   }
