@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react'
 import {
   ArrowLeftRight,
+  BarChart3,
   Building2,
   CalendarDays,
   CreditCard,
@@ -47,6 +48,7 @@ export const navGroups: NavGroup[] = [
     title: 'Gestão',
     items: [
       { label: 'Financeiro', href: '/financeiro', icon: Wallet },
+      { label: 'Relatórios', href: '/relatorios', icon: BarChart3, managementOnly: true },
       { label: 'Importar / Exportar', href: '/importacao', icon: ArrowLeftRight },
       { label: 'Minha rede', href: '/rede', icon: Building2, managementOnly: true },
       { label: 'Configurações', href: '/configuracoes', icon: Settings },
