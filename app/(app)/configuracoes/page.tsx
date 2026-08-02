@@ -43,13 +43,13 @@ const brandColors = ['#1E3A32', '#0F766E', '#111827', '#7C2D12', '#B45309', '#4F
 const employeeColors = ['#1E3A32', '#22C55E', '#D0021B', '#22C55E', '#7C3AED', '#F59E0B', '#0EA5E9', '#64748B']
 const hexColorPattern = /^#[0-9a-f]{6}$/i
 
-const settingsTabs: Array<{ id: SettingsTab; label: string; icon: ComponentType<{ className?: string }> }> = [
+const settingsTabs: Array<{ id: SettingsTab; label: string; icon: ComponentType<{ className?: string }>; featured?: boolean }> = [
   { id: 'aparencia', label: 'Aparência', icon: Palette },
   { id: 'inicio', label: 'Tela inicial', icon: Home },
   { id: 'funcionarios', label: 'Cores dos funcionários', icon: Users },
   { id: 'agenda', label: 'Agenda', icon: CalendarDays },
   { id: 'pagamentos', label: 'Pagamentos da barbearia', icon: CreditCard },
-  { id: 'assinatura', label: 'Assinatura BarberHub', icon: Receipt },
+  { id: 'assinatura', label: 'Assinatura BarberHub', icon: Receipt, featured: true },
   { id: 'modulos', label: 'Módulos', icon: Grid3X3 },
 ]
 
@@ -384,7 +384,7 @@ export default function ConfiguracoesPage() {
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-primary">Painel de personalização</p>
             <h2 className="mt-2 text-2xl font-bold text-foreground">Deixe o BarberHub com a cara da empresa</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Ajuste aparência, tela inicial, funcionários, agenda, pagamentos e módulos em áreas separadas.
+              Ajuste aparência, tela inicial, funcionários, agenda, pagamentos, assinatura e módulos em áreas separadas.
             </p>
           </div>
           <div className="grid grid-cols-2 gap-1 p-2 sm:grid-cols-3 xl:grid-cols-7">
@@ -397,12 +397,19 @@ export default function ConfiguracoesPage() {
                   type="button"
                   onClick={() => setActiveTab(tab.id)}
                   className={cn(
-                    'flex min-h-10 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-colors',
+                    'relative flex min-h-10 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-colors',
                     active ? 'bg-background text-foreground shadow-sm ring-1 ring-border' : 'text-muted-foreground hover:bg-background/70 hover:text-foreground',
+                    tab.featured && !active && 'bg-gold/10 text-foreground ring-1 ring-gold/35 hover:bg-gold/20',
+                    tab.featured && active && 'bg-gold/20 ring-gold/60',
                   )}
                 >
                   <Icon className="size-4" />
                   <span className="truncate">{tab.label}</span>
+                  {tab.featured ? (
+                    <span className="absolute -right-1 -top-2 rounded-full bg-gold px-1.5 py-0.5 text-[0.6rem] font-bold uppercase tracking-wide text-gold-foreground shadow-sm">
+                      Seu plano
+                    </span>
+                  ) : null}
                 </button>
               )
             })}

@@ -7,6 +7,8 @@ import {
   CalendarDays,
   CheckCircle2,
   CreditCard,
+  ExternalLink,
+  Mail,
   MessageCircle,
   Receipt,
   Scissors,
@@ -569,6 +571,48 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      <footer className="border-t border-primary-foreground/10 bg-[#142c25] text-primary-foreground">
+        <div className="mx-auto grid max-w-7xl gap-10 px-5 py-12 sm:grid-cols-2 lg:grid-cols-[1.35fr_0.65fr_1fr]">
+          <div className="max-w-md">
+            <Link href="/" className="inline-flex items-center gap-3">
+              <span className="flex size-10 items-center justify-center rounded-lg bg-primary-foreground/10 ring-1 ring-primary-foreground/15"><Scissors className="size-5" /></span>
+              <div><p className="font-bold">MeuBarberHub</p><p className="text-xs text-primary-foreground/60">Gestão simples. Barbearia forte.</p></div>
+            </Link>
+            <p className="mt-5 text-sm leading-6 text-primary-foreground/65">Agenda, comandas, clientes, estoque e financeiro reunidos para simplificar a gestão da sua barbearia.</p>
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-gold">Navegação</h2>
+            <nav className="mt-4 flex flex-col items-start gap-3 text-sm text-primary-foreground/70">
+              <a href="#solucao" className="transition-colors hover:text-primary-foreground">Solução</a>
+              <a href="#recursos" className="transition-colors hover:text-primary-foreground">Recursos</a>
+              <a href="#planos" className="transition-colors hover:text-primary-foreground">Planos</a>
+              <Link href="/login" className="transition-colors hover:text-primary-foreground">Entrar</Link>
+            </nav>
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-gold">Atendimento</h2>
+            <p className="mt-4 text-sm leading-6 text-primary-foreground/65">Precisa de ajuda? Fale diretamente com nosso suporte.</p>
+            <div className="mt-4 space-y-3">
+              <a href="mailto:suportemeubarberhub@gmail.com" className="flex items-start gap-3 text-sm text-primary-foreground/80 transition-colors hover:text-primary-foreground">
+                <Mail className="mt-0.5 size-4 shrink-0 text-gold" /><span className="break-all">suportemeubarberhub@gmail.com</span>
+              </a>
+              <a href="https://wa.me/5524999327549?text=Ol%C3%A1%2C%20preciso%20de%20ajuda%20com%20o%20MeuBarberHub." target="_blank" rel="noreferrer" className="inline-flex items-center gap-3 text-sm text-primary-foreground/80 transition-colors hover:text-primary-foreground">
+                <MessageCircle className="size-4 text-gold" />WhatsApp: (24) 99932-7549<ExternalLink className="size-3.5" />
+              </a>
+            </div>
+          </div>
+        </div>
+        <div className="border-t border-primary-foreground/10">
+          <div className="mx-auto flex max-w-7xl flex-col gap-2 px-5 py-5 text-xs text-primary-foreground/50 sm:flex-row sm:items-center sm:justify-between">
+            <p>© {new Date().getFullYear()} MeuBarberHub. Todos os direitos reservados.</p><p>Feito para fortalecer a gestão da sua barbearia.</p>
+          </div>
+        </div>
+      </footer>
+
+      <a href="https://wa.me/5524999327549?text=Ol%C3%A1%2C%20gostaria%20de%20falar%20com%20o%20MeuBarberHub." target="_blank" rel="noreferrer" aria-label="Fale conosco pelo WhatsApp" className="fixed bottom-5 right-4 z-50 inline-flex items-center gap-2 rounded-full bg-[#25D366] px-4 py-3 text-sm font-bold text-[#10251f] shadow-xl shadow-black/20 transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-primary sm:bottom-6 sm:right-6">
+        <MessageCircle className="size-5" /><span className="hidden sm:inline">Fale conosco</span>
+      </a>
     </main>
   )
 }
