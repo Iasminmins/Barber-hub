@@ -32,7 +32,7 @@ export async function POST(request: Request) {
 
   const { data: barbershop, error: barbershopError } = await admin
     .from('barbershops')
-    .select('id, asaas_subscription_id')
+    .select('id, network_id, asaas_subscription_id')
     .eq('id', barbershopId)
     .maybeSingle()
   if (barbershopError) return NextResponse.json({ error: 'Falha interna.' }, { status: 500 })
@@ -42,20 +42,24 @@ export async function POST(request: Request) {
   }
 
   let updateError: { message: string } | null = null
+  const updateBillingGroup = async (values: Record<string, unknown>) => {
+    const query = admin.from('barbershops').update(values)
+    return barbershop.network_id ? query.eq('network_id', barbershop.network_id) : query.eq('id', barbershopId)
+  }
   if (payload.event === 'PAYMENT_CONFIRMED' || payload.event === 'PAYMENT_RECEIVED') {
     const dueDate = payment.dueDate ? new Date(`${payment.dueDate}T12:00:00`) : new Date()
     dueDate.setMonth(dueDate.getMonth() + 1)
-    const result = await admin.from('barbershops').update({
+    const result = await updateBillingGroup({
       billing_status: 'active',
       last_payment_at: new Date().toISOString(),
       next_billing_date: dueDate.toISOString().slice(0, 10),
-    }).eq('id', barbershopId)
+    })
     updateError = result.error
   } else if (payload.event === 'PAYMENT_OVERDUE') {
-    const result = await admin.from('barbershops').update({ billing_status: 'past_due' }).eq('id', barbershopId)
+    const result = await updateBillingGroup({ billing_status: 'past_due', ...(payment.dueDate ? { next_billing_date: payment.dueDate } : {}) })
     updateError = result.error
   } else if (payload.event === 'PAYMENT_REFUNDED' || payload.event === 'PAYMENT_DELETED') {
-    const result = await admin.from('barbershops').update({ billing_status: 'past_due' }).eq('id', barbershopId)
+    const result = await updateBillingGroup({ billing_status: 'past_due', ...(payment.dueDate ? { next_billing_date: payment.dueDate } : {}) })
     updateError = result.error
   }
 

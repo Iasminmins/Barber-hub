@@ -18,6 +18,7 @@ import { useAppData } from '@/components/data/app-data-provider'
 import { formatDate, formatNumber } from '@/lib/format'
 import { canUsePlanFeature, getSaasPlan } from '@/lib/saas-plans'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
+import { downloadExcelWorkbook } from '@/lib/spreadsheet-export'
 import type { ClientTag } from '@/lib/types'
 
 export default function ImportacaoPage() {
@@ -95,15 +96,54 @@ export default function ImportacaoPage() {
     const link = document.createElement('a'); link.href=url; link.download='modelo-barberhub.csv'; link.click(); URL.revokeObjectURL(url)
   }
   function exportData() {
-    const escape = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`
-    const rows = [
-      csvHeaders,
-      ...existingClients.map(item=>['cliente',item.name,item.phone,item.email,item.birthDate,item.address,item.notes,item.tags.join('|'),item.visits,'','','','','','','','','','','','']),
-      ...subscriptions.map(item=>['assinatura',item.clientName,'','','','','','','',item.planName,item.startDate,item.dueDate,item.status,'','','','','','','','']),
-      ...catalog.map(item=>[item.type,item.name,'','','','','','','','','','','','','',item.category,item.price,item.cost,item.commission,item.durationMin??'',item.stock??'']),
-      ...employees.map(item=>['funcionario',item.name,item.phone,item.email,'','','','','','','','','','','',item.role,'','','','','']),
-    ]
-    const content='\uFEFF'+rows.map(row=>row.map(escape).join(',')).join('\n'); const url=URL.createObjectURL(new Blob([content],{type:'text/csv;charset=utf-8'})); const link=document.createElement('a');link.href=url;link.download=`barberhub-${new Date().toISOString().slice(0,10)}.csv`;link.click();URL.revokeObjectURL(url)
+    const subtitle = `${barbershop.name} • dados separados por categoria • ${new Intl.DateTimeFormat('pt-BR').format(new Date())}`
+    downloadExcelWorkbook(`relatorio-barberhub-${new Date().toISOString().slice(0, 10)}`, [
+      {
+        name: 'Resumo', title: 'Resumo da operação', subtitle,
+        columns: [{ key: 'indicador', label: 'Indicador', width: 190 }, { key: 'valor', label: 'Quantidade', width: 95, kind: 'number' }],
+        rows: [
+          { indicador: 'Clientes', valor: existingClients.length }, { indicador: 'Produtos e serviços', valor: catalog.length },
+          { indicador: 'Funcionários', valor: employees.length }, { indicador: 'Assinaturas de clientes', valor: subscriptions.length },
+          { indicador: 'Comandas', valor: orders.length }, { indicador: 'Lançamentos financeiros', valor: financialEntries.length },
+        ],
+      },
+      {
+        name: 'Clientes', title: 'Clientes', subtitle,
+        columns: [
+          { key: 'nome', label: 'Nome', width: 170 }, { key: 'telefone', label: 'Telefone', width: 105 }, { key: 'email', label: 'E-mail', width: 180 },
+          { key: 'aniversario', label: 'Aniversário', width: 90, kind: 'date' }, { key: 'endereco', label: 'Endereço', width: 220 },
+          { key: 'tags', label: 'Tags', width: 130 }, { key: 'visitas', label: 'Visitas', width: 65, kind: 'number' }, { key: 'observacoes', label: 'Observações', width: 240 },
+        ],
+        rows: existingClients.map((item) => ({ nome: item.name, telefone: item.phone, email: item.email, aniversario: item.birthDate, endereco: item.address, tags: item.tags.join(', '), visitas: item.visits, observacoes: item.notes })),
+      },
+      {
+        name: 'Assinaturas', title: 'Assinaturas de clientes', subtitle,
+        columns: [
+          { key: 'cliente', label: 'Cliente', width: 170 }, { key: 'plano', label: 'Plano', width: 160 }, { key: 'inicio', label: 'Início', width: 85, kind: 'date' },
+          { key: 'vencimento', label: 'Vencimento', width: 90, kind: 'date' }, { key: 'status', label: 'Status', width: 80 }, { key: 'vendedor', label: 'Vendedor', width: 140 }, { key: 'metodo', label: 'Método', width: 90 },
+        ],
+        rows: subscriptions.map((item) => ({ cliente: item.clientName, plano: item.planName, inicio: item.startDate, vencimento: item.dueDate, status: item.status, vendedor: item.employeeName, metodo: 'Não informado' })),
+      },
+      {
+        name: 'Catálogo', title: 'Produtos e serviços', subtitle,
+        columns: [
+          { key: 'tipo', label: 'Tipo', width: 80 }, { key: 'nome', label: 'Nome', width: 190 }, { key: 'categoria', label: 'Categoria', width: 120 },
+          { key: 'preco', label: 'Preço', width: 85, kind: 'currency' }, { key: 'custo', label: 'Custo', width: 85, kind: 'currency' },
+          { key: 'comissao', label: 'Comissão (%)', width: 85, kind: 'number' }, { key: 'duracao', label: 'Duração (min)', width: 90, kind: 'number' }, { key: 'estoque', label: 'Estoque', width: 70, kind: 'number' },
+        ],
+        rows: catalog.map((item) => ({ tipo: item.type === 'produto' ? 'Produto' : 'Serviço', nome: item.name, categoria: item.category, preco: item.price, custo: item.cost, comissao: item.commission, duracao: item.durationMin, estoque: item.stock })),
+      },
+      {
+        name: 'Funcionários', title: 'Funcionários', subtitle,
+        columns: [{ key: 'nome', label: 'Nome', width: 180 }, { key: 'funcao', label: 'Função', width: 120 }, { key: 'telefone', label: 'Telefone', width: 110 }, { key: 'email', label: 'E-mail', width: 190 }, { key: 'status', label: 'Status', width: 80 }],
+        rows: employees.map((item) => ({ nome: item.name, funcao: item.role, telefone: item.phone, email: item.email, status: item.active ? 'Ativo' : 'Inativo' })),
+      },
+      {
+        name: 'Financeiro', title: 'Lançamentos financeiros', subtitle,
+        columns: [{ key: 'data', label: 'Data', width: 85, kind: 'date' }, { key: 'tipo', label: 'Tipo', width: 75 }, { key: 'descricao', label: 'Descrição', width: 220 }, { key: 'categoria', label: 'Categoria', width: 120 }, { key: 'metodo', label: 'Método', width: 90 }, { key: 'valor', label: 'Valor', width: 90, kind: 'currency' }],
+        rows: financialEntries.map((item) => ({ data: item.date, tipo: item.type === 'entrada' ? 'Entrada' : 'Saída', descricao: item.description, categoria: item.category, metodo: item.method ?? 'A definir', valor: item.type === 'entrada' ? item.amount : -item.amount })),
+      },
+    ])
   }
   async function readCsvFile(file: File) {
     const buffer = await file.arrayBuffer()
