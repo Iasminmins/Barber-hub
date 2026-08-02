@@ -17,130 +17,69 @@ export interface SpreadsheetSheet<Row extends Record<string, SpreadsheetCell> = 
   rows: Row[]
 }
 
-const BRAND = {
-  green: 'FF234E42',
-  gold: 'FFD9AD36',
-  goldEdge: 'FFB28B25',
-  ink: 'FF17211F',
-  muted: 'FF6B7069',
-  subtitleBg: 'FFF3EFE4',
-  zebra: 'FFF9F7F1',
-  grid: 'FFE7E3D8',
-  white: 'FFFFFFFF',
-}
+const escapeXml = (value: SpreadsheetCell) => String(value ?? '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&apos;')
 
 const safeSheetName = (value: string) => value.replace(/[\\/?*[\]:]/g, ' ').slice(0, 31) || 'Dados'
 
-function toDateValue(value: SpreadsheetCell): Date | string {
-  const iso = String(value ?? '').slice(0, 10)
-  const date = new Date(`${iso}T00:00:00`)
-  return Number.isNaN(date.getTime()) ? String(value ?? '') : date
+function dataCell(value: SpreadsheetCell, kind: SpreadsheetColumn<Record<string, SpreadsheetCell>>['kind']) {
+  if ((kind === 'number' || kind === 'currency') && value !== '' && value !== null && value !== undefined) {
+    return `<Cell ss:StyleID="${kind === 'currency' ? 'Currency' : 'Number'}"><Data ss:Type="Number">${Number(value) || 0}</Data></Cell>`
+  }
+  if (kind === 'date' && value) {
+    const iso = String(value).slice(0, 10)
+    return `<Cell ss:StyleID="Date"><Data ss:Type="DateTime">${escapeXml(iso)}T00:00:00.000</Data></Cell>`
+  }
+  return `<Cell><Data ss:Type="String">${escapeXml(value)}</Data></Cell>`
 }
 
-export async function downloadExcelWorkbook(fileName: string, sheets: SpreadsheetSheet[]) {
-  const mod = await import('exceljs')
-  const ExcelJS = (mod as unknown as { default?: typeof mod }).default ?? mod
+export function downloadExcelWorkbook(fileName: string, sheets: SpreadsheetSheet[]) {
+  const worksheets = sheets.map((sheet) => {
+    const columns = sheet.columns.map((column) => `<Column ss:AutoFitWidth="0" ss:Width="${column.width ?? 110}"/>`).join('')
+    const columnCount = Math.max(sheet.columns.length, 1)
+    const header = sheet.columns.map((column) => `<Cell ss:StyleID="Header"><Data ss:Type="String">${escapeXml(column.label)}</Data></Cell>`).join('')
+    const rows = sheet.rows.length
+      ? sheet.rows.map((row) => `<Row>${sheet.columns.map((column) => dataCell(row[column.key], column.kind)).join('')}</Row>`).join('')
+      : `<Row><Cell ss:MergeAcross="${columnCount - 1}" ss:StyleID="Empty"><Data ss:Type="String">Nenhum registro encontrado</Data></Cell></Row>`
 
-  const workbook = new ExcelJS.Workbook()
-  workbook.creator = 'BarberHub'
-  workbook.created = new Date()
+    return `<Worksheet ss:Name="${escapeXml(safeSheetName(sheet.name))}">
+      <Table>
+        ${columns}
+        <Row ss:Height="30"><Cell ss:MergeAcross="${columnCount - 1}" ss:StyleID="Title"><Data ss:Type="String">${escapeXml(sheet.title)}</Data></Cell></Row>
+        <Row ss:Height="22"><Cell ss:MergeAcross="${columnCount - 1}" ss:StyleID="Subtitle"><Data ss:Type="String">${escapeXml(sheet.subtitle ?? `Gerado em ${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long' }).format(new Date())}`)}</Data></Cell></Row>
+        <Row ss:Height="8"><Cell><Data ss:Type="String"></Data></Cell></Row>
+        <Row ss:Height="24">${header}</Row>
+        ${rows}
+      </Table>
+      <AutoFilter x:Range="R4C1:R${Math.max(sheet.rows.length + 4, 4)}C${columnCount}" xmlns="urn:schemas-microsoft-com:office:excel"/>
+      <WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel"><FreezePanes/><FrozenNoSplit/><SplitHorizontal>4</SplitHorizontal><TopRowBottomPane>4</TopRowBottomPane><ActivePane>2</ActivePane><ProtectObjects>False</ProtectObjects><ProtectScenarios>False</ProtectScenarios></WorksheetOptions>
+    </Worksheet>`
+  }).join('')
 
-  const thin = { style: 'thin' as const, color: { argb: BRAND.grid } }
+  const xml = `<?xml version="1.0"?><?mso-application progid="Excel.Sheet"?>
+  <Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+    <DocumentProperties xmlns="urn:schemas-microsoft-com:office:office"><Author>BarberHub</Author><Company>BarberHub</Company><Title>Relatório BarberHub</Title></DocumentProperties>
+    <Styles>
+      <Style ss:ID="Default" ss:Name="Normal"><Alignment ss:Vertical="Center"/><Borders/><Font ss:FontName="Calibri" ss:Size="11" ss:Color="#17211F"/><Interior/><NumberFormat/><Protection/></Style>
+      <Style ss:ID="Title"><Alignment ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="18" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#234E42" ss:Pattern="Solid"/></Style>
+      <Style ss:ID="Subtitle"><Alignment ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="10" ss:Color="#5E665F"/><Interior ss:Color="#F7F4EC" ss:Pattern="Solid"/></Style>
+      <Style ss:ID="Header"><Alignment ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#17211F"/><Interior ss:Color="#D9AD36" ss:Pattern="Solid"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#B28B25"/></Borders></Style>
+      <Style ss:ID="Currency"><NumberFormat ss:Format="[$R$-416] #,##0.00;[Red]-[$R$-416] #,##0.00"/></Style>
+      <Style ss:ID="Number"><NumberFormat ss:Format="#,##0.00"/></Style>
+      <Style ss:ID="Date"><NumberFormat ss:Format="dd/mm/yyyy"/></Style>
+      <Style ss:ID="Empty"><Alignment ss:Horizontal="Center"/><Font ss:Italic="1" ss:Color="#707770"/></Style>
+    </Styles>
+    ${worksheets}
+  </Workbook>`
 
-  for (const sheet of sheets) {
-    const colCount = Math.max(sheet.columns.length, 1)
-    const ws = workbook.addWorksheet(safeSheetName(sheet.name), {
-      views: [{ state: 'frozen', ySplit: 4 }],
-    })
-
-    sheet.columns.forEach((column, index) => {
-      ws.getColumn(index + 1).width = Math.max(10, (column.width ?? 110) / 7)
-    })
-
-    // Title (row 1)
-    ws.mergeCells(1, 1, 1, colCount)
-    const titleCell = ws.getCell(1, 1)
-    titleCell.value = sheet.title
-    titleCell.font = { name: 'Calibri', size: 16, bold: true, color: { argb: BRAND.white } }
-    titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BRAND.green } }
-    titleCell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 }
-    ws.getRow(1).height = 32
-
-    // Subtitle (row 2)
-    ws.mergeCells(2, 1, 2, colCount)
-    const subtitleCell = ws.getCell(2, 1)
-    subtitleCell.value =
-      sheet.subtitle ?? `Gerado em ${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long' }).format(new Date())}`
-    subtitleCell.font = { name: 'Calibri', size: 10, italic: true, color: { argb: BRAND.muted } }
-    subtitleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BRAND.subtitleBg } }
-    subtitleCell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 }
-    ws.getRow(2).height = 20
-
-    // Spacer (row 3)
-    ws.getRow(3).height = 6
-
-    // Header (row 4)
-    const headerRow = ws.getRow(4)
-    sheet.columns.forEach((column, index) => {
-      const cell = headerRow.getCell(index + 1)
-      const numeric = column.kind === 'number' || column.kind === 'currency'
-      cell.value = column.label
-      cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: BRAND.ink } }
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BRAND.gold } }
-      cell.alignment = { vertical: 'middle', horizontal: numeric ? 'right' : 'left' }
-      cell.border = { bottom: { style: 'medium', color: { argb: BRAND.goldEdge } } }
-    })
-    headerRow.height = 22
-
-    // Data rows (from row 5)
-    if (sheet.rows.length === 0) {
-      ws.mergeCells(5, 1, 5, colCount)
-      const emptyCell = ws.getCell(5, 1)
-      emptyCell.value = 'Nenhum registro encontrado'
-      emptyCell.font = { name: 'Calibri', size: 10, italic: true, color: { argb: BRAND.muted } }
-      emptyCell.alignment = { vertical: 'middle', horizontal: 'center' }
-      ws.getRow(5).height = 20
-    } else {
-      sheet.rows.forEach((row, rowIndex) => {
-        const excelRow = ws.getRow(5 + rowIndex)
-        sheet.columns.forEach((column, colIndex) => {
-          const cell = excelRow.getCell(colIndex + 1)
-          const raw = row[column.key]
-          const numeric = column.kind === 'currency' || column.kind === 'number'
-          if (numeric && raw !== '' && raw !== null && raw !== undefined) {
-            cell.value = Number(raw) || 0
-            cell.numFmt = column.kind === 'currency' ? '"R$" #,##0.00;[Red]-"R$" #,##0.00' : '#,##0.##'
-            cell.alignment = { horizontal: 'right', vertical: 'middle' }
-          } else if (column.kind === 'date' && raw) {
-            cell.value = toDateValue(raw)
-            cell.numFmt = 'dd/mm/yyyy'
-            cell.alignment = { horizontal: 'left', vertical: 'middle' }
-          } else {
-            cell.value = raw === null || raw === undefined ? '' : String(raw)
-            cell.alignment = { horizontal: 'left', vertical: 'middle' }
-          }
-          cell.font = { name: 'Calibri', size: 11, color: { argb: BRAND.ink } }
-          cell.border = { bottom: thin, left: thin, right: thin }
-          if (rowIndex % 2 === 1) {
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BRAND.zebra } }
-          }
-        })
-        excelRow.height = 20
-      })
-    }
-
-    const lastRow = Math.max(sheet.rows.length + 4, 4)
-    ws.autoFilter = { from: { row: 4, column: 1 }, to: { row: lastRow, column: colCount } }
-  }
-
-  const buffer = await workbook.xlsx.writeBuffer()
-  const blob = new Blob([buffer], {
-    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  })
-  const url = URL.createObjectURL(blob)
+  const url = URL.createObjectURL(new Blob(['\uFEFF' + xml], { type: 'application/vnd.ms-excel;charset=utf-8' }))
   const link = document.createElement('a')
   link.href = url
-  link.download = `${fileName.replace(/\.(xml|xlsx?)$/i, '')}.xlsx`
+  link.download = `${fileName.replace(/\.(xml|xlsx?|xls)$/i, '')}.xls`
   link.click()
   URL.revokeObjectURL(url)
 }
