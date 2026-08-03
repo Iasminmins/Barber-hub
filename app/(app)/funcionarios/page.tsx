@@ -626,7 +626,13 @@ export default function FuncionariosPage() {
                       {values.orderDetails.map((order) => (
                         <div key={order.id} className="rounded-lg border border-border bg-background p-3">
                           <div className="flex items-center justify-between gap-2 font-semibold text-foreground">
-                            <span>Comanda #{order.number}</span>
+                            <Link
+                              href={`/comandas?order=${encodeURIComponent(order.id)}`}
+                              className="text-primary underline decoration-primary/30 underline-offset-2 hover:decoration-primary"
+                              title={`Abrir comanda #${order.number}`}
+                            >
+                              Comanda #{order.number}
+                            </Link>
                             <span>{formatCurrency(order.value)} recebido</span>
                           </div>
                           {order.items.length > 0 ? (

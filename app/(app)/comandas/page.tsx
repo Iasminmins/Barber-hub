@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { CalendarDays, CreditCard, Crown, MessageCircle, Minus, Pencil, Plus, Printer, Receipt, Save, Trash2, Upload } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { PageHeader } from '@/components/page-header'
 import { StatusBadge } from '@/components/status-badge'
 import { Badge } from '@/components/ui/badge'
@@ -117,6 +117,7 @@ export default function ComandasPage() {
   const [editingDate, setEditingDate] = useState('')
   const [editError, setEditError] = useState('')
   const [savingOrder, setSavingOrder] = useState(false)
+  const openedOrderId = useRef('')
   const [whatsAppDraft, setWhatsAppDraft] = useState<{
     orderNumber: number
     clientName: string
@@ -184,6 +185,17 @@ export default function ComandasPage() {
     setEditingDate(toDateTimeLocal(order.createdAt))
     setEditingOrder({ ...order, items: order.items.map((item) => ({ ...item })) })
   }
+
+  useEffect(() => {
+    const requestedOrderId = new URLSearchParams(window.location.search).get('order') ?? ''
+    if (!requestedOrderId || openedOrderId.current === requestedOrderId) return
+    const requestedOrder = orders.find((order) => order.id === requestedOrderId)
+    if (!requestedOrder) return
+
+    openedOrderId.current = requestedOrderId
+    setSelectedMonth(toMonthKey(requestedOrder.createdAt))
+    openOrderEditor(requestedOrder)
+  }, [orders])
 
   function sendOrderByWhatsApp(order: Order) {
     const client = clients.find((item) => (
