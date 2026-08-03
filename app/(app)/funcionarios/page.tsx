@@ -230,7 +230,40 @@ export default function FuncionariosPage() {
       .filter((item) => item.employeeId === employee.id && item.status === 'paga' && item.date >= reportRange.start && item.date <= reportRange.end)
       .reduce((sum, item) => sum + item.amount, 0)
     const generated = salesCommission + subscriptionCommission
-    return [employee.id, { revenue, subscriptionRevenue, generated, paid, pending: Math.max(0, generated - paid), orders: orders.length }]
+    const orderDetails = orders.map(({ order, value }) => {
+      const items = order.items.map((orderItem) => {
+        const base = orderItem.quantity * orderItem.unitPrice
+        const rate = orderItemCommissionRate(orderItem, employee)
+        return {
+          id: orderItem.id,
+          name: orderItem.name,
+          origin: commissionOriginLabel(orderItem),
+          base,
+          rate,
+          commission: base * rate / 100,
+        }
+      })
+      return {
+        id: order.id,
+        number: order.number,
+        value,
+        discount: order.discount,
+        surcharge: order.surcharge,
+        items,
+        commission: items.reduce((sum, item) => sum + item.commission, 0),
+      }
+    })
+    return [employee.id, {
+      revenue,
+      subscriptionRevenue,
+      generated,
+      paid,
+      pending: Math.max(0, generated - paid),
+      orders: orders.length,
+      salesCommission,
+      subscriptionCommission,
+      orderDetails,
+    }]
   })), [commissions, employees, reportPaidOrders, reportRange])
   const reportRevenue = [...reportValues.values()].reduce((sum, item) => sum + item.revenue, 0)
   const reportGenerated = [...reportValues.values()].reduce((sum, item) => sum + item.generated, 0)
@@ -542,6 +575,54 @@ export default function FuncionariosPage() {
                       <p className="mt-2 text-xs text-muted-foreground">
                         Gerada: {formatCurrency(values.generated)} · Paga: {formatCurrency(values.paid)}
                       </p>
+                      {values.orderDetails.length > 0 || values.subscriptionCommission > 0 ? (
+                        <details className="group mt-3 max-w-3xl">
+                          <summary className="cursor-pointer list-none text-xs font-semibold text-primary hover:underline">
+                            <span className="group-open:hidden">Ver cálculo detalhado do período</span>
+                            <span className="hidden group-open:inline">Ocultar cálculo detalhado</span>
+                          </summary>
+                          <div className="mt-3 space-y-2">
+                            <p className="rounded-lg bg-amber-50 p-2 text-xs leading-relaxed text-amber-900">
+                              A comissão usa o valor original dos itens. Descontos e acréscimos mudam o faturamento recebido, mas não alteram a base da comissão atual.
+                            </p>
+                            {values.orderDetails.map((order) => (
+                              <div key={order.id} className="rounded-lg border border-border bg-background/90 p-3 text-xs">
+                                <div className="flex flex-wrap items-center justify-between gap-2 font-semibold">
+                                  <Link
+                                    href={`/comandas?order=${encodeURIComponent(order.id)}`}
+                                    className="text-primary underline decoration-primary/30 underline-offset-2 hover:decoration-primary"
+                                    title={`Abrir comanda #${order.number}`}
+                                  >
+                                    Comanda #{order.number}
+                                  </Link>
+                                  <span>{formatCurrency(order.value)} recebido</span>
+                                </div>
+                                {order.items.length > 0 ? (
+                                  <div className="mt-2 space-y-1.5">
+                                    {order.items.map((item) => (
+                                      <div key={item.id} className="flex flex-wrap justify-between gap-x-3 border-t border-border/60 pt-1.5 first:border-0 first:pt-0">
+                                        <span className="text-muted-foreground">{item.name} ({item.origin})</span>
+                                        <span className="tabular-nums">
+                                          {formatCurrency(item.base)} × {formatPercent(item.rate)} ={' '}
+                                          <strong className="text-emerald-700">{formatCurrency(item.commission)}</strong>
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : <p className="mt-2 text-muted-foreground">Sem item vinculado: não gerou comissão.</p>}
+                                {order.discount > 0 ? <p className="mt-2 text-amber-800">Desconto: −{formatCurrency(order.discount)} (não reduz a comissão atual)</p> : null}
+                                {order.surcharge > 0 ? <p className="mt-2 text-amber-800">Acréscimo: +{formatCurrency(order.surcharge)} (não aumenta a comissão atual)</p> : null}
+                                <p className="mt-2 text-right font-semibold text-emerald-700">Comissão: {formatCurrency(order.commission)}</p>
+                              </div>
+                            ))}
+                            <div className="rounded-lg bg-emerald-100/70 p-3 text-xs text-emerald-950">
+                              <div className="flex justify-between gap-2"><span>Comandas</span><strong>{formatCurrency(values.salesCommission)}</strong></div>
+                              <div className="mt-1 flex justify-between gap-2"><span>Lançamentos de assinatura</span><strong>{formatCurrency(values.subscriptionCommission)}</strong></div>
+                              <div className="mt-2 flex justify-between gap-2 border-t border-emerald-200 pt-2 text-sm"><strong>Total gerado</strong><strong>{formatCurrency(values.generated)}</strong></div>
+                            </div>
+                          </div>
+                        </details>
+                      ) : null}
                     </div>
                     <div className="border-t border-border pt-3 text-left sm:border-l sm:border-t-0 sm:pl-5 sm:pt-0 sm:text-right">
                       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">A pagar</p>
