@@ -130,7 +130,7 @@ export default function FuncionariosPage() {
       (sum, item) => sum + item.order.items.filter((orderItem) => orderItem.type === 'servico').reduce((itemSum, orderItem) => itemSum + orderItem.quantity, 0),
       0,
     )
-    const orderCommission = paidOrders.reduce((sum, item) => sum + item.order.items.reduce(
+    const orderCommission = paidOrders.reduce((sum, item) => item.value <= 0 ? sum : sum + item.order.items.reduce(
       (itemSum, orderItem) => itemSum + orderItem.quantity * orderItem.unitPrice
         * orderItemCommissionRate(orderItem, employee) / 100,
       0,
@@ -150,7 +150,7 @@ export default function FuncionariosPage() {
           unitPrice: orderItem.unitPrice,
           base,
           rate,
-          commission: base * rate / 100,
+          commission: value > 0 ? base * rate / 100 : 0,
         }
       })
       return {
@@ -218,7 +218,7 @@ export default function FuncionariosPage() {
     const subscriptionRevenue = orders
       .filter((item) => item.order.items.some((orderItem) => orderItem.name.startsWith('[Assinatura]')))
       .reduce((sum, item) => sum + item.value, 0)
-    const salesCommission = orders.reduce((sum, item) => sum + item.order.items.reduce(
+    const salesCommission = orders.reduce((sum, item) => item.value <= 0 ? sum : sum + item.order.items.reduce(
       (itemSum, orderItem) => itemSum + orderItem.quantity * orderItem.unitPrice
         * orderItemCommissionRate(orderItem, employee) / 100,
       0,
@@ -240,7 +240,7 @@ export default function FuncionariosPage() {
           origin: commissionOriginLabel(orderItem),
           base,
           rate,
-          commission: base * rate / 100,
+          commission: value > 0 ? base * rate / 100 : 0,
         }
       })
       return {
@@ -583,7 +583,7 @@ export default function FuncionariosPage() {
                           </summary>
                           <div className="mt-3 space-y-2">
                             <p className="rounded-lg bg-amber-50 p-2 text-xs leading-relaxed text-amber-900">
-                              A comissão usa o valor original dos itens. Descontos e acréscimos mudam o faturamento recebido, mas não alteram a base da comissão atual.
+                              Regra: a comissão é calculada sobre os itens da comanda. Quando o valor final recebido for R$ 0,00, nenhuma comissão será gerada.
                             </p>
                             {values.orderDetails.map((order) => (
                               <div key={order.id} className="rounded-lg border border-border bg-background/90 p-3 text-xs">
@@ -602,15 +602,22 @@ export default function FuncionariosPage() {
                                     {order.items.map((item) => (
                                       <div key={item.id} className="flex flex-wrap justify-between gap-x-3 border-t border-border/60 pt-1.5 first:border-0 first:pt-0">
                                         <span className="text-muted-foreground">{item.name} ({item.origin})</span>
-                                        <span className="tabular-nums">
-                                          {formatCurrency(item.base)} × {formatPercent(item.rate)} ={' '}
-                                          <strong className="text-emerald-700">{formatCurrency(item.commission)}</strong>
-                                        </span>
+                                        {order.value <= 0 ? (
+                                          <span className="tabular-nums text-rose-700">
+                                            Base {formatCurrency(item.base)} · percentual {formatPercent(item.rate)} · <strong>comissão anulada: {formatCurrency(0)}</strong>
+                                          </span>
+                                        ) : (
+                                          <span className="tabular-nums">
+                                            {formatCurrency(item.base)} × {formatPercent(item.rate)} ={' '}
+                                            <strong className="text-emerald-700">{formatCurrency(item.commission)}</strong>
+                                          </span>
+                                        )}
                                       </div>
                                     ))}
                                   </div>
                                 ) : <p className="mt-2 text-muted-foreground">Sem item vinculado: não gerou comissão.</p>}
-                                {order.discount > 0 ? <p className="mt-2 text-amber-800">Desconto: −{formatCurrency(order.discount)} (não reduz a comissão atual)</p> : null}
+                                {order.value <= 0 ? <p className="mt-2 font-semibold text-rose-700">Comanda zerada: comissão não gerada.</p> : null}
+                                {order.discount > 0 ? <p className="mt-2 text-amber-800">Desconto: −{formatCurrency(order.discount)}{order.value <= 0 ? ' (zerou a comanda)' : ''}</p> : null}
                                 {order.surcharge > 0 ? <p className="mt-2 text-amber-800">Acréscimo: +{formatCurrency(order.surcharge)} (não aumenta a comissão atual)</p> : null}
                                 <p className="mt-2 text-right font-semibold text-emerald-700">Comissão: {formatCurrency(order.commission)}</p>
                               </div>
@@ -702,7 +709,7 @@ export default function FuncionariosPage() {
                     </summary>
                     <div className="mt-3 space-y-3 text-xs">
                       <p className="rounded-lg bg-amber-50 p-2 leading-relaxed text-amber-900">
-                        A comissão usa o valor original de cada item. Descontos e acréscimos alteram o faturamento da comanda, mas atualmente não alteram a base da comissão.
+                        Regra: a comissão é calculada sobre os itens da comanda. Quando o valor final recebido for R$ 0,00, nenhuma comissão será gerada.
                       </p>
                       {values.orderDetails.map((order) => (
                         <div key={order.id} className="rounded-lg border border-border bg-background p-3">
@@ -721,19 +728,29 @@ export default function FuncionariosPage() {
                               {order.items.map((commissionItem) => (
                                 <div key={commissionItem.id} className="border-t border-border/70 pt-2 first:border-0 first:pt-0">
                                   <p className="font-medium text-foreground">{commissionItem.quantity}× {commissionItem.name}</p>
-                                  <p className="mt-0.5 leading-relaxed text-muted-foreground">
-                                    {commissionItem.origin}: {formatCurrency(commissionItem.base)} × {formatPercent(commissionItem.rate)} ={' '}
-                                    <strong className="text-emerald-700">{formatCurrency(commissionItem.commission)}</strong>
-                                  </p>
+                                  {order.value <= 0 ? (
+                                    <p className="mt-0.5 leading-relaxed text-rose-700">
+                                      {commissionItem.origin}: base {formatCurrency(commissionItem.base)} · percentual {formatPercent(commissionItem.rate)} ·{' '}
+                                      <strong>comissão anulada: {formatCurrency(0)}</strong>
+                                    </p>
+                                  ) : (
+                                    <p className="mt-0.5 leading-relaxed text-muted-foreground">
+                                      {commissionItem.origin}: {formatCurrency(commissionItem.base)} × {formatPercent(commissionItem.rate)} ={' '}
+                                      <strong className="text-emerald-700">{formatCurrency(commissionItem.commission)}</strong>
+                                    </p>
+                                  )}
                                 </div>
                               ))}
                             </div>
                           ) : (
                             <p className="mt-2 text-muted-foreground">Sem item vinculado: não gerou comissão.</p>
                           )}
+                          {order.value <= 0 ? (
+                            <p className="mt-2 rounded-md bg-rose-50 p-2 font-semibold text-rose-700">Comanda zerada: comissão não gerada.</p>
+                          ) : null}
                           {(order.discount > 0 || order.surcharge > 0) ? (
                             <div className="mt-2 rounded-md bg-muted p-2 text-muted-foreground">
-                              {order.discount > 0 ? <p>Desconto da comanda: −{formatCurrency(order.discount)} (não reduz a comissão atual)</p> : null}
+                              {order.discount > 0 ? <p>Desconto da comanda: −{formatCurrency(order.discount)}{order.value <= 0 ? ' (zerou a comanda)' : ''}</p> : null}
                               {order.surcharge > 0 ? <p>Acréscimo da comanda: +{formatCurrency(order.surcharge)} (não aumenta a comissão atual)</p> : null}
                             </div>
                           ) : null}
