@@ -235,7 +235,7 @@ export default function ConfiguracoesPage() {
       const filePath = getLogoFilePath(barbershop.id, logoFile)
       const { error: uploadError } = await supabase.storage
         .from('barbershop-assets')
-        .upload(filePath, logoFile, { contentType: logoFile.type, upsert: true })
+        .upload(filePath, logoFile, { contentType: logoFile.type, upsert: false })
 
       if (uploadError) {
         setSaving(false)
