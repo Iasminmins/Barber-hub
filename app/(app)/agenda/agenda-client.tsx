@@ -11,14 +11,18 @@ import { Tabs } from '@/components/ui/tabs'
 import { Avatar } from '@/components/ui/avatar'
 import { Dialog, DialogHeader } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { formatCurrency } from '@/lib/format'
 import type { Appointment, Employee, ScheduleBlock } from '@/lib/types'
 import { isBarberRole } from '@/lib/employees'
+import { appointmentConflictsWithScheduleBlock, formatScheduleBlockPeriod, getBlockTimeOptions, timeToMinutes } from '@/lib/schedule-blocks'
+import type { BusinessDayKey } from '@/lib/barbershop-settings'
 import { useAppData } from '@/components/data/app-data-provider'
 
 const HOURS = Array.from({ length: 12 }, (_, i) => 8 + i) // 08:00 - 19:00
+const BUSINESS_DAY_KEYS: BusinessDayKey[] = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado']
 
 const statusColor: Record<Appointment['status'], string> = {
   agendado: 'border-l-muted-foreground/40 bg-muted/60',
@@ -41,11 +45,6 @@ const appointmentStatuses: Array<{ value: Appointment['status']; label: string }
 function timeToTop(start: string) {
   const [h, mm] = start.split(':').map(Number)
   return (h - 8) * 64 + (mm / 60) * 64
-}
-
-function timeToMinutes(value: string) {
-  const [hours, minutes] = value.split(':').map(Number)
-  return hours * 60 + minutes
 }
 
 function toDateKey(date: Date) {
@@ -101,6 +100,9 @@ export function AgendaClient({
   const [blockBarber, setBlockBarber] = React.useState<Employee | null>(null)
   const [savingBlock, setSavingBlock] = React.useState(false)
   const [blockError, setBlockError] = React.useState('')
+  const [blockMode, setBlockMode] = React.useState<'day' | 'period'>('day')
+  const [blockStart, setBlockStart] = React.useState('08:00')
+  const [blockEnd, setBlockEnd] = React.useState('14:00')
   const handledAgendaLink = React.useRef(false)
   const agendaAppointments = appointments
 
@@ -168,6 +170,18 @@ export function AgendaClient({
     }
     if (!Number.isFinite(price) || price < 0 || !Number.isFinite(durationMin) || durationMin < 5) {
       setAppointmentError('Revise o valor e a duração do serviço.')
+      return
+    }
+
+    const conflictingBlock = scheduleBlocks.find((block) =>
+      block.employeeId === employee.id
+      && block.date === editingAppointment.date
+      && appointmentConflictsWithScheduleBlock(editingAppointment.start, durationMin, block),
+    )
+    if (conflictingBlock) {
+      setAppointmentError(conflictingBlock.startTime
+        ? `A agenda deste barbeiro está bloqueada das ${conflictingBlock.startTime} às ${conflictingBlock.endTime}.`
+        : 'A agenda deste barbeiro está bloqueada neste dia.')
       return
     }
 
@@ -241,22 +255,29 @@ export function AgendaClient({
   }
 
   function openBlockDialog(barber: Employee) {
+    const selectedBusinessHours = barbershop.agendaSettings.businessHours[BUSINESS_DAY_KEYS[fromDateKey(selectedDate).getDay()]]
     setBlockBarber(barber)
     setBlockError('')
+    setBlockMode('day')
+    setBlockStart(selectedBusinessHours.start)
+    setBlockEnd(selectedBusinessHours.end)
   }
 
-  async function toggleDayBlock() {
+  async function createScheduleBlock() {
     if (!blockBarber) return
-    const existingBlock = scheduleBlocks.find((block) => block.employeeId === blockBarber.id && block.date === selectedDate)
+    if (blockMode === 'period' && timeToMinutes(blockStart) >= timeToMinutes(blockEnd)) {
+      setBlockError('O horário final precisa ser depois do horário inicial.')
+      return
+    }
     setSavingBlock(true)
     setBlockError('')
-    const result = existingBlock
-      ? await deleteRecord('schedule_blocks', existingBlock.id)
-      : await insertRecord('schedule_blocks', {
-          barbershop_id: barbershopId,
-          employee_id: blockBarber.id,
-          date: selectedDate,
-        })
+    const result = await insertRecord('schedule_blocks', {
+      barbershop_id: barbershopId,
+      employee_id: blockBarber.id,
+      date: selectedDate,
+      start_time: blockMode === 'period' ? blockStart : null,
+      end_time: blockMode === 'period' ? blockEnd : null,
+    })
     setSavingBlock(false)
     if (result.error) {
       setBlockError(result.error)
@@ -264,6 +285,17 @@ export function AgendaClient({
     }
     setBlockBarber(null)
   }
+
+  async function removeScheduleBlock(blockId: string) {
+    setSavingBlock(true)
+    setBlockError('')
+    const result = await deleteRecord('schedule_blocks', blockId)
+    setSavingBlock(false)
+    if (result.error) setBlockError(result.error)
+  }
+
+  const selectedBusinessHours = barbershop.agendaSettings.businessHours[BUSINESS_DAY_KEYS[fromDateKey(selectedDate).getDay()]]
+  const blockTimeOptions = getBlockTimeOptions(selectedBusinessHours.start, selectedBusinessHours.end)
 
   const barbers = employees.filter((e) => e.active && isBarberRole(e.role))
   const columns = quickPreferences.showByBarber && barberFilter === 'todos'
@@ -414,7 +446,9 @@ export function AgendaClient({
             <div className="flex min-w-0 flex-1">
               {columns.map((barber) => {
                 const appts = selectedDayAppointments.filter((a) => a.employeeId === barber.id)
-                const dayBlocked = scheduleBlocks.some((block) => block.employeeId === barber.id && block.date === selectedDate)
+                const dayBlocks = scheduleBlocks.filter((block) => block.employeeId === barber.id && block.date === selectedDate)
+                const dayBlocked = dayBlocks.some((block) => !block.startTime || !block.endTime)
+                const hasBlocks = dayBlocks.length > 0
                 return (
                   <div key={barber.id} className="min-w-40 flex-1 border-r border-border last:border-r-0">
                     <button
@@ -422,13 +456,13 @@ export function AgendaClient({
                       onClick={() => openBlockDialog(barber)}
                       className={cn(
                         'flex h-12 w-full items-center gap-2 border-b border-border px-3 text-left transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-                        dayBlocked ? 'bg-destructive/10' : 'bg-muted/40',
+                        hasBlocks ? 'bg-destructive/10' : 'bg-muted/40',
                       )}
-                      aria-label={`${dayBlocked ? 'Desbloquear' : 'Bloquear'} agenda de ${barber.name} em ${selectedDate}`}
+                      aria-label={`Gerenciar bloqueios da agenda de ${barber.name} em ${selectedDate}`}
                     >
                       <Avatar name={barber.name} src={barber.avatarUrl} color={barber.avatarColor} className="size-6 text-[10px]" />
                       <span className="truncate text-xs font-semibold text-foreground">{barber.name}</span>
-                      {dayBlocked ? <Ban className="ml-auto size-3.5 text-destructive" /> : null}
+                      {hasBlocks ? <Ban className="ml-auto size-3.5 text-destructive" /> : null}
                     </button>
                     <div className={cn('relative', dayBlocked && 'bg-destructive/[0.04]')} style={{ height: HOURS.length * 64 }}>
                       {HOURS.map((h) => {
@@ -447,6 +481,18 @@ export function AgendaClient({
                           />
                         )
                       })}
+                      {dayBlocks.filter((block) => block.startTime && block.endTime).map((block) => (
+                        <div
+                          key={block.id}
+                          className="pointer-events-none absolute inset-x-1 z-10 overflow-hidden rounded-md border border-destructive/30 bg-destructive/10 px-2 py-1 text-center text-[11px] font-semibold text-destructive"
+                          style={{
+                            top: timeToTop(block.startTime!),
+                            height: Math.max(28, ((timeToMinutes(block.endTime!) - timeToMinutes(block.startTime!)) / 60) * 64 - 2),
+                          }}
+                        >
+                          Bloqueado · {formatScheduleBlockPeriod(block)}
+                        </div>
+                      ))}
                       {appts.map((a) => (
                         <button
                           type="button"
@@ -454,7 +500,7 @@ export function AgendaClient({
                           onClick={() => openAppointment(a)}
                           aria-label={`Abrir agendamento de ${a.clientName} às ${a.start}`}
                           className={cn(
-                            'absolute left-1 right-1 cursor-pointer overflow-hidden rounded-md border-l-2 px-2 py-1 text-left shadow-sm transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                            'absolute left-1 right-1 z-20 cursor-pointer overflow-hidden rounded-md border-l-2 px-2 py-1 text-left shadow-sm transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                             statusColor[a.status],
                             quickPreferences.alertDelays
                               && selectedDate === toDateKey(new Date())
@@ -522,28 +568,77 @@ export function AgendaClient({
         {blockBarber ? (
           <>
             <DialogHeader
-              title={scheduleBlocks.some((block) => block.employeeId === blockBarber.id && block.date === selectedDate) ? 'Desbloquear agenda' : 'Bloquear agenda'}
+              title="Bloquear agenda"
               description={`${blockBarber.name} · ${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long' }).format(fromDateKey(selectedDate))}`}
             />
             <p className="text-sm text-muted-foreground">
-              {scheduleBlocks.some((block) => block.employeeId === blockBarber.id && block.date === selectedDate)
-                ? 'O profissional voltará a aparecer com horários disponíveis para este dia.'
-                : 'Nenhum novo agendamento poderá ser feito para este profissional neste dia. Agendamentos já existentes serão mantidos.'}
+              Novos agendamentos serão impedidos no período escolhido. Agendamentos já existentes serão mantidos.
             </p>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => { setBlockMode('day'); setBlockError('') }}
+                className={cn('rounded-lg border px-3 py-2 text-sm font-medium transition', blockMode === 'day' ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:bg-muted')}
+              >
+                Dia inteiro
+              </button>
+              <button
+                type="button"
+                onClick={() => { setBlockMode('period'); setBlockError('') }}
+                className={cn('rounded-lg border px-3 py-2 text-sm font-medium transition', blockMode === 'period' ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:bg-muted')}
+              >
+                Período
+              </button>
+            </div>
+            {blockMode === 'period' ? (
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <label className="space-y-1.5 text-sm font-medium">
+                  <span>Das</span>
+                  <Select value={blockStart} onChange={(event) => { setBlockStart(event.target.value); setBlockError('') }}>
+                    {blockTimeOptions.slice(0, -1).map((time) => <option key={time} value={time}>{time}</option>)}
+                  </Select>
+                </label>
+                <label className="space-y-1.5 text-sm font-medium">
+                  <span>Até</span>
+                  <Select value={blockEnd} onChange={(event) => { setBlockEnd(event.target.value); setBlockError('') }}>
+                    {blockTimeOptions.slice(1).map((time) => <option key={time} value={time}>{time}</option>)}
+                  </Select>
+                </label>
+              </div>
+            ) : null}
+            {scheduleBlocks.some((block) => block.employeeId === blockBarber.id && block.date === selectedDate) ? (
+              <div className="mt-5 border-t border-border pt-4">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Bloqueios deste dia</p>
+                <div className="space-y-2">
+                  {scheduleBlocks
+                    .filter((block) => block.employeeId === blockBarber.id && block.date === selectedDate)
+                    .map((block) => (
+                      <div key={block.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
+                        <span className="text-sm font-medium">{formatScheduleBlockPeriod(block)}</span>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`Remover bloqueio ${formatScheduleBlockPeriod(block)}`}
+                          onClick={() => removeScheduleBlock(block.id)}
+                          disabled={savingBlock}
+                        >
+                          <Trash2 className="size-4 text-destructive" />
+                        </Button>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            ) : null}
             {blockError ? <p role="alert" className="mt-4 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{blockError}</p> : null}
             <div className="mt-6 flex justify-end gap-2">
               <Button variant="outline" onClick={() => setBlockBarber(null)} disabled={savingBlock}>Cancelar</Button>
               <Button
-                variant={scheduleBlocks.some((block) => block.employeeId === blockBarber.id && block.date === selectedDate) ? 'default' : 'destructive'}
-                onClick={toggleDayBlock}
+                variant="destructive"
+                onClick={createScheduleBlock}
                 disabled={savingBlock}
               >
                 <Ban className="size-4" />
-                {savingBlock
-                  ? 'Salvando...'
-                  : scheduleBlocks.some((block) => block.employeeId === blockBarber.id && block.date === selectedDate)
-                    ? 'Desbloquear dia'
-                    : 'Bloquear dia'}
+                {savingBlock ? 'Salvando...' : blockMode === 'day' ? 'Bloquear dia' : 'Bloquear período'}
               </Button>
             </div>
           </>

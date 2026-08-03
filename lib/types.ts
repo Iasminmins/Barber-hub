@@ -131,6 +131,8 @@ export interface ScheduleBlock {
   barbershopId: string
   employeeId: string
   date: string // YYYY-MM-DD
+  startTime: string | null // HH:mm or HH:mm:ss; null means full day
+  endTime: string | null // HH:mm or HH:mm:ss; null means full day
   createdAt?: string
 }
 

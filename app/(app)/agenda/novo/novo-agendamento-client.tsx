@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { useAppData } from '@/components/data/app-data-provider'
+import { appointmentConflictsWithScheduleBlock } from '@/lib/schedule-blocks'
 import type { Appointment, AppointmentStatus, CatalogItem, Client, Employee } from '@/lib/types'
 
 interface NovoAgendamentoClientProps {
@@ -119,8 +120,15 @@ export function NovoAgendamentoClient({
       return
     }
 
-    if (scheduleBlocks.some((block) => block.employeeId === barber.id && block.date === date)) {
-      setSaveError('A agenda deste barbeiro está bloqueada neste dia.')
+    const conflictingBlock = scheduleBlocks.find((block) =>
+      block.employeeId === barber.id
+      && block.date === date
+      && appointmentConflictsWithScheduleBlock(start, service.durationMin ?? 40, block),
+    )
+    if (conflictingBlock) {
+      setSaveError(conflictingBlock.startTime
+        ? `A agenda deste barbeiro está bloqueada das ${conflictingBlock.startTime} às ${conflictingBlock.endTime}.`
+        : 'A agenda deste barbeiro está bloqueada neste dia.')
       return
     }
 
