@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import Link from 'next/link'
-import { CalendarDays, CreditCard, DollarSign, Edit3, ListChecks, Pencil, Plus, ReceiptText, Repeat, Save, Search, Trash2, TrendingUp, Users } from 'lucide-react'
+import { CalendarDays, CreditCard, DollarSign, Edit3, ListChecks, MessageCircle, Pencil, Plus, ReceiptText, Repeat, Save, Search, Trash2, TrendingUp, Users } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { StatusBadge } from '@/components/status-badge'
 import { Badge } from '@/components/ui/badge'
@@ -27,6 +27,7 @@ import { daysUntil, formatCurrency, formatDate } from '@/lib/format'
 import type { CatalogItem, FinancialEntry, PaymentMethod, Plan, PlanCycle, PlanRules, Subscription, SubscriptionStatus } from '@/lib/types'
 import { useAppData } from '@/components/data/app-data-provider'
 import { isBarberRole } from '@/lib/employees'
+import { renewalMessage, whatsappUrl } from '@/lib/whatsapp'
 
 type View = 'assinaturas' | 'planos' | 'financeiro'
 type SubscriptionFilter = 'ativas' | 'vencendo' | 'vencidas' | 'todas'
@@ -278,6 +279,23 @@ export function AssinaturasClient({
       registerPayment: false,
       paymentMethod: 'pix',
     })
+  }
+
+  function openRenewalWhatsApp(subscription: Subscription) {
+    const client = clients.find((item) => item.id === subscription.clientId)
+    if (!client?.phone) return
+
+    const url = whatsappUrl(
+      client.phone,
+      renewalMessage(
+        subscription.clientName,
+        subscription.planName,
+        daysUntil(subscription.dueDate),
+        barbershop.name,
+      ),
+    )
+
+    if (url) window.open(url, '_blank', 'noopener,noreferrer')
   }
 
   function openPlanDialog(plan?: Plan) {
@@ -779,6 +797,8 @@ export function AssinaturasClient({
           <div className="divide-y divide-border lg:hidden">
             {filteredSubscriptions.map((sub) => {
               const due = daysUntil(sub.dueDate)
+              const clientPhone = clients.find((client) => client.id === sub.clientId)?.phone
+              const canSendRenewalMessage = sub.displayStatus === 'vencendo' || sub.displayStatus === 'vencido'
               return (
                 <div
                   key={sub.id}
@@ -811,7 +831,23 @@ export function AssinaturasClient({
                       <p className="text-foreground">{formatDate(sub.dueDate)}</p>
                       <p className="text-xs text-muted-foreground">{due < 0 ? `${Math.abs(due)} dias atrás` : `em ${due} dias`}</p>
                     </div>
-                    <div className="flex items-end justify-end">
+                    <div className="flex items-end justify-end gap-2">
+                      {canSendRenewalMessage ? (
+                        <Button
+                          variant="outline"
+                          size="icon-sm"
+                          disabled={!clientPhone}
+                          title={clientPhone ? 'Enviar lembrete pelo WhatsApp' : 'Cliente sem telefone cadastrado'}
+                          aria-label={`Enviar lembrete de renovação para ${sub.clientName} pelo WhatsApp`}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            openRenewalWhatsApp(sub)
+                          }}
+                          className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
+                        >
+                          <MessageCircle className="size-4" />
+                        </Button>
+                      ) : null}
                       <Button
                         variant="outline"
                         size="sm"
@@ -851,6 +887,8 @@ export function AssinaturasClient({
               {filteredSubscriptions.map((sub) => {
                 const due = daysUntil(sub.dueDate)
                 const hasCredits = sub.creditsTotal && sub.creditsTotal > 0
+                const clientPhone = clients.find((client) => client.id === sub.clientId)?.phone
+                const canSendRenewalMessage = sub.displayStatus === 'vencendo' || sub.displayStatus === 'vencido'
                 return (
                   <TableRow
                     key={sub.id}
@@ -893,6 +931,23 @@ export function AssinaturasClient({
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
+                        {canSendRenewalMessage ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={!clientPhone}
+                            title={clientPhone ? 'Enviar lembrete pelo WhatsApp' : 'Cliente sem telefone cadastrado'}
+                            aria-label={`Enviar lembrete de renovação para ${sub.clientName} pelo WhatsApp`}
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              openRenewalWhatsApp(sub)
+                            }}
+                            className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
+                          >
+                            <MessageCircle className="size-4" />
+                            WhatsApp
+                          </Button>
+                        ) : null}
                         <Button
                           variant="outline"
                           size="sm"
