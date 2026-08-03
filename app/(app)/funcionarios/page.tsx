@@ -503,15 +503,29 @@ export default function FuncionariosPage() {
 
           <Card className="p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
+              <div className="min-w-0">
                 <h2 className="text-lg font-semibold text-foreground">
                   Relatório {reportPeriod === 'diario' ? 'diário' : 'semanal'} da equipe
                 </h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {reportPeriod === 'diario'
-                    ? new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' }).format(reportRange.startDate)
-                    : `${new Intl.DateTimeFormat('pt-BR').format(reportRange.startDate)} – ${new Intl.DateTimeFormat('pt-BR').format(reportRange.endDate)}`}
-                </p>
+                <div
+                  className="mt-3 inline-flex items-center gap-3 rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-emerald-50 px-4 py-3 shadow-sm"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
+                    <CalendarDays className="size-5" />
+                  </span>
+                  <div>
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-primary">
+                      {reportPeriod === 'diario' ? 'Dia selecionado' : 'Semana selecionada'}
+                    </p>
+                    <p className="mt-0.5 text-lg font-bold capitalize leading-tight text-foreground sm:text-xl">
+                      {reportPeriod === 'diario'
+                        ? new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' }).format(reportRange.startDate)
+                        : `${new Intl.DateTimeFormat('pt-BR').format(reportRange.startDate)} – ${new Intl.DateTimeFormat('pt-BR').format(reportRange.endDate)}`}
+                    </p>
+                  </div>
+                </div>
               </div>
               <div className="flex flex-wrap items-center justify-end gap-1">
                 <div className="mr-2 flex rounded-md border border-border bg-muted/30 p-0.5">
