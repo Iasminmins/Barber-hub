@@ -89,6 +89,11 @@ function orderItemCommissionRate(
   return item.type === 'servico' ? employee.serviceCommission : employee.productCommission
 }
 
+function commissionOriginLabel(item: ReturnType<typeof useAppData>['orders'][number]['items'][number]) {
+  if (item.name.startsWith('[Assinatura]')) return 'Assinatura'
+  return item.type === 'servico' ? 'Serviço' : 'Produto'
+}
+
 export default function FuncionariosPage() {
   const appData = useAppData()
   const [employees, setEmployees] = useState(() => appData.employees)
@@ -133,7 +138,40 @@ export default function FuncionariosPage() {
     const subscriptionCommission = commissions
       .filter((item) => item.employeeId === employee.id && item.origin === 'assinatura' && item.date.slice(0, 7) === currentMonth)
       .reduce((sum, item) => sum + item.amount, 0)
-    return [employee.id, { revenue, subscriptionRevenue, services, commission: orderCommission + subscriptionCommission }]
+    const orderDetails = paidOrders.map(({ order, value }) => {
+      const items = order.items.map((orderItem) => {
+        const base = orderItem.quantity * orderItem.unitPrice
+        const rate = orderItemCommissionRate(orderItem, employee)
+        return {
+          id: orderItem.id,
+          name: orderItem.name,
+          origin: commissionOriginLabel(orderItem),
+          quantity: orderItem.quantity,
+          unitPrice: orderItem.unitPrice,
+          base,
+          rate,
+          commission: base * rate / 100,
+        }
+      })
+      return {
+        id: order.id,
+        number: order.number,
+        value,
+        discount: order.discount,
+        surcharge: order.surcharge,
+        items,
+        commission: items.reduce((sum, item) => sum + item.commission, 0),
+      }
+    })
+    return [employee.id, {
+      revenue,
+      subscriptionRevenue,
+      services,
+      commission: orderCommission + subscriptionCommission,
+      orderCommission,
+      subscriptionCommission,
+      orderDetails,
+    }]
   })), [commissions, currentMonth, employees, paidOrdersWithEmployee])
   const ranking = employees.map((employee) => ({
     id: employee.id,
@@ -575,6 +613,73 @@ export default function FuncionariosPage() {
                     <p className="mt-0.5 text-lg font-bold tabular-nums text-emerald-700">{formatCurrency(values?.commission ?? 0)}</p>
                   </div>
                 </div>
+                {values ? (
+                  <details className="group mt-3 border-t border-border pt-3">
+                    <summary className="cursor-pointer list-none text-xs font-semibold text-primary hover:underline">
+                      <span className="group-open:hidden">Ver como a comissão foi calculada</span>
+                      <span className="hidden group-open:inline">Ocultar memória de cálculo</span>
+                    </summary>
+                    <div className="mt-3 space-y-3 text-xs">
+                      <p className="rounded-lg bg-amber-50 p-2 leading-relaxed text-amber-900">
+                        A comissão usa o valor original de cada item. Descontos e acréscimos alteram o faturamento da comanda, mas atualmente não alteram a base da comissão.
+                      </p>
+                      {values.orderDetails.map((order) => (
+                        <div key={order.id} className="rounded-lg border border-border bg-background p-3">
+                          <div className="flex items-center justify-between gap-2 font-semibold text-foreground">
+                            <span>Comanda #{order.number}</span>
+                            <span>{formatCurrency(order.value)} recebido</span>
+                          </div>
+                          {order.items.length > 0 ? (
+                            <div className="mt-2 space-y-2">
+                              {order.items.map((commissionItem) => (
+                                <div key={commissionItem.id} className="border-t border-border/70 pt-2 first:border-0 first:pt-0">
+                                  <p className="font-medium text-foreground">{commissionItem.quantity}× {commissionItem.name}</p>
+                                  <p className="mt-0.5 leading-relaxed text-muted-foreground">
+                                    {commissionItem.origin}: {formatCurrency(commissionItem.base)} × {formatPercent(commissionItem.rate)} ={' '}
+                                    <strong className="text-emerald-700">{formatCurrency(commissionItem.commission)}</strong>
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="mt-2 text-muted-foreground">Sem item vinculado: não gerou comissão.</p>
+                          )}
+                          {(order.discount > 0 || order.surcharge > 0) ? (
+                            <div className="mt-2 rounded-md bg-muted p-2 text-muted-foreground">
+                              {order.discount > 0 ? <p>Desconto da comanda: −{formatCurrency(order.discount)} (não reduz a comissão atual)</p> : null}
+                              {order.surcharge > 0 ? <p>Acréscimo da comanda: +{formatCurrency(order.surcharge)} (não aumenta a comissão atual)</p> : null}
+                            </div>
+                          ) : null}
+                          <p className="mt-2 text-right font-semibold text-emerald-700">
+                            Comissão da comanda: {formatCurrency(order.commission)}
+                          </p>
+                        </div>
+                      ))}
+                      {values.subscriptionCommission > 0 ? (
+                        <div className="rounded-lg border border-border bg-background p-3">
+                          <div className="flex justify-between gap-2">
+                            <span>Comissões de assinatura lançadas separadamente</span>
+                            <strong className="text-emerald-700">{formatCurrency(values.subscriptionCommission)}</strong>
+                          </div>
+                        </div>
+                      ) : null}
+                      <div className="rounded-lg bg-emerald-50 p-3 text-emerald-950">
+                        <div className="flex justify-between gap-2">
+                          <span>Comissões das comandas</span>
+                          <strong>{formatCurrency(values.orderCommission)}</strong>
+                        </div>
+                        <div className="mt-1 flex justify-between gap-2">
+                          <span>Lançamentos separados</span>
+                          <strong>{formatCurrency(values.subscriptionCommission)}</strong>
+                        </div>
+                        <div className="mt-2 flex justify-between gap-2 border-t border-emerald-200 pt-2 text-sm">
+                          <strong>Total da comissão</strong>
+                          <strong>{formatCurrency(values.commission)}</strong>
+                        </div>
+                      </div>
+                    </div>
+                  </details>
+                ) : null}
               </div>
             )
           })}
