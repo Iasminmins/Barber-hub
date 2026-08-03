@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from 'react'
+import posthog from 'posthog-js'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import { defaultAgendaSettings, defaultPaymentMethods, normalizeAgendaSettings, normalizePaymentMethods } from '@/lib/barbershop-settings'
 import type { Appointment, Barbershop, CatalogItem, Client, Commission, Employee, FinancialEntry, ImportRecord, Member, Order, Plan, PlanRules, ScheduleBlock, Subscription } from '@/lib/types'
@@ -90,6 +91,11 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       window.location.replace('/login')
       return
     }
+
+    posthog.identify(user.id, {
+      email: user.email,
+      name: user.user_metadata.owner_name,
+    })
 
     const { data: memberships, error: memberError } = await withTimeout(
       supabase

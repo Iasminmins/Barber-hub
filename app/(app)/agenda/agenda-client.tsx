@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 import Link from 'next/link'
+import posthog from 'posthog-js'
 import { ChevronLeft, ChevronRight, Plus, CalendarDays, Ban, Coffee, Copy, ExternalLink, MessageCircle, Share2, Save, Trash2 } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { StatusBadge } from '@/components/status-badge'
@@ -237,6 +238,12 @@ export function AgendaClient({
       setAppointmentError(result.error)
       return
     }
+    posthog.capture('appointment_updated', {
+      appointment_status: editingAppointment.status,
+      service_id: service.id,
+      duration_minutes: durationMin,
+      price,
+    })
     setEditingAppointment(null)
   }
 
@@ -250,6 +257,9 @@ export function AgendaClient({
       setAppointmentError(result.error)
       return
     }
+    posthog.capture('appointment_deleted', {
+      appointment_status: editingAppointment.status,
+    })
     setEditingAppointment(null)
     setConfirmingDelete(false)
   }
@@ -283,6 +293,9 @@ export function AgendaClient({
       setBlockError(result.error)
       return
     }
+    posthog.capture('schedule_block_created', {
+      block_mode: blockMode,
+    })
     setBlockBarber(null)
   }
 
@@ -291,7 +304,11 @@ export function AgendaClient({
     setBlockError('')
     const result = await deleteRecord('schedule_blocks', blockId)
     setSavingBlock(false)
-    if (result.error) setBlockError(result.error)
+    if (result.error) {
+      setBlockError(result.error)
+      return
+    }
+    posthog.capture('schedule_block_removed')
   }
 
   const selectedBusinessHours = barbershop.agendaSettings.businessHours[BUSINESS_DAY_KEYS[fromDateKey(selectedDate).getDay()]]

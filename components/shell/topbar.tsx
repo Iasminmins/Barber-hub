@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import { BrandMark } from '@/components/brand-mark'
 import { Avatar } from '@/components/ui/avatar'
+import posthog from 'posthog-js'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogHeader } from '@/components/ui/dialog'
@@ -661,5 +662,6 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
 }
   async function signOut() {
     await createBrowserSupabaseClient().auth.signOut()
+    posthog.reset()
     window.location.replace('/login')
   }

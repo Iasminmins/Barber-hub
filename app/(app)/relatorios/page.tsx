@@ -173,9 +173,10 @@ export default function RelatoriosPage() {
       .map((r) => ({ ...r, margem: r.receita - r.custo, margemPct: r.receita ? (r.receita - r.custo) / r.receita : 0 }))
       .sort((a, b) => b.receita - a.receita)
     const totalReceita = sorted.reduce((s, r) => s + r.receita, 0)
-    let cumulative = 0
-    const rows = sorted.map((r) => {
-      cumulative += r.receita
+    const rows = sorted.map((r, index) => {
+      const cumulative = sorted
+        .slice(0, index + 1)
+        .reduce((sum, item) => sum + item.receita, 0)
       const share = totalReceita ? cumulative / totalReceita : 0
       const abc: 'A' | 'B' | 'C' = share <= 0.8 ? 'A' : share <= 0.95 ? 'B' : 'C'
       return { ...r, abc }

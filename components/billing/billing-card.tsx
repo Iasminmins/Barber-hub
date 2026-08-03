@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from 'react'
+import posthog from 'posthog-js'
 import { CalendarClock, CreditCard, ExternalLink, LoaderCircle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -54,6 +55,10 @@ export function BillingCard({ planId }: { planId: SaasPlanId }) {
       const response = await authenticatedFetch('/api/billing/checkout', { method: 'POST' })
       const body = await response.json()
       if (!response.ok) throw new Error(body.error)
+      posthog.capture('billing_checkout_started', {
+        billing_status: billing?.status,
+        has_subscription: billing?.hasSubscription ?? false,
+      })
       window.location.assign(body.url)
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Não foi possível abrir o pagamento.')

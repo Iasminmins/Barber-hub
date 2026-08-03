@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
+import posthog from 'posthog-js'
 import { useMemo, useState } from 'react'
 import { ArrowLeft, CalendarPlus, MessageCircle, Save, Search } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
@@ -151,7 +152,16 @@ export function NovoAgendamentoClient({
       setSaveError(result.error)
       return
     }
+    posthog.capture('appointment_created', {
+      appointment_status: status,
+      service_id: service.id,
+      duration_minutes: service.durationMin ?? 40,
+      confirmation_channel: sendWhatsapp ? 'whatsapp' : 'none',
+    })
     if (sendWhatsapp) {
+      posthog.capture('appointment_confirmation_sent', {
+        channel: 'whatsapp',
+      })
       const message = [
         `Olá, ${client.name}! 👋`,
         '',

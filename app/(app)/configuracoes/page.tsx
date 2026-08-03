@@ -1,6 +1,7 @@
 'use client'
 
 import { type ChangeEvent, type ComponentType, useEffect, useMemo, useState } from 'react'
+import posthog from 'posthog-js'
 import { useSearchParams } from 'next/navigation'
 import {
   Bell,
@@ -373,6 +374,7 @@ export default function ConfiguracoesPage() {
 
   async function signOut() {
     await createBrowserSupabaseClient().auth.signOut()
+    posthog.reset()
     window.location.replace('/login')
   }
 

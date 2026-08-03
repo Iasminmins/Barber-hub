@@ -26,6 +26,7 @@ import {
   saasPlans,
   type SaasPlanId,
 } from '@/lib/saas-plans'
+import posthog from 'posthog-js'
 import { createBrowserSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 import { formatBillingDocument, isValidBillingDocument, onlyDigits } from '@/lib/billing-document'
@@ -93,7 +94,12 @@ export function CadastroClient({ selectedPlanId }: { selectedPlanId: SaasPlanId 
       return
     }
 
-    if (data.session) {
+    if (data.session && data.user) {
+      posthog.identify(data.user.id, {
+        email: data.user.email,
+        name: owner.trim(),
+      })
+
       const { error: onboardingError } = await supabase.rpc('create_barbershop_for_current_user', {
         barbershop_name: shop.trim(),
         barbershop_city: city.trim() || null,

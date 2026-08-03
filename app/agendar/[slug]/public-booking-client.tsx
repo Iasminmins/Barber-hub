@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from 'react'
+import posthog from 'posthog-js'
 import { CalendarDays, CalendarX2, CheckCircle2, Clock3, LoaderCircle, MapPin, Scissors, UserRound } from 'lucide-react'
 import { BrandMark } from '@/components/brand-mark'
 import { Button } from '@/components/ui/button'
@@ -131,7 +132,12 @@ export function PublicBookingClient({ slug }: { slug: string }) {
       setStatus(error.message)
       return
     }
-    setResult(data as BookingResult)
+    const booking = data as BookingResult
+    posthog.capture('public_appointment_booked', {
+      service_id: serviceId,
+      employee_id: employeeId,
+    })
+    setResult(booking)
   }
 
   if (result) {

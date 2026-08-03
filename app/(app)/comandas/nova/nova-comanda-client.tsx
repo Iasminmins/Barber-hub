@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import posthog from 'posthog-js'
 import { useMemo, useState } from 'react'
 import {
   ArrowLeft,
@@ -193,6 +194,13 @@ export function NovaComandaClient({
       const financialResult = await insertRecord('financial_entries', { barbershop_id: barbershopId, order_id:orderResult.data.id, type:'entrada', category:'Comandas', description:`Comanda #${nextOrderNumber}`, amount:total, method:payment, date:todayKey() })
       if (financialResult.error) { setSaveError(`Comanda salva, mas o financeiro falhou: ${financialResult.error}`); return }
     }
+    posthog.capture('order_created', {
+      order_status: orderStatus,
+      payment_method: paymentMethod ?? 'none',
+      item_count: selectedCount,
+      total,
+      has_client: Boolean(client),
+    })
     router.push('/comandas')
   }
 

@@ -79,6 +79,7 @@ const inspection = await workbook.inspect({
   maxChars: 8000,
 });
 
+// eslint-disable-next-line no-undef -- console is provided by the Node.js CLI runtime.
 console.log(
   JSON.stringify({
     headers,

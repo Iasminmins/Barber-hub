@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { useMemo, useState } from "react"
+import posthog from 'posthog-js'
 import { AlertTriangle, Clock, Package, Pencil, Plus, Save, Scissors, Search, Trash2, Upload } from "lucide-react"
 import type { CatalogItem, CatalogType } from "@/lib/types"
 import { useAppData } from '@/components/data/app-data-provider'
@@ -93,6 +94,7 @@ export function CatalogoClient({ items }: { items: CatalogItem[] }) {
     if (!window.confirm('Excluir este item?')) return
     const result = await deleteRecord('catalog_items', id)
     if (result.error) { window.alert(result.error); return }
+    posthog.capture('catalog_item_deleted')
     setRecords((current) => current.filter((item) => item.id !== id))
   }
 
@@ -148,6 +150,10 @@ export function CatalogoClient({ items }: { items: CatalogItem[] }) {
       minStock: editing.type === "produto" ? minStock : undefined,
       active: editing.active,
     } : item))
+    posthog.capture('catalog_item_updated', {
+      catalog_item_type: editing.type,
+      is_active: editing.active,
+    })
     setEditing(null)
   }
 

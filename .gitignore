@@ -15,3 +15,7 @@ node_modules
 .pnpm-store/
 tsconfig.tsbuildinfo
 .DS_Store
+
+.vercel
+.env*
+!.env.example

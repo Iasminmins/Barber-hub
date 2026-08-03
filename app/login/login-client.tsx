@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import posthog from 'posthog-js'
 import { createBrowserSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/client'
 
 const loginTimeoutMs = 15000
@@ -54,7 +55,7 @@ export function LoginClient() {
     setLoading(true)
     try {
       const supabase = createBrowserSupabaseClient()
-      const { error } = await withTimeout(
+      const { data, error } = await withTimeout(
         supabase.auth.signInWithPassword({
           email: email.trim(),
           password,
@@ -66,6 +67,16 @@ export function LoginClient() {
         setStatus(error.message)
         return
       }
+
+      if (!data.user) {
+        setStatus('Não foi possível identificar a conta autenticada. Tente novamente.')
+        return
+      }
+
+      posthog.identify(data.user.id, {
+        email: data.user.email,
+        name: data.user.user_metadata.owner_name,
+      })
 
       router.push('/dashboard')
       router.refresh()
