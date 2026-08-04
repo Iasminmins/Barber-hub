@@ -2,32 +2,29 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { adminCookieHeader, createAdminSessionToken } from '@/lib/platform-admin'
 import { createAdminSupabaseClient } from '@/lib/supabase/server'
+import {
+  adminRequestRateLimitLayers,
+  checkAdminRateLimit,
+  clearAdminRateLimit,
+  recordAdminLoginFailure,
+  type RateLimitRpcClient,
+} from '@/lib/admin-rate-limit'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
-const MAX_ATTEMPTS = 5
-const LOCK_MS = 15 * 60 * 1000
-const attempts = new Map<string, { count: number; until: number }>()
-
-function attemptKey(request: Request, email: string) {
-  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'local'
-  return `${ip}|${email.toLowerCase()}`
+function lockedResponse(retryAfter: number) {
+  return NextResponse.json(
+    { error: 'Muitas tentativas. Aguarde antes de tentar novamente.' },
+    { status: 429, headers: { 'Retry-After': String(retryAfter) } },
+  )
 }
 
-function isLocked(key: string) {
-  const record = attempts.get(key)
-  if (!record) return false
-  if (record.until > Date.now()) return true
-  attempts.delete(key)
-  return false
-}
-
-function registerFailure(key: string) {
-  const record = attempts.get(key) ?? { count: 0, until: 0 }
-  record.count += 1
-  if (record.count >= MAX_ATTEMPTS) record.until = Date.now() + LOCK_MS
-  attempts.set(key, record)
+function rateLimitUnavailableResponse() {
+  return NextResponse.json(
+    { error: 'Login administrativo temporariamente indisponível.' },
+    { status: 503 },
+  )
 }
 
 export async function POST(request: Request) {
@@ -39,12 +36,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Informe e-mail e senha.' }, { status: 400 })
   }
 
-  const key = attemptKey(request, email)
-  if (isLocked(key)) {
-    return NextResponse.json(
-      { error: 'Muitas tentativas. Aguarde 15 minutos antes de tentar novamente.' },
-      { status: 429 },
-    )
+  const admin = createAdminSupabaseClient()
+  const rateLimitClient = admin as unknown as RateLimitRpcClient
+  let layers
+  try {
+    layers = adminRequestRateLimitLayers(request, email)
+    const retryAfter = await checkAdminRateLimit(rateLimitClient, layers)
+    if (retryAfter > 0) return lockedResponse(retryAfter)
+  } catch {
+    return rateLimitUnavailableResponse()
   }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -63,7 +63,12 @@ export async function POST(request: Request) {
   })
 
   if (signInError || !signIn.user) {
-    registerFailure(key)
+    try {
+      const retryAfter = await recordAdminLoginFailure(rateLimitClient, layers)
+      if (retryAfter > 0) return lockedResponse(retryAfter)
+    } catch {
+      return rateLimitUnavailableResponse()
+    }
     return NextResponse.json({ error: 'E-mail ou senha inválidos.' }, { status: 401 })
   }
 
@@ -71,7 +76,6 @@ export async function POST(request: Request) {
   await authClient.auth.signOut().catch(() => undefined)
 
   // 2) Confere se esse usuario esta autorizado como admin da plataforma.
-  const admin = createAdminSupabaseClient()
   const { data: adminRow } = await admin
     .from('platform_admins')
     .select('id, user_id, email, name')
@@ -80,7 +84,12 @@ export async function POST(request: Request) {
     .maybeSingle()
 
   if (!adminRow) {
-    registerFailure(key)
+    try {
+      const retryAfter = await recordAdminLoginFailure(rateLimitClient, layers)
+      if (retryAfter > 0) return lockedResponse(retryAfter)
+    } catch {
+      return rateLimitUnavailableResponse()
+    }
     await admin.from('platform_audit_log').insert({
       admin_user_id: signIn.user.id,
       admin_email: email,
@@ -90,7 +99,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'E-mail ou senha inválidos.' }, { status: 401 })
   }
 
-  attempts.delete(key)
+  try {
+    await clearAdminRateLimit(rateLimitClient, layers)
+  } catch {
+    return rateLimitUnavailableResponse()
+  }
 
   await admin.from('platform_audit_log').insert({
     admin_user_id: adminRow.user_id,

@@ -51,6 +51,11 @@ create index if not exists idx_platform_audit_admin_user
 grant select on public.platform_admins to service_role;
 grant select, insert on public.platform_audit_log to service_role;
 
+-- As rotas administrativas globais usam o service_role para ignorar o RLS,
+-- mas o papel ainda precisa dos privilegios SQL nas tabelas gerenciadas.
+grant select, update, delete on public.barbershops to service_role;
+grant select, update on public.members to service_role;
+
 notify pgrst, 'reload schema';
 
 -- ============================================================
