@@ -23,6 +23,7 @@ import {
 import { useAppData } from '@/components/data/app-data-provider'
 import { formatCurrency, formatPercent } from '@/lib/format'
 import { isBarberRole } from '@/lib/employees'
+import { buildEmployeeMonthlyStatement } from '@/lib/employee-monthly-statement'
 import type { Employee } from '@/lib/types'
 import { staffPermissionOptions, type StaffPermission } from '@/lib/staff-permissions'
 
@@ -113,66 +114,16 @@ export default function FuncionariosPage() {
   const [creatingEmployee, setCreatingEmployee] = useState(false)
   const commissions = appData.commissions
   const currentMonth = new Date().toISOString().slice(0, 7)
-  const paidOrdersWithEmployee = useMemo(() => appData.orders
-    .filter((order) => order.status === 'paga' && order.createdAt.slice(0, 7) === currentMonth)
-    .map((order) => ({
-      order,
-      resolvedEmployeeId: resolveOrderEmployeeId(order, employees),
-      value: paidOrderValue(order),
-    })), [appData.orders, currentMonth, employees])
-  const employeeValues = useMemo(() => new Map(employees.map((employee) => {
-    const paidOrders = paidOrdersWithEmployee.filter((item) => item.resolvedEmployeeId === employee.id)
-    const revenue = paidOrders.reduce((sum, item) => sum + item.value, 0)
-    const subscriptionRevenue = paidOrders
-      .filter((item) => item.order.items.some((orderItem) => orderItem.name.startsWith('[Assinatura]')))
-      .reduce((sum, item) => sum + item.value, 0)
-    const services = paidOrders.reduce(
-      (sum, item) => sum + item.order.items.filter((orderItem) => orderItem.type === 'servico').reduce((itemSum, orderItem) => itemSum + orderItem.quantity, 0),
-      0,
-    )
-    const orderCommission = paidOrders.reduce((sum, item) => item.value <= 0 ? sum : sum + item.order.items.reduce(
-      (itemSum, orderItem) => itemSum + orderItem.quantity * orderItem.unitPrice
-        * orderItemCommissionRate(orderItem, employee) / 100,
-      0,
-    ), 0)
-    const subscriptionCommission = commissions
-      .filter((item) => item.employeeId === employee.id && item.origin === 'assinatura' && item.date.slice(0, 7) === currentMonth)
-      .reduce((sum, item) => sum + item.amount, 0)
-    const orderDetails = paidOrders.map(({ order, value }) => {
-      const items = order.items.map((orderItem) => {
-        const base = orderItem.quantity * orderItem.unitPrice
-        const rate = orderItemCommissionRate(orderItem, employee)
-        return {
-          id: orderItem.id,
-          name: orderItem.name,
-          origin: commissionOriginLabel(orderItem),
-          quantity: orderItem.quantity,
-          unitPrice: orderItem.unitPrice,
-          base,
-          rate,
-          commission: value > 0 ? base * rate / 100 : 0,
-        }
-      })
-      return {
-        id: order.id,
-        number: order.number,
-        value,
-        discount: order.discount,
-        surcharge: order.surcharge,
-        items,
-        commission: items.reduce((sum, item) => sum + item.commission, 0),
-      }
-    })
-    return [employee.id, {
-      revenue,
-      subscriptionRevenue,
-      services,
-      commission: orderCommission + subscriptionCommission,
-      orderCommission,
-      subscriptionCommission,
-      orderDetails,
-    }]
-  })), [commissions, currentMonth, employees, paidOrdersWithEmployee])
+  const employeeValues = useMemo(() => new Map(employees.map((employee) => [employee.id,
+    buildEmployeeMonthlyStatement({
+      employeeId: employee.id,
+      employees,
+      barbershop: appData.barbershop,
+      competence: currentMonth,
+      orders: appData.orders,
+      commissions,
+    }),
+  ])), [appData.barbershop, appData.orders, commissions, currentMonth, employees])
   const ranking = employees.map((employee) => ({
     id: employee.id,
     name: employee.name,
@@ -180,9 +131,9 @@ export default function FuncionariosPage() {
     services: employeeValues.get(employee.id)?.services ?? 0,
     revenue: employeeValues.get(employee.id)?.revenue ?? 0,
   })).sort((a, b) => b.revenue - a.revenue)
-  const pending = [...employeeValues.values()].reduce((sum, item) => sum + item.commission, 0)
+  const pending = [...employeeValues.values()].reduce((sum, item) => sum + item.totalCommission, 0)
   const totalRevenue = [...employeeValues.values()].reduce((sum, item) => sum + item.revenue, 0)
-  const attributedPaidOrders = paidOrdersWithEmployee.filter((item) => item.resolvedEmployeeId).length
+  const attributedPaidOrders = [...employeeValues.values()].reduce((sum, item) => sum + item.orders.length, 0)
 
   const activeEmployees = useMemo(() => employees.filter((e) => e.active), [employees])
   const weekRange = useMemo(() => {
@@ -712,7 +663,7 @@ export default function FuncionariosPage() {
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Comissão</p>
-                    <p className="mt-0.5 text-lg font-bold tabular-nums text-emerald-700">{formatCurrency(values?.commission ?? 0)}</p>
+                    <p className="mt-0.5 text-lg font-bold tabular-nums text-emerald-700">{formatCurrency(values?.totalCommission ?? 0)}</p>
                   </div>
                 </div>
                 {values ? (
@@ -725,7 +676,7 @@ export default function FuncionariosPage() {
                       <p className="rounded-lg bg-amber-50 p-2 leading-relaxed text-amber-900">
                         Regra: a comissão é calculada sobre os itens da comanda. Quando o valor final recebido for R$ 0,00, nenhuma comissão será gerada.
                       </p>
-                      {values.orderDetails.map((order) => (
+                      {values.orders.map((order) => (
                         <div key={order.id} className="rounded-lg border border-border bg-background p-3">
                           <div className="flex items-center justify-between gap-2 font-semibold text-foreground">
                             <Link
@@ -735,14 +686,14 @@ export default function FuncionariosPage() {
                             >
                               Comanda #{order.number}
                             </Link>
-                            <span>{formatCurrency(order.value)} recebido</span>
+                            <span>{formatCurrency(order.received)} recebido</span>
                           </div>
                           {order.items.length > 0 ? (
                             <div className="mt-2 space-y-2">
                               {order.items.map((commissionItem) => (
                                 <div key={commissionItem.id} className="border-t border-border/70 pt-2 first:border-0 first:pt-0">
                                   <p className="font-medium text-foreground">{commissionItem.quantity}× {commissionItem.name}</p>
-                                  {order.value <= 0 ? (
+                                  {order.received <= 0 ? (
                                     <p className="mt-0.5 leading-relaxed text-rose-700">
                                       {commissionItem.origin}: base {formatCurrency(commissionItem.base)} · percentual {formatPercent(commissionItem.rate)} ·{' '}
                                       <strong>comissão anulada: {formatCurrency(0)}</strong>
@@ -759,12 +710,12 @@ export default function FuncionariosPage() {
                           ) : (
                             <p className="mt-2 text-muted-foreground">Sem item vinculado: não gerou comissão.</p>
                           )}
-                          {order.value <= 0 ? (
+                          {order.received <= 0 ? (
                             <p className="mt-2 rounded-md bg-rose-50 p-2 font-semibold text-rose-700">Comanda zerada: comissão não gerada.</p>
                           ) : null}
                           {(order.discount > 0 || order.surcharge > 0) ? (
                             <div className="mt-2 rounded-md bg-muted p-2 text-muted-foreground">
-                              {order.discount > 0 ? <p>Desconto da comanda: −{formatCurrency(order.discount)}{order.value <= 0 ? ' (zerou a comanda)' : ''}</p> : null}
+                              {order.discount > 0 ? <p>Desconto da comanda: −{formatCurrency(order.discount)}{order.received <= 0 ? ' (zerou a comanda)' : ''}</p> : null}
                               {order.surcharge > 0 ? <p>Acréscimo da comanda: +{formatCurrency(order.surcharge)} (não aumenta a comissão atual)</p> : null}
                             </div>
                           ) : null}
@@ -792,7 +743,7 @@ export default function FuncionariosPage() {
                         </div>
                         <div className="mt-2 flex justify-between gap-2 border-t border-emerald-200 pt-2 text-sm">
                           <strong>Total da comissão</strong>
-                          <strong>{formatCurrency(values.commission)}</strong>
+                          <strong>{formatCurrency(values.totalCommission)}</strong>
                         </div>
                       </div>
                     </div>
@@ -842,7 +793,7 @@ export default function FuncionariosPage() {
                   <TableCell className="text-right tabular-nums">{formatPercent(employee.productCommission)}</TableCell>
                   <TableCell className="text-right tabular-nums">{formatPercent(employee.subscriptionCommission)}</TableCell>
                   <TableCell className="text-right font-semibold tabular-nums">{formatCurrency(employeeValues.get(employee.id)?.revenue ?? 0)}</TableCell>
-                  <TableCell className="text-right font-semibold tabular-nums text-emerald-700">{formatCurrency(employeeValues.get(employee.id)?.commission ?? 0)}</TableCell>
+                  <TableCell className="text-right font-semibold tabular-nums text-emerald-700">{formatCurrency(employeeValues.get(employee.id)?.totalCommission ?? 0)}</TableCell>
                   <TableCell>
                     {appData.staffMembers.some((member) => member.employeeId === employee.id && member.active)
                       ? <Badge variant="success">Liberado</Badge>
