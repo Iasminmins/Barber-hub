@@ -112,7 +112,7 @@ export default function FuncionariosPage() {
   const [accessForm, setAccessForm] = useState<{ employeeId:string; email:string; password:string; confirmPassword:string; permissions:StaffPermission[] }>({ employeeId:'', email:'', password:'', confirmPassword:'', permissions:['dashboard','agenda'] })
   const [newEmployeeStatus, setNewEmployeeStatus] = useState('')
   const [creatingEmployee, setCreatingEmployee] = useState(false)
-  const [generatingEmployeeId, setGeneratingEmployeeId] = useState<string | null>(null)
+  const [generatingEmployeeIds, setGeneratingEmployeeIds] = useState<Set<string>>(() => new Set())
   const [employeePdfErrors, setEmployeePdfErrors] = useState<Record<string, string>>({})
   const commissions = appData.commissions
   const currentMonth = new Date().toISOString().slice(0, 7)
@@ -141,7 +141,7 @@ export default function FuncionariosPage() {
     const statement = employeeValues.get(employeeId)
     if (!statement) return
 
-    setGeneratingEmployeeId(employeeId)
+    setGeneratingEmployeeIds((current) => new Set(current).add(employeeId))
     setEmployeePdfErrors((current) => {
       const remaining = { ...current }
       delete remaining[employeeId]
@@ -156,7 +156,11 @@ export default function FuncionariosPage() {
         [employeeId]: 'Não foi possível gerar o PDF. Tente novamente.',
       }))
     } finally {
-      setGeneratingEmployeeId(null)
+      setGeneratingEmployeeIds((current) => {
+        const remaining = new Set(current)
+        remaining.delete(employeeId)
+        return remaining
+      })
     }
   }
 
@@ -695,11 +699,11 @@ export default function FuncionariosPage() {
                   variant="outline"
                   size="sm"
                   className="mt-3 w-full"
-                  disabled={generatingEmployeeId === item.id}
+                  disabled={generatingEmployeeIds.has(item.id)}
                   onClick={() => void downloadEmployeeMonthlyPdf(item.id)}
                 >
                   <Download className="size-4" />
-                  {generatingEmployeeId === item.id ? 'Gerando PDF...' : 'Baixar PDF'}
+                  {generatingEmployeeIds.has(item.id) ? 'Gerando PDF...' : 'Baixar PDF'}
                 </Button>
                 {employeePdfErrors[item.id] ? <p role="alert" className="mt-2 text-xs font-medium text-destructive">{employeePdfErrors[item.id]}</p> : null}
                 {values ? (
