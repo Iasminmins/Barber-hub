@@ -25,10 +25,10 @@ export function getBillingState(barbershop: Barbershop): BillingState {
     return { visible: true, blocked: false, tone: 'warning', title: remaining === 0 ? `${label} hoje` : `${label} em ${remaining} ${remaining === 1 ? 'dia' : 'dias'}`, description: `Regularize com antecedência para manter a operação funcionando sem interrupções. Data: ${formatDate(dueDate)}.` }
   }
 
-  if (remaining < 0 || barbershop.billingStatus === 'past_due') {
-    const overdue = Math.max(Math.abs(remaining), 1)
-    const blocked = overdue >= 3
-    return { visible: true, blocked, tone: 'danger', title: blocked ? 'Acesso operacional temporariamente suspenso' : `Pagamento pendente há ${overdue} ${overdue === 1 ? 'dia' : 'dias'}`, description: blocked ? 'Seus dados permanecem seguros. Regularize a assinatura para liberar agenda, PDV, cadastros e financeiro.' : 'Você está no período de tolerância e ainda pode usar a plataforma. Regularize agora para evitar o bloqueio no 3º dia.' }
+  if (remaining < 0) {
+    const overdue = Math.abs(remaining)
+    const blocked = overdue > 7
+    return { visible: true, blocked, tone: 'danger', title: blocked ? 'Acesso operacional temporariamente suspenso' : `Pagamento pendente há ${overdue} ${overdue === 1 ? 'dia' : 'dias'}`, description: blocked ? 'Seus dados permanecem seguros. Regularize a assinatura para liberar agenda, PDV, cadastros e financeiro.' : `Você ainda pode usar a plataforma durante o período de tolerância. Regularize agora para evitar o bloqueio após 7 dias de atraso. Faltam ${8 - overdue} ${8 - overdue === 1 ? 'dia' : 'dias'} para o bloqueio.` }
   }
 
   return { visible: false, blocked: false, title: '', description: '', tone: 'warning' }

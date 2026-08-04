@@ -92,9 +92,11 @@ export function BillingCard({ planId }: { planId: SaasPlanId }) {
         {loading ? <LoaderCircle className="size-4 animate-spin" /> : <ExternalLink className="size-4" />}
         {billing?.hasSubscription ? 'Abrir cobrança' : billing?.status === 'trialing' ? 'Cadastrar pagamento' : 'Pagar assinatura'}
       </Button>
-      <p className="mt-2 text-center text-xs text-muted-foreground">
-        Os 30 dias são grátis; cadastrar pagamento só prepara a cobrança para depois do teste.
-      </p>
+      {billing?.status === 'trialing' ? (
+        <p className="mt-2 text-center text-xs text-muted-foreground">
+          Os 30 dias são grátis; cadastrar pagamento só prepara a cobrança para depois do teste.
+        </p>
+      ) : null}
     </Card>
   )
 }
