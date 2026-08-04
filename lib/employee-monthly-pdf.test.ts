@@ -65,4 +65,31 @@ describe('employee monthly PDF', () => {
     expect(content).toContain('R$ 77,00')
     expect(bytes.byteLength).toBeGreaterThan(1000)
   })
+
+  it('repeats the header and page footer for a long statement and explains zero-value orders', () => {
+    const longStatement: EmployeeMonthlyStatement = {
+      ...statement,
+      orders: Array.from({ length: 90 }, (_, index) => ({
+        ...statement.orders[0],
+        id: `order-${index + 1}`,
+        number: index + 1,
+        received: index === 0 ? 0 : 200,
+        commission: index === 0 ? 0 : 57,
+        items: [{
+          ...statement.orders[0].items[0],
+          id: `item-${index + 1}`,
+          name: `Corte detalhado ${index + 1}`,
+        }],
+      })),
+    }
+    const pdf = buildEmployeeMonthlyPdf(longStatement)
+    const content = pdf.output()
+    const pages = pdf.getNumberOfPages()
+
+    expect(pages).toBeGreaterThan(1)
+    expect(content.match(/FECHAMENTO MENSAL/g)).toHaveLength(pages)
+    expect(content).toContain(`Página 1 de ${pages}`)
+    expect(content).toContain(`Página ${pages} de ${pages}`)
+    expect(content).toContain('Comanda zerada: comissão anulada por valor final zero.')
+  })
 })

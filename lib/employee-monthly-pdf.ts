@@ -81,7 +81,10 @@ export function buildEmployeeMonthlyPdf(statement: EmployeeMonthlyStatement): js
     body: statement.orders.length > 0
       ? statement.orders.map((order) => [
         `#${order.number}`,
-        order.items.map((item) => `${item.quantity}x ${item.name}`).join('\n'),
+        [
+          ...order.items.map((item) => `${item.quantity}x ${item.name}`),
+          ...(order.received === 0 ? ['Comanda zerada: comissão anulada por valor final zero.'] : []),
+        ].join('\n'),
         formatCurrency(order.received),
         formatCurrency(order.commission),
       ])
