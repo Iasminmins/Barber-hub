@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requirePlatformAdmin, platformErrorResponse } from '@/lib/platform-admin'
+import { effectiveBillingStatus } from '@/lib/billing-status'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,7 +21,6 @@ export async function GET(request: Request) {
       .limit(limit)
 
     if (search) query = query.or(`name.ilike.%${search}%,slug.ilike.%${search}%,city.ilike.%${search}%`)
-    if (status) query = query.eq('billing_status', status)
     if (plan) query = query.eq('plan', plan)
     const today = new Date().toISOString().slice(0, 10)
     if (billing === 'complimentary') query = query.gte('complimentary_until', today)
@@ -51,11 +51,13 @@ export async function GET(request: Request) {
 
     const items = (shops ?? []).map((shop) => {
       const info = grouped.get(shop.id)
-      const trialDaysLeft = shop.billing_status === 'trialing' && shop.trial_ends_at
+      const billingStatus = effectiveBillingStatus(shop.billing_status, shop.trial_ends_at)
+      const trialDaysLeft = billingStatus === 'trialing' && shop.trial_ends_at
         ? Math.ceil((new Date(shop.trial_ends_at).getTime() - Date.now()) / 86400000)
         : null
       return {
         ...shop,
+        billing_status: billingStatus,
         hasSubscription: Boolean(shop.asaas_subscription_id),
         usersCount: info?.total ?? 0,
         owner: info?.owner ?? null,
@@ -63,7 +65,8 @@ export async function GET(request: Request) {
       }
     })
 
-    return NextResponse.json({ items, count: items.length })
+    const filteredItems = status ? items.filter((item) => item.billing_status === status) : items
+    return NextResponse.json({ items: filteredItems, count: filteredItems.length })
   } catch (error) {
     const { message, status } = platformErrorResponse(error)
     return NextResponse.json({ error: message }, { status })

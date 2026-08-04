@@ -3,6 +3,7 @@ import { requirePlatformAdmin, platformErrorResponse } from '@/lib/platform-admi
 import { calculateAdminBillingMetrics } from '@/lib/admin-billing'
 import { asaasRequest } from '@/lib/asaas'
 import type { SaasPlanId } from '@/lib/saas-plans'
+import { effectiveBillingStatus } from '@/lib/billing-status'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,6 +29,7 @@ export async function GET(request: Request) {
       .eq('active', true)
 
     const rows = shops ?? []
+    const normalizedRows = rows.map((shop) => ({ ...shop, billing_status: effectiveBillingStatus(shop.billing_status, shop.trial_ends_at) }))
     const now = Date.now()
     const last7 = daysAgoIso(7)
     const last30 = daysAgoIso(30)
@@ -37,7 +39,7 @@ export async function GET(request: Request) {
     let trialExpiringSoon = 0
     let trialExpired = 0
 
-    for (const shop of rows) {
+    for (const shop of normalizedRows) {
       byStatus[shop.billing_status] = (byStatus[shop.billing_status] ?? 0) + 1
       byPlan[shop.plan] = (byPlan[shop.plan] ?? 0) + 1
       if (shop.billing_status === 'trialing' && shop.trial_ends_at) {
@@ -47,7 +49,7 @@ export async function GET(request: Request) {
       }
     }
 
-    const revenue = calculateAdminBillingMetrics(rows.map((shop) => ({
+    const revenue = calculateAdminBillingMetrics(normalizedRows.map((shop) => ({
       plan: shop.plan as SaasPlanId,
       billingStatus: shop.billing_status,
       nextBillingDate: shop.next_billing_date,

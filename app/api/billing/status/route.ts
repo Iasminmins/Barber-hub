@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server'
 import { getBillingContext } from '@/lib/billing-auth'
+import { effectiveBillingStatus } from '@/lib/billing-status'
 
 export async function GET(request: Request) {
   try {
     const { barbershop } = await getBillingContext(request)
     return NextResponse.json({
-      status: barbershop.billing_status,
+      status: effectiveBillingStatus(barbershop.billing_status, barbershop.trial_ends_at),
       trialEndsAt: barbershop.trial_ends_at,
       nextBillingDate: barbershop.next_billing_date,
       hasSubscription: Boolean(barbershop.asaas_subscription_id),

@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { usePlatformSession } from './use-platform-session'
 import type { Overview, TenantRow } from './types'
+import { formatDate } from '@/lib/format'
 
 const selectClass =
   'h-9 rounded-md border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring'
@@ -24,11 +25,6 @@ const statusStyle: Record<string, string> = {
   active: 'bg-emerald-100 text-emerald-800',
   past_due: 'bg-red-100 text-red-800',
   canceled: 'bg-muted text-muted-foreground',
-}
-
-function formatDate(value: string | null) {
-  if (!value) return '—'
-  return new Date(value).toLocaleDateString('pt-BR')
 }
 
 function formatMoney(value: number) {

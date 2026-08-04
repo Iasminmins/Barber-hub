@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { usePlatformSession } from '../../use-platform-session'
+import { formatDate } from '@/lib/format'
 
 type Barbershop = {
   id: string
@@ -55,11 +56,6 @@ type AuditEntry = {
   action: string
   details: Record<string, unknown>
   created_at: string
-}
-
-function formatDate(value: string | null) {
-  if (!value) return '—'
-  return new Date(value).toLocaleDateString('pt-BR')
 }
 
 function formatMoney(value: number) {

@@ -3,6 +3,7 @@ import { requirePlatformAdmin, platformErrorResponse, logPlatformAction } from '
 import { addComplimentaryPeriod } from '@/lib/admin-billing'
 import { asaasRequest } from '@/lib/asaas'
 import { getSaasPlan, type SaasPlanId } from '@/lib/saas-plans'
+import { effectiveBillingStatus } from '@/lib/billing-status'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,7 +37,7 @@ export async function GET(request: Request, ctx: Ctx) {
       .order('created_at', { ascending: false })
       .limit(20)
 
-    return NextResponse.json({ barbershop: shop, members: members ?? [], audit: audit ?? [] })
+    return NextResponse.json({ barbershop: { ...shop, billing_status: effectiveBillingStatus(shop.billing_status, shop.trial_ends_at) }, members: members ?? [], audit: audit ?? [] })
   } catch (error) {
     const { message, status } = platformErrorResponse(error)
     return NextResponse.json({ error: message }, { status })
@@ -70,7 +71,7 @@ export async function PATCH(request: Request, ctx: Ctx) {
     }
     if (typeof body.billing_status === 'string') {
       if (!STATUSES.includes(body.billing_status)) throw new Error('Status inválido.')
-      patch.billing_status = body.billing_status
+      patch.billing_status = effectiveBillingStatus(body.billing_status, current.trial_ends_at)
     }
     if (typeof body.trialDays === 'number' && Number.isFinite(body.trialDays)) {
       const end = new Date()

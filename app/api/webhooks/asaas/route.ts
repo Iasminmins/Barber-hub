@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import type { AsaasPayment } from '@/lib/asaas'
 import { createAdminSupabaseClient } from '@/lib/supabase/server'
 import { isUuid, readLimitedJson, RequestBodyError, safeTokenEqual } from '@/lib/http-security'
+import { effectiveBillingStatus } from '@/lib/billing-status'
 
 type AsaasWebhook = { event?: string; payment?: AsaasPayment }
 
@@ -32,7 +33,7 @@ export async function POST(request: Request) {
 
   const { data: barbershop, error: barbershopError } = await admin
     .from('barbershops')
-    .select('id, network_id, asaas_subscription_id')
+    .select('id, network_id, asaas_subscription_id, trial_ends_at')
     .eq('id', barbershopId)
     .maybeSingle()
   if (barbershopError) return NextResponse.json({ error: 'Falha interna.' }, { status: 500 })
@@ -56,10 +57,12 @@ export async function POST(request: Request) {
     })
     updateError = result.error
   } else if (payload.event === 'PAYMENT_OVERDUE') {
-    const result = await updateBillingGroup({ billing_status: 'past_due', ...(payment.dueDate ? { next_billing_date: payment.dueDate } : {}) })
+    const status = effectiveBillingStatus('past_due', barbershop.trial_ends_at)
+    const result = await updateBillingGroup({ billing_status: status, ...(payment.dueDate ? { next_billing_date: payment.dueDate } : {}) })
     updateError = result.error
   } else if (payload.event === 'PAYMENT_REFUNDED' || payload.event === 'PAYMENT_DELETED') {
-    const result = await updateBillingGroup({ billing_status: 'past_due', ...(payment.dueDate ? { next_billing_date: payment.dueDate } : {}) })
+    const status = effectiveBillingStatus('past_due', barbershop.trial_ends_at)
+    const result = await updateBillingGroup({ billing_status: status, ...(payment.dueDate ? { next_billing_date: payment.dueDate } : {}) })
     updateError = result.error
   }
 

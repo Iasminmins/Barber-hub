@@ -5,6 +5,7 @@ import posthog from 'posthog-js'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import { defaultAgendaSettings, defaultPaymentMethods, normalizeAgendaSettings, normalizePaymentMethods } from '@/lib/barbershop-settings'
 import { safeNumber, safeStringArray, safeText } from '@/lib/safe-data'
+import { effectiveBillingStatus } from '@/lib/billing-status'
 import type { Appointment, Barbershop, CatalogItem, Client, Commission, Employee, FinancialEntry, ImportRecord, Member, Order, Plan, PlanRules, ScheduleBlock, Subscription } from '@/lib/types'
 
 type AppData = {
@@ -177,7 +178,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         logoUrl: item.logo_url ?? '',
         billingDocument: item.billing_document ?? '',
         plan: item.plan,
-        billingStatus: item.billing_status ?? 'trialing',
+        billingStatus: effectiveBillingStatus(item.billing_status ?? 'trialing', item.trial_ends_at),
         trialEndsAt: item.trial_ends_at ?? item.created_at,
         nextBillingDate: item.next_billing_date ?? undefined,
         paymentMethods: normalizePaymentMethods(item.payment_methods),
@@ -193,7 +194,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         logoUrl: shop.logo_url ?? '',
         billingDocument: shop.billing_document ?? '',
         plan: shop.plan,
-        billingStatus: shop.billing_status ?? 'trialing',
+        billingStatus: effectiveBillingStatus(shop.billing_status ?? 'trialing', shop.trial_ends_at),
         trialEndsAt: shop.trial_ends_at ?? shop.created_at,
         nextBillingDate: shop.next_billing_date ?? undefined,
         paymentMethods: normalizePaymentMethods(shop.payment_methods),
