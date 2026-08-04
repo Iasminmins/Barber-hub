@@ -27,7 +27,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogHeader } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
 import { useAppData } from '@/components/data/app-data-provider'
-import { daysUntil, formatCurrency } from '@/lib/format'
+import { daysUntil, formatCurrency, formatDate } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { getLowStockThreshold, isLowStock } from '@/lib/inventory'
 import type { AgendaSettings } from '@/lib/barbershop-settings'
@@ -150,7 +150,7 @@ function buildNotifications(
       .map((appointment) => ({
         id: `appointment-${appointment.id}`,
         title: `${appointment.clientName} agendou`,
-        description: `${new Intl.DateTimeFormat('pt-BR').format(new Date(`${appointment.date}T12:00:00`))} às ${appointment.start} · ${appointment.employeeName} · ${appointment.serviceName}`,
+        description: `${formatDate(appointment.date)} às ${appointment.start} · ${appointment.employeeName} · ${appointment.serviceName}`,
         tone: 'green' as const,
         appointmentId: appointment.id,
         appointmentDate: appointment.date,

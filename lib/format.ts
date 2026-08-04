@@ -13,15 +13,20 @@ export function formatPercent(value: number): string {
   return `${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 }).format(value)}%`
 }
 
+function isDisplayableDate(iso: string) {
+  const match = iso.match(/^(\d{4})-\d{2}-\d{2}(?:$|T)/)
+  return Boolean(match && Number(match[1]) >= 1000 && Number(match[1]) <= 9999)
+}
+
 export function formatDate(iso?: string | null): string {
-  if (!iso) return '-'
+  if (!iso || !isDisplayableDate(iso)) return '-'
   const d = new Date(iso.length <= 10 ? `${iso}T00:00:00` : iso)
   if (Number.isNaN(d.getTime())) return '-'
   return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(d)
 }
 
 export function formatDateShort(iso?: string | null): string {
-  if (!iso) return '-'
+  if (!iso || !isDisplayableDate(iso)) return '-'
   const d = new Date(iso.length <= 10 ? `${iso}T00:00:00` : iso)
   if (Number.isNaN(d.getTime())) return '-'
   return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' }).format(d)
