@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { ArrowLeft, Loader2, RefreshCw, UserCheck, UserX, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { AccessGate } from '../../access-gate'
 import { usePlatformSession } from '../../use-platform-session'
 
 type Barbershop = {
@@ -55,7 +54,7 @@ function formatMoney(value: number) {
 }
 
 export function ContaClient({ tenantId }: { tenantId: string }) {
-  const { gate, token, signIn } = usePlatformSession()
+  const { gate, token } = usePlatformSession()
   const [shop, setShop] = useState<Barbershop | null>(null)
   const [members, setMembers] = useState<Member[]>([])
   const [payments, setPayments] = useState<Payment[]>([])
@@ -88,6 +87,7 @@ export function ContaClient({ tenantId }: { tenantId: string }) {
   }, [token, tenantId])
 
   useEffect(() => {
+    if (gate === 'anon') { window.location.replace('/login'); return }
     if (gate === 'granted') void load()
   }, [gate, load])
 
@@ -110,14 +110,14 @@ export function ContaClient({ tenantId }: { tenantId: string }) {
     }
   }
 
-  if (gate !== 'granted') return <AccessGate gate={gate} onSignIn={signIn} />
+  if (gate !== 'granted') return <div className="flex min-h-screen items-center justify-center">Verificando acesso...</div>
 
   return (
     <div className="min-h-screen bg-background p-6">
       <div className="mx-auto max-w-6xl space-y-6">
         <header className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <Link href="/admin" className="inline-flex items-center text-sm text-muted-foreground hover:underline">
+            <Link href="/plataforma" className="inline-flex items-center text-sm text-muted-foreground hover:underline">
               <ArrowLeft className="mr-1 size-4" /> Voltar ao painel
             </Link>
             <h1 className="mt-1 text-2xl font-semibold">{shop?.name ?? 'Carregando…'}</h1>

@@ -20,6 +20,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import posthog from 'posthog-js'
 import { createBrowserSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/client'
+import { readPlatformDestination } from '@/lib/platform-route'
 
 const loginTimeoutMs = 15000
 
@@ -68,7 +69,7 @@ export function LoginClient() {
         return
       }
 
-      if (!data.user) {
+      if (!data.user || !data.session?.access_token) {
         setStatus('Não foi possível identificar a conta autenticada. Tente novamente.')
         return
       }
@@ -78,7 +79,15 @@ export function LoginClient() {
         name: data.user.user_metadata.owner_name,
       })
 
-      router.push('/dashboard')
+      const routeResponse = await withTimeout(fetch('/api/auth/platform-route', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${data.session.access_token}` },
+      }), 'A validacao do acesso demorou demais. Tente novamente.')
+      const routePayload = await routeResponse.json().catch(() => ({}))
+      if (!routeResponse.ok) throw new Error(routePayload.error ?? 'Nao foi possivel validar o acesso.')
+      const destination = readPlatformDestination(routePayload)
+      if (destination === '/plataforma') await supabase.auth.signOut()
+      router.replace(destination)
       router.refresh()
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Não foi possível entrar agora. Tente novamente.')

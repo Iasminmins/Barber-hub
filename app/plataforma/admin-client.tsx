@@ -6,7 +6,6 @@ import { Building2, Users, Timer, ShieldAlert, RefreshCw, Loader2, Search, LogOu
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { AccessGate } from './access-gate'
 import { usePlatformSession } from './use-platform-session'
 import { TenantActions } from './tenant-actions'
 import type { Overview, TenantRow } from './types'
@@ -34,7 +33,7 @@ function formatDate(value: string | null) {
 }
 
 export function AdminClient() {
-  const { gate, adminName, token, signIn, signOut } = usePlatformSession()
+  const { gate, adminName, token, signOut } = usePlatformSession()
   const [overview, setOverview] = useState<Overview | null>(null)
   const [tenants, setTenants] = useState<TenantRow[]>([])
   const [loading, setLoading] = useState(false)
@@ -71,6 +70,7 @@ export function AdminClient() {
   }, [token, search, status, plan])
 
   useEffect(() => {
+    if (gate === 'anon') { window.location.replace('/login'); return }
     if (gate !== 'granted') return
     const timer = window.setTimeout(() => {
       void load()
@@ -89,7 +89,7 @@ export function AdminClient() {
   }, [overview])
 
   if (gate !== 'granted') {
-    return <AccessGate gate={gate} onSignIn={signIn} />
+    return <div className="flex min-h-screen items-center justify-center">Verificando acesso...</div>
   }
 
   return (
@@ -201,7 +201,7 @@ export function AdminClient() {
                   <tr key={tenant.id} className="border-t border-border align-middle">
                     <td className="px-4 py-3">
                       <Link
-                        href={`/admin/contas/${tenant.id}`}
+                        href={`/plataforma/contas/${tenant.id}`}
                         className="font-medium hover:underline"
                       >
                         {tenant.name}
