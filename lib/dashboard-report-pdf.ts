@@ -113,6 +113,7 @@ export function dashboardReportFilename(report: DashboardReport) {
 
 export function buildDashboardReportPdf(report: DashboardReport): jsPDF {
   const doc = new jsPDF({ unit: 'pt', format: 'a4' }) as PdfWithTable
+  drawPageFrame(doc, report, 1)
   const tableDefaults = {
     margin: { top: 108, right: 40, bottom: 48, left: 40 },
     styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 6, textColor: ink },
@@ -164,11 +165,14 @@ export function buildDashboardReportPdf(report: DashboardReport): jsPDF {
     columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' } },
   })
 
-  y = ensureSpace(doc, 115)
+  doc.addPage()
+  drawPageFrame(doc, report, doc.getNumberOfPages())
+  y = 116
   sectionTitle(doc, 'Ranking dos profissionais', y)
   autoTable(doc, {
     ...tableDefaults,
     startY: y + 12,
+    pageBreak: 'avoid',
     head: [['Posicao', 'Profissional', 'Servicos', 'Receita']],
     body: report.ranking.length > 0
       ? report.ranking.map((item, index) => [String(index + 1), item.name, String(item.services), formatCurrency(item.revenue)])
@@ -176,34 +180,45 @@ export function buildDashboardReportPdf(report: DashboardReport): jsPDF {
     columnStyles: { 0: { cellWidth: 55, halign: 'center' }, 2: { halign: 'right' }, 3: { halign: 'right' } },
   })
 
-  y = ensureSpace(doc, 130)
+  doc.addPage()
+  drawPageFrame(doc, report, doc.getNumberOfPages())
+  y = 116
   sectionTitle(doc, 'Comandas pagas', y)
-  autoTable(doc, {
-    ...tableDefaults,
-    startY: y + 12,
-    head: [['Data', 'Comanda', 'Cliente', 'Profissional', 'Pagamento', 'Valor']],
-    body: report.paidOrders.length > 0
-      ? report.paidOrders.map((order) => [
-        formatDate(order.date),
-        `#${order.number}`,
-        order.clientName || 'Cliente avulso',
-        order.employeeName || '-',
-        order.method || 'Nao informado',
-        formatCurrency(order.total),
-      ])
-      : [['-', '-', 'Nenhuma comanda paga no periodo', '-', '-', formatCurrency(0)]],
-    columnStyles: {
-      0: { cellWidth: 62 },
-      1: { cellWidth: 52 },
-      5: { cellWidth: 68, halign: 'right' },
-    },
+  const orderRows = report.paidOrders.length > 0
+    ? report.paidOrders.map((order) => [
+      formatDate(order.date),
+      `#${order.number}`,
+      order.clientName || 'Cliente avulso',
+      order.employeeName || '-',
+      order.method || 'Nao informado',
+      formatCurrency(order.total),
+    ])
+    : [['-', '-', 'Nenhuma comanda paga no periodo', '-', '-', formatCurrency(0)]]
+  const orderChunks = Array.from(
+    { length: Math.ceil(orderRows.length / 12) },
+    (_, index) => orderRows.slice(index * 12, index * 12 + 12),
+  )
+
+  orderChunks.forEach((rows, index) => {
+    if (index > 0) {
+      doc.addPage()
+      drawPageFrame(doc, report, doc.getNumberOfPages())
+    }
+    autoTable(doc, {
+      ...tableDefaults,
+      startY: index === 0 ? y + 12 : 112,
+      pageBreak: 'avoid',
+      rowPageBreak: 'avoid',
+      head: [['Data', 'Comanda', 'Cliente', 'Profissional', 'Pagamento', 'Valor']],
+      body: rows,
+      columnStyles: {
+        0: { cellWidth: 62 },
+        1: { cellWidth: 52 },
+        5: { cellWidth: 68, halign: 'right' },
+      },
+    })
   })
 
-  const pages = doc.getNumberOfPages()
-  for (let page = 1; page <= pages; page += 1) {
-    doc.setPage(page)
-    drawPageFrame(doc, report, page)
-  }
   doc.putTotalPages(totalPagesPlaceholder)
   return doc
 }
