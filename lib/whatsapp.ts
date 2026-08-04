@@ -82,5 +82,11 @@ export function orderMessage({
     `Status: ${status}`,
     '',
     'Obrigado pela preferência!',
+    '',
+    'De 0 a 10, qual nota você daria para o nosso atendimento?',
+    '',
+    'Se gostou da experiência, sua indicação para amigos e familiares será muito bem-vinda. Ela nos ajuda a crescer e atender cada vez melhor.',
+    '',
+    'Muito obrigado pela confiança! 🙏',
   ].join('\n')
 }
