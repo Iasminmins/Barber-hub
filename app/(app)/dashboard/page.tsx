@@ -7,6 +7,7 @@ export default function DashboardPage() {
   const { appointments, barbershop, catalog, clients, commissions, employees, financialEntries, imports, member, orders, subscriptions } = useAppData()
   return (
     <DashboardClient
+      barbershopName={barbershop.name}
       appointments={appointments}
       catalog={catalog}
       clients={clients}

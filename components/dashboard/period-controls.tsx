@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { CalendarDays, FileSpreadsheet, FileText } from 'lucide-react'
+import { CalendarDays, FileText, LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
@@ -65,11 +65,15 @@ export function DashboardPeriodControls({
   range,
   onPeriodChange,
   onRangeChange,
+  onExportPdf,
+  isExportingPdf,
 }: {
   period: Period
   range: DateRange
   onPeriodChange: (period: Period) => void
   onRangeChange: (range: DateRange) => void
+  onExportPdf: () => void
+  isExportingPdf: boolean
 }) {
   const [customRangeOpen, setCustomRangeOpen] = React.useState(false)
   const customRangeRef = React.useRef<HTMLDivElement>(null)
@@ -181,13 +185,15 @@ export function DashboardPeriodControls({
           ) : null}
         </div>
 
-        <Button variant="outline" className="h-10 w-full shrink-0 sm:w-auto">
-          <FileSpreadsheet className="size-4" />
-          Excel
-        </Button>
-        <Button variant="outline" className="h-10 w-full shrink-0 sm:w-auto">
-          <FileText className="size-4" />
-          PDF
+        <Button
+          variant="outline"
+          className="col-span-2 h-10 w-full shrink-0 sm:col-auto sm:w-auto"
+          onClick={onExportPdf}
+          disabled={isExportingPdf}
+          aria-busy={isExportingPdf}
+        >
+          {isExportingPdf ? <LoaderCircle className="size-4 animate-spin" /> : <FileText className="size-4" />}
+          {isExportingPdf ? 'Gerando...' : 'PDF'}
         </Button>
       </div>
     </div>

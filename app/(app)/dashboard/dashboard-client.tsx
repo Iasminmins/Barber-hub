@@ -41,6 +41,7 @@ import type {
 import { isBarberRole } from '@/lib/employees'
 import { isLowStock } from '@/lib/inventory'
 import { buildFirstClientActivity, getEffectiveClientStartDate } from '@/lib/client-start'
+import type { DashboardReport } from '@/lib/dashboard-report-pdf'
 
 const METHOD_LABEL: Record<string, string> = {
   pix: 'Pix',
@@ -232,6 +233,7 @@ function isSubscriptionOrder(order: Order) {
 }
 
 export function DashboardClient({
+  barbershopName,
   appointments,
   catalog,
   clients,
@@ -244,6 +246,7 @@ export function DashboardClient({
   lowStockThreshold,
   isBarber = false,
 }: {
+  barbershopName: string
   appointments: Appointment[]
   catalog: CatalogItem[]
   clients: Client[]
@@ -260,6 +263,8 @@ export function DashboardClient({
   const dashboardAppointments = appointments
   const [period, setPeriod] = React.useState<Period>('mes')
   const [range, setRange] = React.useState<DateRange>(() => getDefaultRange('mes'))
+  const [isExportingPdf, setIsExportingPdf] = React.useState(false)
+  const [exportError, setExportError] = React.useState('')
 
   function handlePeriodChange(nextPeriod: Period) {
     setPeriod(nextPeriod)
@@ -313,6 +318,54 @@ export function DashboardClient({
     .sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start))
     .slice(0, 6)
 
+  async function handleExportPdf() {
+    if (isExportingPdf) return
+    setIsExportingPdf(true)
+    setExportError('')
+
+    const report: DashboardReport = {
+      barbershopName,
+      range,
+      generatedAt: new Date().toISOString(),
+      financial: {
+        revenue,
+        pdvRevenue,
+        subscriptionRevenue,
+        otherRevenue,
+        averageTicket: avgTicket,
+        pendingCommissions,
+      },
+      operational: {
+        paidOrders: paidOrders.length,
+        openOrders,
+        pendingOrders,
+        newClients,
+        activeSubscriptions: activeSubs,
+        atRiskClients,
+        lowStockItems: lowStock.length,
+      },
+      revenueByMethod: revenueByMethod.filter((item) => item.value > 0),
+      ranking,
+      paidOrders: paidOrders.map((order) => ({
+        number: order.number,
+        date: order.createdAt,
+        clientName: order.clientName,
+        employeeName: order.employeeName,
+        method: order.method ? (METHOD_LABEL[order.method] ?? order.method) : 'Nao informado',
+        total: order.total,
+      })),
+    }
+
+    try {
+      const { downloadDashboardReportPdf } = await import('@/lib/dashboard-report-pdf')
+      downloadDashboardReportPdf(report)
+    } catch {
+      setExportError('Nao foi possivel gerar o PDF. Tente novamente.')
+    } finally {
+      setIsExportingPdf(false)
+    }
+  }
+
   return (
     <div>
       <PageHeader
@@ -328,7 +381,10 @@ export function DashboardClient({
           setPeriod('personalizado')
           setRange(nextRange)
         }}
+        onExportPdf={handleExportPdf}
+        isExportingPdf={isExportingPdf}
       />
+      {exportError ? <p role="alert" className="-mt-3 mb-5 text-sm font-medium text-destructive">{exportError}</p> : null}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard
