@@ -52,6 +52,15 @@ export function employeeMonthlyPdfFilename(statement: EmployeeMonthlyStatement) 
   return `fechamento-${filenamePart(statement.employee.name)}-${statement.competence}.pdf`
 }
 
+export function generateEmployeeMonthlyPdf(
+  statement: EmployeeMonthlyStatement,
+  download: (pdf: jsPDF, filename: string) => void = (pdf, filename) => pdf.save(filename),
+) {
+  const filename = employeeMonthlyPdfFilename(statement)
+  download(buildEmployeeMonthlyPdf(statement), filename)
+  return filename
+}
+
 export function buildEmployeeMonthlyPdf(statement: EmployeeMonthlyStatement): jsPDF {
   const doc = new jsPDF({ unit: 'pt', format: 'a4' })
 

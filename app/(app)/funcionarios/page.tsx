@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { CalendarDays, ChevronLeft, ChevronRight, KeyRound, Mail, Pencil, Phone, Plus, Save, Trash2, Trophy, UserCheck, UserX, Users } from 'lucide-react'
+import { CalendarDays, ChevronLeft, ChevronRight, Download, KeyRound, Mail, Pencil, Phone, Plus, Save, Trash2, Trophy, UserCheck, UserX, Users } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Avatar } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -112,6 +112,8 @@ export default function FuncionariosPage() {
   const [accessForm, setAccessForm] = useState<{ employeeId:string; email:string; password:string; confirmPassword:string; permissions:StaffPermission[] }>({ employeeId:'', email:'', password:'', confirmPassword:'', permissions:['dashboard','agenda'] })
   const [newEmployeeStatus, setNewEmployeeStatus] = useState('')
   const [creatingEmployee, setCreatingEmployee] = useState(false)
+  const [generatingEmployeeId, setGeneratingEmployeeId] = useState<string | null>(null)
+  const [employeePdfErrors, setEmployeePdfErrors] = useState<Record<string, string>>({})
   const commissions = appData.commissions
   const currentMonth = new Date().toISOString().slice(0, 7)
   const employeeValues = useMemo(() => new Map(employees.map((employee) => [employee.id,
@@ -134,6 +136,29 @@ export default function FuncionariosPage() {
   const pending = [...employeeValues.values()].reduce((sum, item) => sum + item.totalCommission, 0)
   const totalRevenue = [...employeeValues.values()].reduce((sum, item) => sum + item.revenue, 0)
   const attributedPaidOrders = [...employeeValues.values()].reduce((sum, item) => sum + item.orders.length, 0)
+
+  async function downloadEmployeeMonthlyPdf(employeeId: string) {
+    const statement = employeeValues.get(employeeId)
+    if (!statement) return
+
+    setGeneratingEmployeeId(employeeId)
+    setEmployeePdfErrors((current) => {
+      const remaining = { ...current }
+      delete remaining[employeeId]
+      return remaining
+    })
+    try {
+      const { generateEmployeeMonthlyPdf } = await import('@/lib/employee-monthly-pdf')
+      generateEmployeeMonthlyPdf(statement)
+    } catch {
+      setEmployeePdfErrors((current) => ({
+        ...current,
+        [employeeId]: 'Não foi possível gerar o PDF. Tente novamente.',
+      }))
+    } finally {
+      setGeneratingEmployeeId(null)
+    }
+  }
 
   const activeEmployees = useMemo(() => employees.filter((e) => e.active), [employees])
   const weekRange = useMemo(() => {
@@ -666,6 +691,17 @@ export default function FuncionariosPage() {
                     <p className="mt-0.5 text-lg font-bold tabular-nums text-emerald-700">{formatCurrency(values?.totalCommission ?? 0)}</p>
                   </div>
                 </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3 w-full"
+                  disabled={generatingEmployeeId === item.id}
+                  onClick={() => void downloadEmployeeMonthlyPdf(item.id)}
+                >
+                  <Download className="size-4" />
+                  {generatingEmployeeId === item.id ? 'Gerando PDF...' : 'Baixar PDF'}
+                </Button>
+                {employeePdfErrors[item.id] ? <p role="alert" className="mt-2 text-xs font-medium text-destructive">{employeePdfErrors[item.id]}</p> : null}
                 {values ? (
                   <details className="group mt-3 border-t border-border pt-3">
                     <summary className="cursor-pointer list-none text-xs font-semibold text-primary hover:underline">

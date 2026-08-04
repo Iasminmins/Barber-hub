@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildEmployeeMonthlyPdf, employeeMonthlyPdfFilename } from './employee-monthly-pdf'
+import { buildEmployeeMonthlyPdf, employeeMonthlyPdfFilename, generateEmployeeMonthlyPdf } from './employee-monthly-pdf'
 import type { EmployeeMonthlyStatement } from './employee-monthly-statement'
 
 const statement: EmployeeMonthlyStatement = {
@@ -64,6 +64,18 @@ describe('employee monthly PDF', () => {
     expect(content).toContain('R$ 200,00')
     expect(content).toContain('R$ 77,00')
     expect(bytes.byteLength).toBeGreaterThan(1000)
+  })
+
+  it('saves the generated statement with its monthly filename', () => {
+    let download: { filename: string; bytes: number } | undefined
+
+    const filename = generateEmployeeMonthlyPdf(statement, (pdf, outputFilename) => {
+      download = { filename: outputFilename, bytes: pdf.output('arraybuffer').byteLength }
+    })
+
+    expect(filename).toBe('fechamento-evandro-2026-08.pdf')
+    expect(download).toEqual({ filename: 'fechamento-evandro-2026-08.pdf', bytes: expect.any(Number) })
+    expect(download?.bytes).toBeGreaterThan(1000)
   })
 
   it('repeats the header and page footer for a long statement and explains zero-value orders', () => {
