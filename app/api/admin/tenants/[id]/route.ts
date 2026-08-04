@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server'
 import { requirePlatformAdmin, platformErrorResponse, logPlatformAction } from '@/lib/platform-admin'
+import { addComplimentaryPeriod } from '@/lib/admin-billing'
+import { asaasRequest } from '@/lib/asaas'
+import { getSaasPlan, type SaasPlanId } from '@/lib/saas-plans'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,7 +29,14 @@ export async function GET(request: Request, ctx: Ctx) {
       .eq('barbershop_id', id)
       .order('created_at', { ascending: true })
 
-    return NextResponse.json({ barbershop: shop, members: members ?? [] })
+    const { data: audit } = await admin
+      .from('platform_audit_log')
+      .select('id, admin_email, action, details, created_at')
+      .eq('target_id', id)
+      .order('created_at', { ascending: false })
+      .limit(20)
+
+    return NextResponse.json({ barbershop: shop, members: members ?? [], audit: audit ?? [] })
   } catch (error) {
     const { message, status } = platformErrorResponse(error)
     return NextResponse.json({ error: message }, { status })
@@ -39,7 +49,21 @@ export async function PATCH(request: Request, ctx: Ctx) {
     const { id } = await ctx.params
     const body = await request.json().catch(() => ({}))
 
+    const { data: current, error: currentError } = await admin
+      .from('barbershops')
+      .select('id, name, plan, billing_status, trial_ends_at, next_billing_date, asaas_subscription_id')
+      .eq('id', id)
+      .maybeSingle()
+    if (currentError || !current) throw new Error('Conta não encontrada.')
+
     const patch: Record<string, unknown> = {}
+    if (body.syncAsaas === true) {
+      if (!current.asaas_subscription_id) throw new Error('Esta conta ainda não possui assinatura no Asaas.')
+      const subscription = await asaasRequest<{ nextDueDate?: string; status?: string }>(`/subscriptions/${current.asaas_subscription_id}`)
+      if (subscription.nextDueDate) patch.next_billing_date = subscription.nextDueDate
+      if (subscription.status === 'INACTIVE' || subscription.status === 'EXPIRED') patch.billing_status = 'canceled'
+      else if (subscription.status === 'ACTIVE') patch.billing_status = 'active'
+    }
     if (typeof body.plan === 'string') {
       if (!PLANS.includes(body.plan)) throw new Error('Plano inválido.')
       patch.plan = body.plan
@@ -54,6 +78,57 @@ export async function PATCH(request: Request, ctx: Ctx) {
       patch.trial_ends_at = end.toISOString()
       patch.billing_status = patch.billing_status ?? 'trialing'
     }
+    const complimentaryDays = typeof body.complimentaryDays === 'number' ? Math.trunc(body.complimentaryDays) : 0
+    const complimentaryMonths = typeof body.complimentaryMonths === 'number' ? Math.trunc(body.complimentaryMonths) : 0
+    const customComplimentaryUntil = typeof body.complimentaryUntil === 'string' ? body.complimentaryUntil.trim() : ''
+    const nextBillingDate = typeof body.nextBillingDate === 'string' ? body.nextBillingDate.trim() : ''
+    const reason = typeof body.reason === 'string' ? body.reason.trim() : ''
+    const hasComplimentaryPeriod = complimentaryDays > 0 || complimentaryMonths > 0 || Boolean(customComplimentaryUntil)
+    if (complimentaryDays < 0 || complimentaryDays > 730) throw new Error('A cortesia deve ter no máximo 730 dias.')
+    if (complimentaryMonths < 0 || complimentaryMonths > 24) throw new Error('A cortesia deve ter no máximo 24 meses.')
+    if ((hasComplimentaryPeriod || nextBillingDate || typeof body.billing_status === 'string') && reason.length < 3) {
+      throw new Error('Informe o motivo da alteração administrativa.')
+    }
+
+    let effectiveBillingDate = nextBillingDate
+    if (effectiveBillingDate && !/^\d{4}-\d{2}-\d{2}$/.test(effectiveBillingDate)) throw new Error('Data da próxima cobrança inválida.')
+    if (hasComplimentaryPeriod) {
+      if (customComplimentaryUntil) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(customComplimentaryUntil) || customComplimentaryUntil <= new Date().toISOString().slice(0, 10)) {
+          throw new Error('A data final da cortesia deve estar no futuro.')
+        }
+        effectiveBillingDate = customComplimentaryUntil
+      } else {
+        effectiveBillingDate = addComplimentaryPeriod(
+          current.asaas_subscription_id ? current.next_billing_date : current.trial_ends_at,
+          complimentaryMonths ? { months: complimentaryMonths } : { days: complimentaryDays },
+        )
+      }
+      const plan = getSaasPlan(current.plan as SaasPlanId)
+      const estimatedDays = complimentaryDays || Math.max(1, Math.round((new Date(`${effectiveBillingDate}T12:00:00`).getTime() - Date.now()) / 86400000))
+      patch.complimentary_until = effectiveBillingDate
+      patch.complimentary_reason = reason
+      patch.complimentary_value = complimentaryMonths ? complimentaryMonths * plan.monthlyPrice : Number(((estimatedDays / 30) * plan.monthlyPrice).toFixed(2))
+      patch.complimentary_granted_at = new Date().toISOString()
+      patch.billing_status = current.asaas_subscription_id ? 'active' : 'trialing'
+      if (current.asaas_subscription_id) patch.next_billing_date = effectiveBillingDate
+      else patch.trial_ends_at = effectiveBillingDate
+    } else if (effectiveBillingDate) {
+      patch.next_billing_date = effectiveBillingDate
+    }
+
+    const asaasUpdate: Record<string, unknown> = {}
+    if (effectiveBillingDate && current.asaas_subscription_id) asaasUpdate.nextDueDate = effectiveBillingDate
+    if (typeof patch.plan === 'string' && current.asaas_subscription_id) {
+      const plan = getSaasPlan(patch.plan as SaasPlanId)
+      Object.assign(asaasUpdate, { value: plan.monthlyPrice, cycle: 'MONTHLY', description: `BarberHub - Plano ${plan.name}`, updatePendingPayments: true })
+    }
+    if (Object.keys(asaasUpdate).length && current.asaas_subscription_id) {
+      await asaasRequest(`/subscriptions/${current.asaas_subscription_id}`, {
+        method: 'PUT',
+        body: JSON.stringify(asaasUpdate),
+      })
+    }
     if (!Object.keys(patch).length) throw new Error('Nenhuma alteração informada.')
 
     patch.updated_at = new Date().toISOString()
@@ -61,12 +136,12 @@ export async function PATCH(request: Request, ctx: Ctx) {
       .from('barbershops')
       .update(patch)
       .eq('id', id)
-      .select('id, name, plan, billing_status, trial_ends_at')
+      .select('*')
       .maybeSingle()
     if (error || !updated) throw new Error('Não foi possível atualizar a conta.')
 
     await logPlatformAction(admin, { id: user.id, email: adminRow.email }, {
-      action: 'tenant.update',
+      action: hasComplimentaryPeriod ? 'tenant.complimentary_grant' : 'tenant.billing_update',
       targetType: 'barbershop',
       targetId: id,
       details: patch as Record<string, unknown>,

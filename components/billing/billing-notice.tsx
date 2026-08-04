@@ -15,6 +15,13 @@ export interface BillingState {
   tone: 'warning' | 'danger'
 }
 
+export function getBillingStatusLabel(status: Barbershop['billingStatus'], nextBillingDate?: string): string {
+  if (status === 'trialing') return 'Teste grátis'
+  if (status === 'active') return 'Ativa'
+  if (status === 'canceled') return 'Cancelada'
+  return daysUntil(nextBillingDate) >= 0 ? 'Cobrança agendada' : 'Pagamento pendente'
+}
+
 export function getBillingState(barbershop: Barbershop): BillingState {
   const dueDate = barbershop.billingStatus === 'trialing' ? barbershop.trialEndsAt : barbershop.nextBillingDate
   const remaining = daysUntil(dueDate)

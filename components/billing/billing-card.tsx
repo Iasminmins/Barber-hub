@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/card'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import { formatCurrency } from '@/lib/format'
 import { getSaasPlan, type SaasPlanId } from '@/lib/saas-plans'
+import { getBillingStatusLabel } from '@/components/billing/billing-notice'
 
 type BillingStatus = {
   status: 'trialing' | 'active' | 'past_due' | 'canceled'
@@ -16,8 +17,6 @@ type BillingStatus = {
   nextBillingDate?: string
   hasSubscription: boolean
 }
-
-const labels = { trialing: 'Teste grátis', active: 'Ativa', past_due: 'Pagamento pendente', canceled: 'Cancelada' }
 
 export function BillingCard({ planId }: { planId: SaasPlanId }) {
   const plan = getSaasPlan(planId)
@@ -70,6 +69,7 @@ export function BillingCard({ planId }: { planId: SaasPlanId }) {
     ? Math.max(0, Math.ceil((new Date(billing.trialEndsAt).getTime() - loadedAt) / 86_400_000))
     : 0
   const dateLabel = billing?.status === 'trialing' ? billing.trialEndsAt : billing?.nextBillingDate
+  const billingLabel = billing ? getBillingStatusLabel(billing.status, billing.nextBillingDate) : ''
 
   return (
     <Card className="p-5">
@@ -78,7 +78,7 @@ export function BillingCard({ planId }: { planId: SaasPlanId }) {
           <p className="flex items-center gap-2 text-sm font-semibold text-foreground"><CreditCard className="size-4" /> Pagamento e assinatura</p>
           <p className="mt-1 text-sm text-muted-foreground">Cobrança mensal segura processada pelo Asaas.</p>
         </div>
-        {billing ? <Badge variant={billing.status === 'active' ? 'success' : billing.status === 'past_due' ? 'destructive' : 'gold'}>{labels[billing.status]}</Badge> : null}
+        {billing ? <Badge variant={billingLabel === 'Ativa' ? 'success' : billingLabel === 'Pagamento pendente' ? 'destructive' : 'gold'}>{billingLabel}</Badge> : null}
       </div>
       <div className="rounded-lg border bg-muted/30 p-4">
         <div className="flex items-end justify-between gap-3">

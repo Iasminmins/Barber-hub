@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { getBillingState } from './billing-notice'
+import { getBillingState, getBillingStatusLabel } from './billing-notice'
 import type { Barbershop } from '@/lib/types'
 
 const shop: Barbershop = {
@@ -23,6 +23,10 @@ describe('getBillingState', () => {
 
   test('não trata status pendente como atraso quando o vencimento ainda é futuro', () => {
     expect(getBillingState(shop)).toMatchObject({ visible: false, blocked: false })
+  })
+
+  test('apresenta cobrança futura como agendada mesmo se o status armazenado estiver pendente', () => {
+    expect(getBillingStatusLabel('past_due', '2026-08-16')).toBe('Cobrança agendada')
   })
 
   test.each([

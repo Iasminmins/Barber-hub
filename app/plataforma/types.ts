@@ -8,6 +8,9 @@ export type TenantRow = {
   trial_ends_at: string | null
   next_billing_date: string | null
   last_payment_at: string | null
+  complimentary_until: string | null
+  complimentary_reason: string | null
+  complimentary_value: number
   created_at: string
   hasSubscription: boolean
   usersCount: number
@@ -26,4 +29,16 @@ export type Overview = {
     trialExpired: number
   }
   plans: Record<string, number>
+  revenue: {
+    mrr: number
+    forecast30Days: number
+    averageTicket: number
+    complimentaryCount: number
+    complimentaryValue: number
+    conversionRate: number
+    contractedCompanies: number
+    newThisMonth: number
+    receivedThisMonth: number
+    asaasAvailable: boolean
+  }
 }

@@ -2,12 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Building2, Users, Timer, ShieldAlert, RefreshCw, Loader2, Search, LogOut } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Building2, Users, Timer, ShieldAlert, RefreshCw, Loader2, Search, LogOut, DollarSign, TrendingUp, Gift, Percent, ArrowRight } from 'lucide-react'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { usePlatformSession } from './use-platform-session'
-import { TenantActions } from './tenant-actions'
 import type { Overview, TenantRow } from './types'
 
 const selectClass =
@@ -32,6 +31,17 @@ function formatDate(value: string | null) {
   return new Date(value).toLocaleDateString('pt-BR')
 }
 
+function formatMoney(value: number) {
+  return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
+
+function tenantStatus(tenant: TenantRow) {
+  if (tenant.billing_status === 'past_due' && tenant.next_billing_date && tenant.next_billing_date >= new Date().toISOString().slice(0, 10)) {
+    return { label: 'Cobrança agendada', style: 'bg-amber-100 text-amber-800' }
+  }
+  return { label: statusLabel[tenant.billing_status], style: statusStyle[tenant.billing_status] }
+}
+
 export function AdminClient() {
   const { gate, adminName, token, signOut } = usePlatformSession()
   const [overview, setOverview] = useState<Overview | null>(null)
@@ -41,6 +51,7 @@ export function AdminClient() {
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
   const [plan, setPlan] = useState('')
+  const [billingFilter, setBillingFilter] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -50,6 +61,7 @@ export function AdminClient() {
       if (search.trim()) params.set('search', search.trim())
       if (status) params.set('status', status)
       if (plan) params.set('plan', plan)
+      if (billingFilter) params.set('billing', billingFilter)
 
       const headers = { Authorization: `Bearer ${token}` }
       const [overviewResponse, tenantsResponse] = await Promise.all([
@@ -67,7 +79,7 @@ export function AdminClient() {
     } finally {
       setLoading(false)
     }
-  }, [token, search, status, plan])
+  }, [token, search, status, plan, billingFilter])
 
   useEffect(() => {
     if (gate === 'anon') { window.location.replace('/login'); return }
@@ -85,6 +97,18 @@ export function AdminClient() {
       { label: 'Usuários ativos', value: overview.totals.users, hint: `+${overview.totals.newLast30Days} contas em 30 dias`, icon: Users },
       { label: 'Em teste', value: overview.billing.trialing, hint: `${overview.billing.trialExpiringSoon} vencendo em 7 dias`, icon: Timer },
       { label: 'Assinantes ativos', value: overview.billing.active, hint: `${overview.billing.pastDue} em atraso · ${overview.billing.canceled} canceladas`, icon: ShieldAlert },
+    ]
+  }, [overview])
+
+  const revenueCards = useMemo(() => {
+    if (!overview) return []
+    return [
+      { label: 'MRR contratado', value: formatMoney(overview.revenue.mrr), hint: `${overview.revenue.contractedCompanies} empresas contratadas`, icon: DollarSign },
+      { label: 'Previsão · 30 dias', value: formatMoney(overview.revenue.forecast30Days), hint: 'Cobranças previstas no período', icon: TrendingUp },
+      { label: 'Recebido no mês', value: overview.revenue.asaasAvailable ? formatMoney(overview.revenue.receivedThisMonth) : 'Indisponível', hint: overview.revenue.asaasAvailable ? 'Pagamentos confirmados no Asaas' : 'Asaas não respondeu', icon: DollarSign },
+      { label: 'Ticket médio', value: formatMoney(overview.revenue.averageTicket), hint: 'Por empresa contratada', icon: Building2 },
+      { label: 'Conversão', value: `${overview.revenue.conversionRate}%`, hint: 'Teste para assinatura', icon: Percent },
+      { label: 'Cortesias ativas', value: overview.revenue.complimentaryCount, hint: `${formatMoney(overview.revenue.complimentaryValue)} concedidos`, icon: Gift },
     ]
   }, [overview])
 
@@ -122,6 +146,19 @@ export function AdminClient() {
             {error}
           </div>
         ) : null}
+
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {revenueCards.map((card) => (
+            <Card key={card.label} className="p-5">
+              <div className="flex items-start justify-between">
+                <p className="text-sm text-muted-foreground">{card.label}</p>
+                <card.icon className="size-4 text-muted-foreground" />
+              </div>
+              <p className="mt-2 text-2xl font-semibold tabular-nums">{card.value}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{card.hint}</p>
+            </Card>
+          ))}
+        </section>
 
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {cards.map((card) => (
@@ -173,6 +210,11 @@ export function AdminClient() {
               <option value="pro">Pro</option>
               <option value="premium">Premium</option>
             </select>
+            <select className={selectClass} value={billingFilter} onChange={(event) => setBillingFilter(event.target.value)}>
+              <option value="">Todas as cobranças</option>
+              <option value="complimentary">Cortesias ativas</option>
+              <option value="due7">Vencendo em 7 dias</option>
+            </select>
           </div>
 
           <div className="overflow-x-auto">
@@ -221,8 +263,8 @@ export function AdminClient() {
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`rounded-full px-2 py-1 text-xs font-medium ${statusStyle[tenant.billing_status]}`}>
-                        {statusLabel[tenant.billing_status]}
+                      <span className={`rounded-full px-2 py-1 text-xs font-medium ${tenantStatus(tenant).style}`}>
+                        {tenantStatus(tenant).label}
                       </span>
                     </td>
                     <td className="px-4 py-3">{tenant.usersCount}</td>
@@ -235,19 +277,17 @@ export function AdminClient() {
                             : `${tenant.trialDaysLeft} dia(s) restante(s)`}
                         </span>
                       ) : (
-                        <span className="text-muted-foreground">
-                          {tenant.next_billing_date ? `Próx.: ${formatDate(tenant.next_billing_date)}` : '—'}
-                        </span>
+                        <div className="text-muted-foreground">
+                          <span>{tenant.next_billing_date ? `Próx.: ${formatDate(tenant.next_billing_date)}` : '—'}</span>
+                          {tenant.complimentary_until && tenant.complimentary_until >= new Date().toISOString().slice(0, 10) ? (
+                            <p className="mt-1 text-xs font-medium text-amber-700">Cortesia até {formatDate(tenant.complimentary_until)}</p>
+                          ) : null}
+                        </div>
                       )}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{formatDate(tenant.created_at)}</td>
                     <td className="px-4 py-3">
-                      <TenantActions
-                        tenant={tenant}
-                        token={token}
-                        onChanged={() => void load()}
-                        onError={setError}
-                      />
+                      <Link className={buttonVariants({ variant: 'outline', size: 'sm' })} href={`/plataforma/contas/${tenant.id}`}>Gerenciar <ArrowRight className="ml-1 size-3.5" /></Link>
                     </td>
                   </tr>
                 ))}
