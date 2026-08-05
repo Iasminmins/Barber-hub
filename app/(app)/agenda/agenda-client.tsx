@@ -23,8 +23,8 @@ import { appointmentConflictsWithScheduleBlock, formatScheduleBlockPeriod, getBl
 import type { BusinessDayKey } from '@/lib/barbershop-settings'
 import { useAppData } from '@/components/data/app-data-provider'
 import { findLinkedOrder, getAgendaStats, getAgendaUrlSelection } from '@/lib/agenda-operations'
+import { AGENDA_HOUR_HEIGHT, getAgendaGridRange, minutesToGridTop } from '@/lib/agenda-grid'
 
-const HOURS = Array.from({ length: 12 }, (_, i) => 8 + i) // 08:00 - 19:00
 const BUSINESS_DAY_KEYS: BusinessDayKey[] = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado']
 
 const statusColor: Record<Appointment['status'], string> = {
@@ -44,11 +44,6 @@ const appointmentStatuses: Array<{ value: Appointment['status']; label: string }
   { value: 'cancelado', label: 'Cancelado' },
   { value: 'faltou', label: 'Faltou' },
 ]
-
-function timeToTop(start: string) {
-  const [h, mm] = start.split(':').map(Number)
-  return (h - 8) * 64 + (mm / 60) * 64
-}
 
 function toDateKey(date: Date) {
   const year = date.getFullYear()
@@ -353,6 +348,13 @@ export function AgendaClient({
   const selectedDayAppointments = agendaAppointments.filter((appointment) => (
     appointment.date === selectedDate && (showCompleted || appointment.status !== 'concluido')
   ))
+  const visibleEmployeeIds = new Set(columns.map((column) => column.id))
+  const visibleDayAppointments = selectedDayAppointments.filter((appointment) => visibleEmployeeIds.has(appointment.employeeId))
+  const visibleDayBlocks = scheduleBlocks.filter((block) => (
+    block.date === selectedDate && visibleEmployeeIds.has(block.employeeId)
+  ))
+  const agendaGrid = getAgendaGridRange(selectedBusinessHours, visibleDayAppointments, visibleDayBlocks)
+  const agendaGridHeight = agendaGrid.hours.length * AGENDA_HOUR_HEIGHT
   const linkedOrder = editingAppointment ? findLinkedOrder(editingAppointment.id, orders) : undefined
 
   function changePeriod(direction: -1 | 1) {
@@ -476,10 +478,20 @@ export function AgendaClient({
 
       {view === 'dia' ? (
         <Card className="overflow-hidden p-0">
+          {agendaGrid.closed ? (
+            <div className="border-b border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning-foreground">
+              <p className="font-semibold">Barbearia fechada neste dia</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {visibleDayAppointments.length > 0
+                  ? 'Os agendamentos excepcionais existentes continuam visÃ­veis abaixo.'
+                  : 'NÃ£o hÃ¡ expediente configurado para esta data.'}
+              </p>
+            </div>
+          ) : null}
           <div className="flex overflow-x-auto">
             {/* Coluna de horas */}
             <div className="w-16 shrink-0 border-r border-border pt-12">
-              {HOURS.map((h) => (
+              {agendaGrid.hours.map((h) => (
                 <div key={h} className="relative h-16 pr-2 text-right">
                   <span className="text-xs text-muted-foreground">{String(h).padStart(2, '0')}:00</span>
                 </div>
@@ -508,8 +520,8 @@ export function AgendaClient({
                       <span className="truncate text-xs font-semibold text-foreground">{barber.name}</span>
                       {hasBlocks ? <Ban className="ml-auto size-3.5 text-destructive" /> : null}
                     </button>
-                    <div className={cn('relative', dayBlocked && 'bg-destructive/[0.04]')} style={{ height: HOURS.length * 64 }}>
-                      {HOURS.map((h) => {
+                    <div className={cn('relative', dayBlocked && 'bg-destructive/[0.04]')} style={{ height: agendaGridHeight }}>
+                      {agendaGrid.hours.map((h) => {
                         const hourIsFree = !appts.some((appointment) => {
                           const start = timeToMinutes(appointment.start)
                           const end = start + appointment.durationMin
@@ -520,7 +532,7 @@ export function AgendaClient({
                             key={h}
                             className={cn(
                               'h-16 border-b border-border/60',
-                              quickPreferences.highlightFreeSlots && hourIsFree && !dayBlocked && 'bg-success/[0.04]',
+                              quickPreferences.highlightFreeSlots && hourIsFree && !dayBlocked && !agendaGrid.closed && 'bg-success/[0.04]',
                             )}
                           />
                         )
@@ -530,8 +542,8 @@ export function AgendaClient({
                           key={block.id}
                           className="pointer-events-none absolute inset-x-1 z-10 overflow-hidden rounded-md border border-destructive/30 bg-destructive/10 px-2 py-1 text-center text-[11px] font-semibold text-destructive"
                           style={{
-                            top: timeToTop(block.startTime!),
-                            height: Math.max(28, ((timeToMinutes(block.endTime!) - timeToMinutes(block.startTime!)) / 60) * 64 - 2),
+                            top: minutesToGridTop(block.startTime!, agendaGrid.startMinutes),
+                            height: Math.max(28, ((timeToMinutes(block.endTime!) - timeToMinutes(block.startTime!)) / 60) * AGENDA_HOUR_HEIGHT - 2),
                           }}
                         >
                           Bloqueado · {formatScheduleBlockPeriod(block)}
@@ -552,7 +564,10 @@ export function AgendaClient({
                               && ['agendado', 'confirmado'].includes(a.status)
                               && 'ring-2 ring-warning',
                           )}
-                          style={{ top: timeToTop(a.start), height: (a.durationMin / 60) * 64 - 4 }}
+                          style={{
+                            top: minutesToGridTop(a.start, agendaGrid.startMinutes),
+                            height: (a.durationMin / 60) * AGENDA_HOUR_HEIGHT - 4,
+                          }}
                         >
                           <p className="truncate text-xs font-semibold text-foreground">{a.start} · {a.clientName}</p>
                           <p className="truncate text-[11px] text-muted-foreground">{a.serviceName}</p>
