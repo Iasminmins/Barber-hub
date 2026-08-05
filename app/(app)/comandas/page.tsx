@@ -26,6 +26,7 @@ import { formatCurrency, formatDate } from '@/lib/format'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import type { Order, OrderItem, OrderStatus, PaymentMethod } from '@/lib/types'
 import { orderMessage, whatsappUrl } from '@/lib/whatsapp'
+import { shouldCompleteLinkedAppointment } from '@/lib/order-appointment-sync'
 
 type EditableOrder = Omit<Order, 'items'> & { items: OrderItem[] }
 
@@ -378,6 +379,17 @@ export default function ComandasPage() {
     } else if (financeEntry) {
       const financeResult = await supabase.from('financial_entries').delete().eq('id', financeEntry.id)
       if (financeResult.error) { setSavingOrder(false); setEditError(`Comanda salva, mas o financeiro falhou: ${financeResult.error.message}`); return }
+    }
+
+    if (shouldCompleteLinkedAppointment(oldOrder?.status ?? editingOrder.status, editingOrder.status, editingOrder.appointmentId)) {
+      const appointmentResult = await updateRecord('appointments', editingOrder.appointmentId!, {
+        status: 'concluido',
+      })
+      if (appointmentResult.error) {
+        setSavingOrder(false)
+        setEditError(`Pagamento salvo, mas não foi possível concluir o agendamento: ${appointmentResult.error}`)
+        return
+      }
     }
 
     const savedItems = (insertItemsResult.data ?? []).map((item) => ({

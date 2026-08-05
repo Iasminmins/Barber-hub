@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import posthog from 'posthog-js'
 import { AlertTriangle, Clock, Package, Pencil, Plus, Save, Scissors, Search, Trash2, Upload } from "lucide-react"
 import type { CatalogItem, CatalogType } from "@/lib/types"
@@ -77,6 +77,18 @@ export function CatalogoClient({ items }: { items: CatalogItem[] }) {
   const [editing, setEditing] = useState<CatalogDraft | null>(null)
   const [editStatus, setEditStatus] = useState("")
   const [saving, setSaving] = useState(false)
+  const openedProductId = useRef("")
+
+  useEffect(() => {
+    const requestedProductId = new URLSearchParams(window.location.search).get("produto") ?? ""
+    if (!requestedProductId || openedProductId.current === requestedProductId) return
+    const requestedProduct = records.find((item) => item.id === requestedProductId)
+    if (!requestedProduct) return
+    openedProductId.current = requestedProductId
+    setTab(requestedProduct.type)
+    setEditStatus("")
+    setEditing(createDraft(requestedProduct))
+  }, [records])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()

@@ -3,7 +3,7 @@
 import * as React from 'react'
 import Link from 'next/link'
 import posthog from 'posthog-js'
-import { ChevronLeft, ChevronRight, Plus, CalendarDays, Ban, Coffee, Copy, ExternalLink, MessageCircle, Share2, Save, Trash2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, CalendarDays, Ban, CheckCircle2, Coffee, Copy, ExternalLink, MessageCircle, ReceiptText, Share2, Save, Trash2 } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { StatusBadge } from '@/components/status-badge'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -21,6 +21,7 @@ import { isBarberRole } from '@/lib/employees'
 import { appointmentConflictsWithScheduleBlock, formatScheduleBlockPeriod, getBlockTimeOptions, timeToMinutes } from '@/lib/schedule-blocks'
 import type { BusinessDayKey } from '@/lib/barbershop-settings'
 import { useAppData } from '@/components/data/app-data-provider'
+import { findLinkedOrder, getAgendaStats } from '@/lib/agenda-operations'
 
 const HOURS = Array.from({ length: 12 }, (_, i) => 8 + i) // 08:00 - 19:00
 const BUSINESS_DAY_KEYS: BusinessDayKey[] = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado']
@@ -84,10 +85,11 @@ export function AgendaClient({
   barbershopName: string
   barbershopId: string
 }) {
-  const { barbershop, catalog, clients, insertRecord, updateRecord, deleteRecord } = useAppData()
+  const { barbershop, catalog, clients, orders, insertRecord, updateRecord, deleteRecord } = useAppData()
   const quickPreferences = barbershop.agendaSettings.quickPreferences
   const [view, setView] = React.useState('dia')
   const [barberFilter, setBarberFilter] = React.useState<string>('todos')
+  const [showCompleted, setShowCompleted] = React.useState(true)
   const [selectedDate, setSelectedDate] = React.useState(() => toDateKey(new Date()))
   const [shareOpen, setShareOpen] = React.useState(false)
   const [publicBookingUrl, setPublicBookingUrl] = React.useState('')
@@ -319,7 +321,6 @@ export function AgendaClient({
     ? barbers
     : barbers.filter((b) => b.id === (barberFilter === 'todos' ? barbers[0]?.id : barberFilter))
 
-  const selectedDayAppointments = agendaAppointments.filter((a) => a.date === selectedDate)
   const weekRange = getWeekRange(selectedDate)
   const periodAppointments = agendaAppointments
     .filter((appointment) => {
@@ -330,12 +331,23 @@ export function AgendaClient({
     .filter((appointment) => barberFilter === 'todos' || appointment.employeeId === barberFilter)
     .sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start))
 
-  const stats = {
-    total: periodAppointments.length,
-    confirmados: periodAppointments.filter((a) => ['confirmado', 'chegou'].includes(a.status)).length,
-    concluidos: periodAppointments.filter((a) => a.status === 'concluido').length,
-    receita: periodAppointments.filter((a) => a.status === 'concluido').reduce((s, a) => s + a.price, 0),
-  }
+  const periodStart = view === 'dia' ? selectedDate : view === 'semana' ? weekRange.start : `${selectedDate.slice(0, 7)}-01`
+  const monthEnd = new Date(fromDateKey(periodStart).getFullYear(), fromDateKey(periodStart).getMonth() + 1, 0)
+  const periodEnd = view === 'dia' ? selectedDate : view === 'semana' ? weekRange.end : toDateKey(monthEnd)
+  const stats = getAgendaStats(
+    agendaAppointments,
+    orders,
+    periodStart,
+    periodEnd,
+    barberFilter === 'todos' ? undefined : barberFilter,
+  )
+  const visiblePeriodAppointments = showCompleted
+    ? periodAppointments
+    : periodAppointments.filter((appointment) => appointment.status !== 'concluido')
+  const selectedDayAppointments = agendaAppointments.filter((appointment) => (
+    appointment.date === selectedDate && (showCompleted || appointment.status !== 'concluido')
+  ))
+  const linkedOrder = editingAppointment ? findLinkedOrder(editingAppointment.id, orders) : undefined
 
   function changePeriod(direction: -1 | 1) {
     setSelectedDate((current) => {
@@ -423,6 +435,15 @@ export function AgendaClient({
           </Button>
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+          <Button
+            variant="outline"
+            size="sm"
+            aria-pressed={!showCompleted}
+            onClick={() => setShowCompleted((current) => !current)}
+          >
+            <CheckCircle2 className="size-4" />
+            {showCompleted ? 'Ocultar concluídos' : 'Mostrar concluídos'}
+          </Button>
           <Tabs
             items={[
               { value: 'dia', label: 'Dia' },
@@ -529,6 +550,11 @@ export function AgendaClient({
                         >
                           <p className="truncate text-xs font-semibold text-foreground">{a.start} · {a.clientName}</p>
                           <p className="truncate text-[11px] text-muted-foreground">{a.serviceName}</p>
+                          {a.status === 'concluido' ? (
+                            <span className="mt-0.5 flex items-center gap-1 text-[10px] font-semibold text-emerald-700">
+                              <CheckCircle2 className="size-3" /> Concluído
+                            </span>
+                          ) : null}
                         </button>
                       ))}
                       {dayBlocked ? (
@@ -551,7 +577,7 @@ export function AgendaClient({
             </p>
           </div>
           <div className="divide-y divide-border">
-            {periodAppointments.map((a) => (
+            {visiblePeriodAppointments.map((a) => (
                 <button
                   type="button"
                   key={a.id}
@@ -574,7 +600,7 @@ export function AgendaClient({
                   <StatusBadge status={a.status} />
                 </button>
               ))}
-            {periodAppointments.length === 0 && (
+            {visiblePeriodAppointments.length === 0 && (
               <p className="p-6 text-center text-sm text-muted-foreground">Nenhum agendamento neste período.</p>
             )}
           </div>
@@ -857,6 +883,23 @@ export function AgendaClient({
                   <Trash2 className="size-4" />
                   Excluir agendamento
                 </Button>
+                {linkedOrder ? (
+                  <Link
+                    href={`/comandas?order=${encodeURIComponent(linkedOrder.id)}`}
+                    className={buttonVariants({ variant: 'outline' })}
+                  >
+                    <ReceiptText className="size-4" />
+                    Ver comanda #{linkedOrder.number}
+                  </Link>
+                ) : !['cancelado', 'faltou'].includes(editingAppointment.status) ? (
+                  <Link
+                    href={`/comandas/nova?agendamento=${encodeURIComponent(editingAppointment.id)}`}
+                    className={buttonVariants({ variant: 'outline' })}
+                  >
+                    <ReceiptText className="size-4" />
+                    Criar comanda
+                  </Link>
+                ) : null}
                 <Button variant="outline" onClick={closeAppointment} disabled={savingAppointment}>
                   Cancelar
                 </Button>

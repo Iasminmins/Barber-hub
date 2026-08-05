@@ -15,6 +15,7 @@ import {
   Menu,
   MessageSquare,
   Package,
+  PackagePlus,
   Search,
   ShoppingCart,
   X,
@@ -30,6 +31,7 @@ import { useAppData } from '@/components/data/app-data-provider'
 import { daysUntil, formatCurrency, formatDate } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { getLowStockThreshold, isLowStock } from '@/lib/inventory'
+import { findLinkedOrder, isFreshAppointmentNotification } from '@/lib/agenda-operations'
 import type { AgendaSettings } from '@/lib/barbershop-settings'
 import { birthdayMessage, normalizeWhatsAppPhone, renewalMessage, whatsappUrl } from '@/lib/whatsapp'
 
@@ -46,6 +48,8 @@ interface NotificationItem {
   dueInDays?: number
   appointmentId?: string
   appointmentDate?: string
+  catalogItemId?: string
+  orderId?: string
 }
 
 const tabConfig: Record<
@@ -84,19 +88,6 @@ function isBirthdayToday(birthDate: string) {
   return date.getMonth() === today.getMonth() && date.getDate() === today.getDate()
 }
 
-function orderLocalDate(createdAt: string) {
-  const date = new Date(createdAt)
-  if (Number.isNaN(date.getTime())) return ''
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Sao_Paulo',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(date)
-  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? ''
-  return `${part('year')}-${part('month')}-${part('day')}`
-}
-
 function isAppointmentSettled(
   appointment: ReturnType<typeof useAppData>['appointments'][number],
   orders: ReturnType<typeof useAppData>['orders'],
@@ -105,15 +96,7 @@ function isAppointmentSettled(
     return true
   }
 
-  const normalizedClientName = appointment.clientName.trim().toLocaleLowerCase('pt-BR')
-  return orders.some((order) => {
-    if (order.status !== 'paga' || orderLocalDate(order.createdAt) !== appointment.date) return false
-    const sameClient = appointment.clientId
-      ? order.clientId === appointment.clientId
-      : order.clientName.trim().toLocaleLowerCase('pt-BR') === normalizedClientName
-    const sameEmployee = !appointment.employeeId || order.employeeId === appointment.employeeId
-    return sameClient && sameEmployee
-  })
+  return findLinkedOrder(appointment.id, orders)?.status === 'paga'
 }
 
 function buildNotifications(
@@ -142,9 +125,7 @@ function buildNotifications(
     agendamentos: appointments
       .filter((appointment) => {
         if (readAppointmentIds.has(appointment.id) || isAppointmentSettled(appointment, orders)) return false
-        if (!appointment.createdAt) return false
-        const createdAt = new Date(appointment.createdAt).getTime()
-        return Number.isFinite(createdAt) && Date.now() - createdAt <= 7 * 24 * 60 * 60 * 1000
+        return isFreshAppointmentNotification(appointment.createdAt)
       })
       .sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))
       .map((appointment) => ({
@@ -173,6 +154,7 @@ function buildNotifications(
       title: item.name,
       description: `Estoque ${item.stock ?? 0}/${getLowStockThreshold(item.minStock, agendaSettings.lowStockAlert)} un. - reposição recomendada`,
       tone: 'red',
+      catalogItemId: item.id,
     })),
     comandas: orders
       .filter((order) => order.status === 'aberta' || order.status === 'pendente')
@@ -181,6 +163,7 @@ function buildNotifications(
         title: `Comanda #${order.number}`,
         description: `${order.clientName} - ${formatCurrency(order.total)} - ${order.status}`,
         tone: order.status === 'pendente' ? 'gold' : 'green',
+        orderId: order.id,
       })),
     planos: (agendaSettings.notifications.expiringSubscriptions ? expiringSubscriptions : []).map(({ subscription, due }) => {
       const client = clients.find((item) =>
@@ -290,6 +273,17 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
     router.push(`/agenda?data=${encodeURIComponent(item.appointmentDate)}&agendamento=${encodeURIComponent(item.appointmentId)}`)
   }
 
+  function openOperationalNotification(item: NotificationItem) {
+    const target = item.catalogItemId
+      ? `/catalogo?produto=${encodeURIComponent(item.catalogItemId)}`
+      : item.orderId
+        ? `/comandas?order=${encodeURIComponent(item.orderId)}`
+        : ''
+    if (!target) return
+    setNotificationsOpen(false)
+    router.push(target)
+  }
+
   const preparedStorageKey = React.useMemo(() => {
     const date = new Date()
     const day = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
@@ -360,7 +354,7 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
     month: 'long',
   }).format(new Date())
 
-  const totalNotifications = Object.values(notifications).reduce((sum, items) => sum + items.length, 0)
+  const unreadNotifications = notifications.agendamentos.length
   const activeNotifications = notifications[activeTab]
 
   return (
@@ -431,9 +425,9 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
             onClick={() => setNotificationsOpen((value) => !value)}
           >
             <Bell className="size-5" />
-            {totalNotifications > 0 ? (
+            {unreadNotifications > 0 ? (
               <span className="absolute -right-0.5 -top-0.5 flex size-5 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">
-                {totalNotifications}
+                {unreadNotifications}
               </span>
             ) : null}
           </Button>
@@ -447,7 +441,7 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="rounded-md bg-muted px-2.5 py-1 text-xs font-semibold text-foreground">
-                    {totalNotifications} novas
+                    {unreadNotifications} {unreadNotifications === 1 ? 'nova' : 'novas'}
                   </span>
                   <Button variant="ghost" size="icon-sm" aria-label="Marcar agendamentos como lidos" onClick={markNotificationsAsRead}>
                     <CheckCheck className="size-4" />
@@ -496,19 +490,21 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
                   activeNotifications.map((item) => (
                     <div
                       key={item.id}
-                      role={activeTab === 'agendamentos' ? 'button' : undefined}
-                      tabIndex={activeTab === 'agendamentos' ? 0 : undefined}
+                      role={['agendamentos', 'estoque', 'comandas'].includes(activeTab) ? 'button' : undefined}
+                      tabIndex={['agendamentos', 'estoque', 'comandas'].includes(activeTab) ? 0 : undefined}
                       onClick={() => {
                         if (activeTab === 'agendamentos') openAppointmentNotification(item)
+                        if (activeTab === 'estoque' || activeTab === 'comandas') openOperationalNotification(item)
                       }}
                       onKeyDown={(event) => {
-                        if (activeTab !== 'agendamentos' || (event.key !== 'Enter' && event.key !== ' ')) return
+                        if (!['agendamentos', 'estoque', 'comandas'].includes(activeTab) || (event.key !== 'Enter' && event.key !== ' ')) return
                         event.preventDefault()
-                        openAppointmentNotification(item)
+                        if (activeTab === 'agendamentos') openAppointmentNotification(item)
+                        else openOperationalNotification(item)
                       }}
                       className={cn(
                         'flex items-center gap-3 rounded-lg border p-3 transition-colors',
-                        activeTab === 'agendamentos' && 'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                        ['agendamentos', 'estoque', 'comandas'].includes(activeTab) && 'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                         item.clientId && preparedBirthdayIds.has(item.clientId)
                           ? 'border-emerald-200 bg-emerald-50/70'
                           : 'border-border bg-background hover:bg-muted/50',
@@ -541,7 +537,22 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
                           </span>
                         ) : null}
                       </div>
-                      {activeTab === 'aniversarios' ? (
+                      {activeTab === 'estoque' ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="relative z-10 shrink-0"
+                          aria-label={`Repor estoque de ${item.title}`}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            openOperationalNotification(item)
+                          }}
+                        >
+                          <PackagePlus className="size-4" />
+                          Repor estoque
+                        </Button>
+                      ) : activeTab === 'aniversarios' ? (
                         <Button
                           type="button"
                           variant="ghost"

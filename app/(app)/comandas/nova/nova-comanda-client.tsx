@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import posthog from 'posthog-js'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   ArrowLeft,
   Minus,
@@ -24,7 +24,7 @@ import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { formatCurrency } from '@/lib/format'
 import { useAppData } from '@/components/data/app-data-provider'
-import type { CatalogItem, CatalogType, Client, Employee, PaymentMethod } from '@/lib/types'
+import type { Appointment, CatalogItem, CatalogType, Client, Employee, Order, PaymentMethod } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
 type CatalogFilter = CatalogType | 'todos'
@@ -36,6 +36,8 @@ interface NovaComandaClientProps {
   employees: Employee[]
   items: CatalogItem[]
   nextOrderNumber: number
+  appointments: Appointment[]
+  orders: Order[]
 }
 
 const initialQuantities = (items: CatalogItem[]) =>
@@ -72,6 +74,8 @@ export function NovaComandaClient({
   employees,
   items,
   nextOrderNumber,
+  appointments,
+  orders,
 }: NovaComandaClientProps) {
   const router = useRouter()
   const { insertRecord, deleteRecord } = useAppData()
@@ -86,6 +90,26 @@ export function NovaComandaClient({
   const [payment, setPayment] = useState<PaymentChoice | ''>('')
   const [manualTotal, setManualTotal] = useState<string | null>(null)
   const [saveError, setSaveError] = useState('')
+  const [sourceAppointment, setSourceAppointment] = useState<Appointment | null>(null)
+
+  const linkedOrder = sourceAppointment
+    ? orders.find((order) => order.appointmentId === sourceAppointment.id)
+    : undefined
+
+  useEffect(() => {
+    const appointmentId = new URLSearchParams(window.location.search).get('agendamento') ?? ''
+    const appointment = appointments.find((item) => item.id === appointmentId)
+    if (!appointment) return
+
+    setSourceAppointment(appointment)
+    setClientId(appointment.clientId)
+    setEmployeeId(appointment.employeeId)
+    setQuantities((current) => ({ ...current, [appointment.serviceId]: 1 }))
+    setPrices((current) => ({
+      ...current,
+      [appointment.serviceId]: appointment.price.toFixed(2).replace('.', ','),
+    }))
+  }, [appointments])
 
   const filteredItems = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
@@ -165,13 +189,18 @@ export function NovaComandaClient({
   async function saveOrder() {
     setSaveError('')
 
+    if (linkedOrder) {
+      setSaveError(`Este agendamento já possui a comanda #${linkedOrder.number}.`)
+      return
+    }
+
     const employee = employees.find((item) => item.id === employeeId)
     if (!employee) {
       setSaveError('Selecione um responsável para salvar.')
       return
     }
 
-    if (total > 0 && !payment) {
+    if (!sourceAppointment && total > 0 && !payment) {
       setSaveError('Selecione a forma de pagamento.')
       return
     }
@@ -182,15 +211,15 @@ export function NovaComandaClient({
     }
 
     const client = clients.find((item) => item.id === clientId)
-    const orderStatus = total === 0 ? 'aberta' : payment === 'pendente' ? 'pendente' : 'paga'
-    const paymentMethod = total === 0 || payment === 'pendente' ? null : payment
-    const orderResult = await insertRecord('orders', { barbershop_id: barbershopId, number: nextOrderNumber, client_id: client?.id ?? null, client_name: client?.name ?? 'Cliente avulso', employee_id: employee.id, employee_name: employee.name, discount, surcharge, status: orderStatus, method: paymentMethod, total })
+    const orderStatus = sourceAppointment ? 'aberta' : total === 0 ? 'aberta' : payment === 'pendente' ? 'pendente' : 'paga'
+    const paymentMethod = sourceAppointment || total === 0 || payment === 'pendente' ? null : payment
+    const orderResult = await insertRecord('orders', { barbershop_id: barbershopId, appointment_id: sourceAppointment?.id ?? null, number: nextOrderNumber, client_id: client?.id ?? null, client_name: client?.name ?? 'Cliente avulso', employee_id: employee.id, employee_name: employee.name, discount, surcharge, status: orderStatus, method: paymentMethod, total })
     if (orderResult.error || !orderResult.data) { setSaveError(orderResult.error ?? 'Não foi possível criar a comanda.'); return }
     for (const item of selectedItems) {
       const itemResult = await insertRecord('order_items', { order_id: orderResult.data.id, barbershop_id: barbershopId, ref_id: item.id, type: item.type, name: item.name, quantity: quantities[item.id] ?? 1, unit_price: parseMoney(prices[item.id] ?? '') })
       if (itemResult.error) { await deleteRecord('orders', orderResult.data.id); setSaveError(itemResult.error); return }
     }
-    if (total > 0 && payment && payment !== 'pendente') {
+    if (!sourceAppointment && total > 0 && payment && payment !== 'pendente') {
       const financialResult = await insertRecord('financial_entries', { barbershop_id: barbershopId, order_id:orderResult.data.id, type:'entrada', category:'Comandas', description:`Comanda #${nextOrderNumber}`, amount:total, method:payment, date:todayKey() })
       if (financialResult.error) { setSaveError(`Comanda salva, mas o financeiro falhou: ${financialResult.error}`); return }
     }
@@ -201,14 +230,16 @@ export function NovaComandaClient({
       total,
       has_client: Boolean(client),
     })
-    router.push('/comandas')
+    router.push(`/comandas?order=${encodeURIComponent(orderResult.data.id)}`)
   }
 
   return (
     <div>
       <PageHeader
         title="Nova comanda"
-        description="Monte a venda do balcão com cliente, responsável, itens e forma de pagamento."
+        description={sourceAppointment
+          ? `Comanda do agendamento de ${sourceAppointment.clientName}. Ela será criada aberta para você ajustar antes do pagamento.`
+          : 'Monte a venda do balcão com cliente, responsável, itens e forma de pagamento.'}
       >
         <Link href="/comandas" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
           <ArrowLeft className="size-4" />
@@ -224,6 +255,11 @@ export function NovaComandaClient({
               Atendimento
             </h2>
             <div className="grid gap-4 sm:grid-cols-2">
+              {sourceAppointment ? (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 sm:col-span-2">
+                  Serviço, cliente e barbeiro foram preenchidos a partir da Agenda. Você pode adicionar outros itens antes de salvar.
+                </div>
+              ) : null}
               <div className="space-y-2">
                 <Label htmlFor="client-search">Cliente</Label>
                 <div
@@ -543,10 +579,11 @@ export function NovaComandaClient({
               )}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="method">Pagamento {total === 0 ? '(opcional)' : ''}</Label>
+              <Label htmlFor="method">Pagamento {sourceAppointment || total === 0 ? '(defina depois)' : ''}</Label>
               <Select
                 id="method"
                 value={payment}
+                disabled={Boolean(sourceAppointment)}
                 onChange={(event) => setPayment(event.target.value as PaymentChoice)}
               >
                 <option value="">Selecione o pagamento</option>
@@ -558,6 +595,11 @@ export function NovaComandaClient({
               </Select>
             </div>
             {saveError ? <p className="mt-3 text-sm font-medium text-destructive">{saveError}</p> : null}
+            {linkedOrder ? (
+              <Link href={`/comandas?order=${encodeURIComponent(linkedOrder.id)}`} className={cn(buttonVariants({ variant: 'outline' }), 'mt-3 w-full')}>
+                Abrir comanda #{linkedOrder.number}
+              </Link>
+            ) : null}
             <Button
               type="button"
               variant="gold"

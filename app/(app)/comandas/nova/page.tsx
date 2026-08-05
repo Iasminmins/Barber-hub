@@ -4,7 +4,7 @@ import { NovaComandaClient } from './nova-comanda-client'
 import { useAppData } from '@/components/data/app-data-provider'
 
 export default function NovaComandaPage() {
-  const { barbershop, catalog, clients, employees: databaseEmployees, orders } = useAppData()
+  const { appointments, barbershop, catalog, clients, employees: databaseEmployees, orders } = useAppData()
   const employees = databaseEmployees.filter((employee) => employee.active)
   const items = catalog.filter((item) => item.active)
   const orderNumbers = orders.map((order) => order.number)
@@ -17,6 +17,8 @@ export default function NovaComandaPage() {
       employees={employees}
       items={items}
       nextOrderNumber={nextOrderNumber}
+      appointments={appointments}
+      orders={orders}
     />
   )
 }
