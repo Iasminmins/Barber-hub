@@ -150,6 +150,7 @@ export interface OrderItem {
 export interface Order {
   id: string
   barbershopId: string
+  appointmentId?: string
   number: number
   clientId?: string
   clientName: string
