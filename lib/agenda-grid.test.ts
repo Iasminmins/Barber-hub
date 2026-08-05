@@ -11,6 +11,7 @@ describe('faixa horaria da agenda', () => {
       closed: false,
       startMinutes: 9 * 60,
       endMinutes: 20 * 60,
+      endLabel: '20:00',
       hours: [9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
     })
   })

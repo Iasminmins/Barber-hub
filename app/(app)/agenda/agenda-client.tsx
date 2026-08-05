@@ -490,12 +490,17 @@ export function AgendaClient({
           ) : null}
           <div className="flex overflow-x-auto">
             {/* Coluna de horas */}
-            <div className="w-16 shrink-0 border-r border-border pt-12">
+            <div className="w-16 shrink-0 border-r border-border pb-4 pt-12">
               {agendaGrid.hours.map((h) => (
                 <div key={h} className="relative h-16 pr-2 text-right">
                   <span className="text-xs text-muted-foreground">{String(h).padStart(2, '0')}:00</span>
                 </div>
               ))}
+              <div className="relative h-0 pr-2 text-right">
+                <span className="absolute right-2 top-0 -translate-y-1/2 text-xs text-muted-foreground">
+                  {agendaGrid.endLabel}
+                </span>
+              </div>
             </div>
 
             {/* Colunas de barbeiros */}

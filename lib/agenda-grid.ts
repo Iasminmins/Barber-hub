@@ -53,6 +53,7 @@ export function getAgendaGridRange(
     closed: businessHours.closed,
     startMinutes,
     endMinutes,
+    endLabel: `${String(Math.floor(endMinutes / MINUTES_PER_HOUR)).padStart(2, '0')}:00`,
     hours,
   }
 }
