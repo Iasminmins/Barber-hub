@@ -31,7 +31,11 @@ import { useAppData } from '@/components/data/app-data-provider'
 import { daysUntil, formatCurrency, formatDate } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { getLowStockThreshold, isLowStock } from '@/lib/inventory'
-import { findLinkedOrder, isFreshAppointmentNotification } from '@/lib/agenda-operations'
+import {
+  findLinkedOrder,
+  isActionableOrderNotification,
+  isFreshAppointmentNotification,
+} from '@/lib/agenda-operations'
 import type { AgendaSettings } from '@/lib/barbershop-settings'
 import { birthdayMessage, normalizeWhatsAppPhone, renewalMessage, whatsappUrl } from '@/lib/whatsapp'
 
@@ -157,7 +161,7 @@ function buildNotifications(
       catalogItemId: item.id,
     })),
     comandas: orders
-      .filter((order) => order.status === 'aberta' || order.status === 'pendente')
+      .filter((order) => isActionableOrderNotification(order))
       .map((order) => ({
         id: `order-${order.id}`,
         title: `Comanda #${order.number}`,

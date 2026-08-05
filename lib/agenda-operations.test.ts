@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { Appointment, Order } from './types'
-import { findLinkedOrder, getAgendaStats, isFreshAppointmentNotification } from './agenda-operations'
+import {
+  findLinkedOrder,
+  getAgendaStats,
+  isActionableOrderNotification,
+  isFreshAppointmentNotification,
+} from './agenda-operations'
 
 const appointment = (overrides: Partial<Appointment> = {}): Appointment => ({
   id: 'appointment-1',
@@ -78,5 +83,26 @@ describe('notification and link helpers', () => {
   it('encontra a comanda pelo vínculo explícito', () => {
     expect(findLinkedOrder('appointment-1', [order()])?.id).toBe('order-1')
     expect(findLinkedOrder('missing', [order()])).toBeUndefined()
+  })
+
+  it('exibe somente comandas abertas ou pendentes criadas nas ultimas 24 horas', () => {
+    const now = new Date('2026-08-05T15:00:00.000Z')
+
+    expect(isActionableOrderNotification(order({
+      status: 'aberta',
+      createdAt: '2026-08-04T15:01:00.000Z',
+    }), now)).toBe(true)
+    expect(isActionableOrderNotification(order({
+      status: 'pendente',
+      createdAt: '2026-08-05T14:00:00.000Z',
+    }), now)).toBe(true)
+    expect(isActionableOrderNotification(order({
+      status: 'aberta',
+      createdAt: '2026-08-04T14:59:00.000Z',
+    }), now)).toBe(false)
+    expect(isActionableOrderNotification(order({
+      status: 'paga',
+      createdAt: '2026-08-05T14:00:00.000Z',
+    }), now)).toBe(false)
   })
 })

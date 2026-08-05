@@ -23,6 +23,14 @@ export function isFreshAppointmentNotification(
   return ageMs >= 0 && ageMs <= maxAgeHours * 60 * 60 * 1000
 }
 
+export function isActionableOrderNotification(
+  order: Pick<Order, 'status' | 'createdAt'>,
+  now = new Date(),
+) {
+  if (order.status !== 'aberta' && order.status !== 'pendente') return false
+  return isFreshAppointmentNotification(order.createdAt, now)
+}
+
 export function getAgendaStats(
   appointments: Appointment[],
   orders: Order[],
