@@ -192,7 +192,7 @@ export function SidebarContent({
             disabled={!supportMessage.trim()}
             onClick={() => {
               const message = encodeURIComponent(`Olá, sou da ${barbershop.name}. ${supportMessage.trim()}`)
-              window.open(`https://wa.me/5524999327549?text=${message}`, '_blank', 'noopener,noreferrer')
+              window.open(`https://wa.me/5524998369828?text=${message}`, '_blank', 'noopener,noreferrer')
             }}
           >
             <MessageCircle className="size-5" />
@@ -216,7 +216,7 @@ export function SidebarContent({
 
         <div className="mt-4 flex items-center justify-center gap-2 text-xs text-muted-foreground">
           <Send className="size-3.5" />
-          WhatsApp: (24) 99932-7549
+          WhatsApp: (24) 99836-9828
         </div>
       </Dialog>
     </div>

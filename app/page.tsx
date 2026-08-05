@@ -606,8 +606,8 @@ export default function Home() {
               <a href="mailto:suportemeubarberhub@gmail.com" className="flex items-start gap-3 text-sm text-primary-foreground/80 transition-colors hover:text-primary-foreground">
                 <Mail className="mt-0.5 size-4 shrink-0 text-gold" /><span className="break-all">suportemeubarberhub@gmail.com</span>
               </a>
-              <a href="https://wa.me/5524999327549?text=Ol%C3%A1%2C%20preciso%20de%20ajuda%20com%20o%20MeuBarberHub." target="_blank" rel="noreferrer" className="inline-flex items-center gap-3 text-sm text-primary-foreground/80 transition-colors hover:text-primary-foreground">
-                <MessageCircle className="size-4 text-gold" />WhatsApp: (24) 99932-7549<ExternalLink className="size-3.5" />
+              <a href="https://wa.me/5524998369828?text=Ol%C3%A1%2C%20preciso%20de%20ajuda%20com%20o%20MeuBarberHub." target="_blank" rel="noreferrer" className="inline-flex items-center gap-3 text-sm text-primary-foreground/80 transition-colors hover:text-primary-foreground">
+                <MessageCircle className="size-4 text-gold" />WhatsApp: (24) 99836-9828<ExternalLink className="size-3.5" />
               </a>
             </div>
           </div>
@@ -619,7 +619,7 @@ export default function Home() {
         </div>
       </footer>
 
-      <a href="https://wa.me/5524999327549?text=Ol%C3%A1%2C%20gostaria%20de%20falar%20com%20o%20MeuBarberHub." target="_blank" rel="noreferrer" aria-label="Fale conosco pelo WhatsApp" className="fixed bottom-5 right-4 z-50 inline-flex items-center gap-2 rounded-full bg-[#25D366] px-4 py-3 text-sm font-bold text-[#10251f] shadow-xl shadow-black/20 transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-primary sm:bottom-6 sm:right-6">
+      <a href="https://wa.me/5524998369828?text=Ol%C3%A1%2C%20gostaria%20de%20falar%20com%20o%20MeuBarberHub." target="_blank" rel="noreferrer" aria-label="Fale conosco pelo WhatsApp" className="fixed bottom-5 right-4 z-50 inline-flex items-center gap-2 rounded-full bg-[#25D366] px-4 py-3 text-sm font-bold text-[#10251f] shadow-xl shadow-black/20 transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-primary sm:bottom-6 sm:right-6">
         <MessageCircle className="size-5" /><span className="hidden sm:inline">Fale conosco</span>
       </a>
     </main>
