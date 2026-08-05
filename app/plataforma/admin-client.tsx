@@ -2,16 +2,17 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Building2, Users, Timer, ShieldAlert, RefreshCw, Loader2, Search, LogOut, DollarSign, TrendingUp, Gift, Percent, ArrowRight } from 'lucide-react'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { Building2, Users, Timer, ShieldAlert, DollarSign, TrendingUp, Gift, Percent, ArrowRight } from 'lucide-react'
+import { buttonVariants } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
+import { Select } from '@/components/ui/select'
+import { PlatformShell } from '@/components/platform/platform-shell'
+import { MetricCard } from '@/components/platform/metric-card'
+import { AdminCharts } from '@/components/platform/admin-charts'
+import { AttentionPanel } from '@/components/platform/attention-panel'
 import { usePlatformSession } from './use-platform-session'
 import type { Overview, TenantRow } from './types'
 import { formatDate } from '@/lib/format'
-
-const selectClass =
-  'h-9 rounded-md border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring'
 
 const statusLabel: Record<string, string> = {
   trialing: 'Em teste',
@@ -48,6 +49,7 @@ export function AdminClient() {
   const [status, setStatus] = useState('')
   const [plan, setPlan] = useState('')
   const [billingFilter, setBillingFilter] = useState('')
+  const [period, setPeriod] = useState(30)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -61,7 +63,7 @@ export function AdminClient() {
 
       const headers = { Authorization: `Bearer ${token}` }
       const [overviewResponse, tenantsResponse] = await Promise.all([
-        fetch('/api/admin/overview', { headers }),
+        fetch(`/api/admin/overview?period=${period}`, { headers }),
         fetch(`/api/admin/tenants?${params}`, { headers }),
       ])
       const overviewData = await overviewResponse.json()
@@ -75,104 +77,82 @@ export function AdminClient() {
     } finally {
       setLoading(false)
     }
-  }, [token, search, status, plan, billingFilter])
+  }, [token, search, status, plan, billingFilter, period])
 
   useEffect(() => {
     if (gate === 'anon') { window.location.replace('/login'); return }
     if (gate !== 'granted') return
-    const timer = window.setTimeout(() => {
-      void load()
-    }, 250)
+    const timer = window.setTimeout(() => { void load() }, 250)
     return () => window.clearTimeout(timer)
   }, [gate, load])
 
-  const cards = useMemo(() => {
+  const revenueCards = useMemo(() => {
     if (!overview) return []
+    const r = overview.revenue
     return [
-      { label: 'Barbearias', value: overview.totals.barbershops, hint: `+${overview.totals.newLast7Days} em 7 dias`, icon: Building2 },
-      { label: 'Usuários ativos', value: overview.totals.users, hint: `+${overview.totals.newLast30Days} contas em 30 dias`, icon: Users },
-      { label: 'Em teste', value: overview.billing.trialing, hint: `${overview.billing.trialExpiringSoon} vencendo em 7 dias`, icon: Timer },
-      { label: 'Assinantes ativos', value: overview.billing.active, hint: `${overview.billing.pastDue} em atraso · ${overview.billing.canceled} canceladas`, icon: ShieldAlert },
+      { label: 'MRR contratado', value: formatMoney(r.mrr), hint: `${r.contractedCompanies} empresas contratadas`, icon: DollarSign, accent: 'gold' as const },
+      { label: 'Previsão · 30 dias', value: formatMoney(r.forecast30Days), hint: 'Cobranças previstas no período', icon: TrendingUp },
+      { label: 'Recebido no mês', value: r.asaasAvailable ? formatMoney(r.receivedThisMonth) : 'Indisponível', hint: r.asaasAvailable ? 'Pagamentos confirmados no Asaas' : 'Asaas não respondeu', icon: DollarSign, accent: 'success' as const },
+      { label: 'Ticket médio', value: formatMoney(r.averageTicket), hint: 'Por empresa contratada', icon: Building2 },
+      { label: 'Conversão', value: `${r.conversionRate}%`, hint: 'Teste para assinatura', icon: Percent },
+      { label: 'Cortesias ativas', value: r.complimentaryCount, hint: `${formatMoney(r.complimentaryValue)} concedidos`, icon: Gift, accent: 'gold' as const },
     ]
   }, [overview])
 
-  const revenueCards = useMemo(() => {
+  const summaryCards = useMemo(() => {
     if (!overview) return []
+    const t = overview.totals
+    const b = overview.billing
     return [
-      { label: 'MRR contratado', value: formatMoney(overview.revenue.mrr), hint: `${overview.revenue.contractedCompanies} empresas contratadas`, icon: DollarSign },
-      { label: 'Previsão · 30 dias', value: formatMoney(overview.revenue.forecast30Days), hint: 'Cobranças previstas no período', icon: TrendingUp },
-      { label: 'Recebido no mês', value: overview.revenue.asaasAvailable ? formatMoney(overview.revenue.receivedThisMonth) : 'Indisponível', hint: overview.revenue.asaasAvailable ? 'Pagamentos confirmados no Asaas' : 'Asaas não respondeu', icon: DollarSign },
-      { label: 'Ticket médio', value: formatMoney(overview.revenue.averageTicket), hint: 'Por empresa contratada', icon: Building2 },
-      { label: 'Conversão', value: `${overview.revenue.conversionRate}%`, hint: 'Teste para assinatura', icon: Percent },
-      { label: 'Cortesias ativas', value: overview.revenue.complimentaryCount, hint: `${formatMoney(overview.revenue.complimentaryValue)} concedidos`, icon: Gift },
+      { label: 'Barbearias', value: t.barbershops, hint: `+${t.newLast7Days} em 7 dias`, icon: Building2 },
+      { label: 'Usuários ativos', value: t.users, hint: `+${t.newLast30Days} contas em 30 dias`, icon: Users },
+      { label: 'Em teste', value: b.trialing, hint: `${b.trialExpiringSoon} vencendo em 7 dias`, icon: Timer, accent: 'warning' as const },
+      { label: 'Assinantes ativos', value: b.active, hint: `${b.pastDue} em atraso · ${b.canceled} canceladas`, icon: ShieldAlert, accent: 'success' as const },
     ]
   }, [overview])
 
   if (gate !== 'granted') {
-    return <div className="flex min-h-screen items-center justify-center">Verificando acesso...</div>
+    return <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">Verificando acesso…</div>
   }
 
   return (
-    <div className="min-h-screen bg-background p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <header className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Administração da plataforma
-            </p>
-            <h1 className="text-2xl font-semibold">Barber Hub · Painel do SaaS</h1>
-            {adminName ? (
-              <p className="text-sm text-muted-foreground">Conectado como {adminName}</p>
-            ) : null}
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" disabled={loading} onClick={() => void load()}>
-              {loading ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
-              <span className="ml-2">Atualizar</span>
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => void signOut()}>
-              <LogOut className="size-4" />
-              <span className="ml-2">Sair</span>
-            </Button>
-          </div>
-        </header>
-
+    <PlatformShell
+      adminName={adminName ?? ''}
+      title="Visão geral"
+      description="Acompanhe barbearias, assinaturas, cobranças e testes em um só lugar."
+      unreadMessages={overview?.notifications?.unreadMessages ?? 0}
+      loading={loading}
+      period={period}
+      onPeriodChange={setPeriod}
+      onRefresh={() => void load()}
+      onSignOut={() => void signOut()}
+      globalSearch={search}
+      onGlobalSearchChange={setSearch}
+      onGlobalSearchSubmit={() => void load()}
+    >
+      <div className="mx-auto max-w-[1600px] space-y-6">
         {error ? (
-          <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+          <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
             {error}
           </div>
         ) : null}
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {revenueCards.map((card) => (
-            <Card key={card.label} className="p-5">
-              <div className="flex items-start justify-between">
-                <p className="text-sm text-muted-foreground">{card.label}</p>
-                <card.icon className="size-4 text-muted-foreground" />
-              </div>
-              <p className="mt-2 text-2xl font-semibold tabular-nums">{card.value}</p>
-              <p className="mt-1 text-xs text-muted-foreground">{card.hint}</p>
-            </Card>
+            <MetricCard key={card.label} {...card} loading={loading && !overview} />
           ))}
         </section>
 
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {cards.map((card) => (
-            <Card key={card.label} className="p-5">
-              <div className="flex items-start justify-between">
-                <p className="text-sm text-muted-foreground">{card.label}</p>
-                <card.icon className="size-4 text-muted-foreground" />
-              </div>
-              <p className="mt-2 text-3xl font-semibold">{card.value}</p>
-              <p className="mt-1 text-xs text-muted-foreground">{card.hint}</p>
-            </Card>
+          {summaryCards.map((card) => (
+            <MetricCard key={card.label} {...card} loading={loading && !overview} />
           ))}
         </section>
 
         {overview ? (
-          <section className="flex flex-wrap gap-3 text-sm">
+          <section className="flex flex-wrap gap-2 text-sm">
             {Object.entries(overview.plans).map(([planName, total]) => (
-              <span key={planName} className="rounded-full border border-border px-3 py-1">
+              <span key={planName} className="rounded-full border border-border bg-card px-3 py-1">
                 Plano <strong className="capitalize">{planName}</strong>: {total}
               </span>
             ))}
@@ -182,35 +162,35 @@ export function AdminClient() {
           </section>
         ) : null}
 
-        <Card className="overflow-hidden">
-          <div className="flex flex-wrap items-center gap-3 border-b border-border p-4">
-            <div className="relative min-w-56 flex-1">
-              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                className="pl-9"
-                placeholder="Buscar por nome, slug ou cidade…"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-              />
+        {overview?.charts ? <AdminCharts charts={overview.charts} loading={loading && !overview} /> : null}
+
+        {overview?.attention && overview.attention.length > 0 ? (
+          <AttentionPanel items={overview.attention} loading={loading && !overview} />
+        ) : null}
+
+        <Card className="overflow-hidden rounded-2xl border-border/70 shadow-sm">
+          <div className="flex flex-wrap items-center gap-3 border-b border-border/70 p-4">
+            <p className="text-sm font-semibold text-foreground">Barbearias</p>
+            <div className="ml-auto flex flex-wrap gap-2">
+              <Select className="h-9 w-[150px] rounded-xl text-sm" value={status} onChange={(e) => setStatus(e.target.value)}>
+                <option value="">Todos os status</option>
+                <option value="trialing">Em teste</option>
+                <option value="active">Ativas</option>
+                <option value="past_due">Em atraso</option>
+                <option value="canceled">Canceladas</option>
+              </Select>
+              <Select className="h-9 w-[140px] rounded-xl text-sm" value={plan} onChange={(e) => setPlan(e.target.value)}>
+                <option value="">Todos os planos</option>
+                <option value="starter">Starter</option>
+                <option value="pro">Pro</option>
+                <option value="premium">Premium</option>
+              </Select>
+              <Select className="h-9 w-[170px] rounded-xl text-sm" value={billingFilter} onChange={(e) => setBillingFilter(e.target.value)}>
+                <option value="">Todas as cobranças</option>
+                <option value="complimentary">Cortesias ativas</option>
+                <option value="due7">Vencendo em 7 dias</option>
+              </Select>
             </div>
-            <select className={selectClass} value={status} onChange={(event) => setStatus(event.target.value)}>
-              <option value="">Todos os status</option>
-              <option value="trialing">Em teste</option>
-              <option value="active">Ativas</option>
-              <option value="past_due">Em atraso</option>
-              <option value="canceled">Canceladas</option>
-            </select>
-            <select className={selectClass} value={plan} onChange={(event) => setPlan(event.target.value)}>
-              <option value="">Todos os planos</option>
-              <option value="starter">Starter</option>
-              <option value="pro">Pro</option>
-              <option value="premium">Premium</option>
-            </select>
-            <select className={selectClass} value={billingFilter} onChange={(event) => setBillingFilter(event.target.value)}>
-              <option value="">Todas as cobranças</option>
-              <option value="complimentary">Cortesias ativas</option>
-              <option value="due7">Vencendo em 7 dias</option>
-            </select>
           </div>
 
           <div className="overflow-x-auto">
@@ -236,17 +216,21 @@ export function AdminClient() {
                 ) : null}
 
                 {tenants.map((tenant) => (
-                  <tr key={tenant.id} className="border-t border-border align-middle">
+                  <tr key={tenant.id} className="border-t border-border/70 align-middle transition-colors hover:bg-muted/30">
                     <td className="px-4 py-3">
-                      <Link
-                        href={`/plataforma/contas/${tenant.id}`}
-                        className="font-medium hover:underline"
-                      >
-                        {tenant.name}
-                      </Link>
-                      <p className="text-xs text-muted-foreground">
-                        /{tenant.slug}{tenant.city ? ` · ${tenant.city}` : ''}
-                      </p>
+                      <div className="flex items-center gap-3">
+                        <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-xs font-bold uppercase text-primary">
+                          {tenant.name.slice(0, 2)}
+                        </span>
+                        <div className="min-w-0">
+                          <Link href={`/plataforma/contas/${tenant.id}`} className="font-medium hover:underline">
+                            {tenant.name}
+                          </Link>
+                          <p className="text-xs text-muted-foreground">
+                            /{tenant.slug}{tenant.city ? ` · ${tenant.city}` : ''}
+                          </p>
+                        </div>
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       {tenant.owner ? (
@@ -264,7 +248,6 @@ export function AdminClient() {
                       </span>
                     </td>
                     <td className="px-4 py-3">{tenant.usersCount}</td>
-
                     <td className="px-4 py-3">
                       {tenant.billing_status === 'trialing' ? (
                         <span className={tenant.trialDaysLeft !== null && tenant.trialDaysLeft < 0 ? 'text-destructive' : ''}>
@@ -282,19 +265,21 @@ export function AdminClient() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{formatDate(tenant.created_at)}</td>
-                    <td className="px-4 py-3">
-                      <Link className={buttonVariants({ variant: 'outline', size: 'sm' })} href={`/plataforma/contas/${tenant.id}`}>Gerenciar <ArrowRight className="ml-1 size-3.5" /></Link>
+                    <td className="px-4 py-3 text-right">
+                      <Link className={buttonVariants({ variant: 'outline', size: 'sm', className: 'rounded-xl' })} href={`/plataforma/contas/${tenant.id}`}>
+                        Gerenciar <ArrowRight className="ml-1 size-3.5" />
+                      </Link>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <div className="border-t border-border px-4 py-3 text-xs text-muted-foreground">
+          <div className="border-t border-border/70 px-4 py-3 text-xs text-muted-foreground">
             {loading ? 'Carregando…' : `${tenants.length} conta(s) listada(s)`}
           </div>
         </Card>
       </div>
-    </div>
+    </PlatformShell>
   )
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requirePlatformAdmin, platformErrorResponse } from '@/lib/platform-admin'
 import { calculateAdminBillingMetrics } from '@/lib/admin-billing'
+import { buildAdminCharts, buildAttentionItems, computePeriodComparison } from '@/lib/admin-charts'
 import { asaasRequest } from '@/lib/asaas'
 import type { SaasPlanId } from '@/lib/saas-plans'
 import { effectiveBillingStatus } from '@/lib/billing-status'
@@ -17,10 +18,12 @@ function daysAgoIso(days: number) {
 export async function GET(request: Request) {
   try {
     const { admin } = await requirePlatformAdmin(request)
+    const url = new URL(request.url)
+    const periodDays = Math.min(Math.max(Number(url.searchParams.get('period') ?? 30), 7), 365)
 
     const { data: shops, error } = await admin
       .from('barbershops')
-      .select('id, plan, billing_status, trial_ends_at, next_billing_date, created_at, asaas_subscription_id, complimentary_until, complimentary_value')
+      .select('id, name, slug, plan, billing_status, trial_ends_at, next_billing_date, created_at, updated_at, last_payment_at, asaas_subscription_id, complimentary_until, complimentary_value')
     if (error) throw new Error('Não foi possível carregar as barbearias.')
 
     const { count: membersCount } = await admin
@@ -28,8 +31,17 @@ export async function GET(request: Request) {
       .select('id', { count: 'exact', head: true })
       .eq('active', true)
 
+    const { count: unreadCount } = await admin
+      .from('platform_message_inbox')
+      .select('id', { count: 'exact', head: true })
+      .is('read_at', null)
+      .eq('direction', 'inbound')
+
     const rows = shops ?? []
-    const normalizedRows = rows.map((shop) => ({ ...shop, billing_status: effectiveBillingStatus(shop.billing_status, shop.trial_ends_at) }))
+    const normalizedRows = rows.map((shop) => ({
+      ...shop,
+      billing_status: effectiveBillingStatus(shop.billing_status, shop.trial_ends_at),
+    }))
     const now = Date.now()
     const last7 = daysAgoIso(7)
     const last30 = daysAgoIso(30)
@@ -74,6 +86,10 @@ export async function GET(request: Request) {
       asaasAvailable = false
     }
 
+    const charts = buildAdminCharts(normalizedRows, receivedThisMonth)
+    const attention = buildAttentionItems(normalizedRows, unreadCount ?? 0)
+    const newShopsComparison = computePeriodComparison(normalizedRows, periodDays)
+
     return NextResponse.json({
       totals: {
         barbershops: rows.length,
@@ -91,6 +107,15 @@ export async function GET(request: Request) {
       },
       revenue: { ...revenue, receivedThisMonth, asaasAvailable },
       plans: byPlan,
+      charts,
+      attention,
+      comparisons: {
+        newBarbershops: newShopsComparison,
+        periodDays,
+      },
+      notifications: {
+        unreadMessages: unreadCount ?? 0,
+      },
     })
   } catch (error) {
     const { message, status } = platformErrorResponse(error)

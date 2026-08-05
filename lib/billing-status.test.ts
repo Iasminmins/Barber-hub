@@ -15,4 +15,8 @@ describe('effectiveBillingStatus', () => {
   test('não altera uma assinatura já ativa', () => {
     expect(effectiveBillingStatus('active', '2026-08-11T03:23:38.011Z', now)).toBe('active')
   })
+
+  test('rejeita um status desconhecido vindo do banco', () => {
+    expect(() => effectiveBillingStatus('unknown', null, now)).toThrow('Status de cobrança inválido: unknown')
+  })
 })

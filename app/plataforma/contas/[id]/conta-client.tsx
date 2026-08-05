@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { usePlatformSession } from '../../use-platform-session'
+import { PlatformShell } from '@/components/platform/platform-shell'
 import { formatDate } from '@/lib/format'
 
 type Barbershop = {
@@ -77,7 +78,7 @@ function billingStatusLabel(shop: Barbershop) {
 }
 
 export function ContaClient({ tenantId }: { tenantId: string }) {
-  const { gate, token } = usePlatformSession()
+  const { gate, token, adminName, signOut } = usePlatformSession()
   const [shop, setShop] = useState<Barbershop | null>(null)
   const [members, setMembers] = useState<Member[]>([])
   const [payments, setPayments] = useState<Payment[]>([])
@@ -173,25 +174,21 @@ export function ContaClient({ tenantId }: { tenantId: string }) {
   if (gate !== 'granted') return <div className="flex min-h-screen items-center justify-center">Verificando acesso...</div>
 
   return (
-    <div className="min-h-screen bg-background p-6">
+    <PlatformShell
+      adminName={adminName ?? ''}
+      title={shop?.name ?? 'Carregando…'}
+      description={shop ? `/${shop.slug}${shop.city ? ` · ${shop.city}` : ''} · criada em ${formatDate(shop.created_at)}` : 'Perfil da barbearia'}
+      loading={loading}
+      onRefresh={() => void load()}
+      onSignOut={() => void signOut()}
+      showGlobalSearch={false}
+      showPeriod={false}
+      showNewMessage={false}
+    >
       <div className="mx-auto max-w-6xl space-y-6">
-        <header className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <Link href="/plataforma" className="inline-flex items-center text-sm text-muted-foreground hover:underline">
-              <ArrowLeft className="mr-1 size-4" /> Voltar ao painel
-            </Link>
-            <h1 className="mt-1 text-2xl font-semibold">{shop?.name ?? 'Carregando…'}</h1>
-            {shop ? (
-              <p className="text-sm text-muted-foreground">
-                /{shop.slug}{shop.city ? ` · ${shop.city}` : ''} · criada em {formatDate(shop.created_at)}
-              </p>
-            ) : null}
-          </div>
-          <Button variant="outline" size="sm" disabled={loading} onClick={() => void load()}>
-            {loading ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
-            <span className="ml-2">Atualizar</span>
-          </Button>
-        </header>
+        <Link href="/plataforma" className="inline-flex items-center text-sm text-muted-foreground hover:underline">
+          <ArrowLeft className="mr-1 size-4" /> Voltar ao painel
+        </Link>
 
         {error ? (
           <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
@@ -434,6 +431,6 @@ export function ContaClient({ tenantId }: { tenantId: string }) {
           </div>
         </Card>
       </div>
-    </div>
+    </PlatformShell>
   )
 }
