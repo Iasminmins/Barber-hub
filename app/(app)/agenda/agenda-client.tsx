@@ -24,16 +24,35 @@ import type { BusinessDayKey } from '@/lib/barbershop-settings'
 import { useAppData } from '@/components/data/app-data-provider'
 import { findLinkedOrder, getAgendaStats, getAgendaUrlSelection } from '@/lib/agenda-operations'
 import { AGENDA_HOUR_HEIGHT, getAgendaGridRange, minutesToGridTop } from '@/lib/agenda-grid'
+import { getAppointmentColumns } from '@/lib/agenda-layout'
 
 const BUSINESS_DAY_KEYS: BusinessDayKey[] = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado']
 
 const statusColor: Record<Appointment['status'], string> = {
-  agendado: 'border-l-muted-foreground/40 bg-muted/60',
-  confirmado: 'border-l-primary bg-primary/8',
-  chegou: 'border-l-gold bg-gold/10',
-  concluido: 'border-l-success bg-success/8',
-  cancelado: 'border-l-destructive bg-destructive/8 opacity-70',
-  faltou: 'border-l-warning bg-warning/10 opacity-80',
+  agendado: 'border-slate-300 bg-slate-50 hover:bg-slate-100',
+  confirmado: 'border-blue-300 bg-blue-50 hover:bg-blue-100',
+  chegou: 'border-amber-300 bg-amber-50 hover:bg-amber-100',
+  concluido: 'border-emerald-300 bg-emerald-50 hover:bg-emerald-100',
+  cancelado: 'border-red-300 bg-red-50 opacity-70 hover:bg-red-100',
+  faltou: 'border-orange-300 bg-orange-50 opacity-80 hover:bg-orange-100',
+}
+
+const compactStatusLabel: Record<Appointment['status'], string> = {
+  agendado: 'Agendado',
+  confirmado: 'Confirmado',
+  chegou: 'Na loja',
+  concluido: 'ConcluÃ­do',
+  cancelado: 'Cancelado',
+  faltou: 'Faltou',
+}
+
+const statusDotColor: Record<Appointment['status'], string> = {
+  agendado: 'bg-slate-400',
+  confirmado: 'bg-blue-500',
+  chegou: 'bg-amber-500',
+  concluido: 'bg-emerald-500',
+  cancelado: 'bg-red-500',
+  faltou: 'bg-orange-500',
 }
 
 const appointmentStatuses: Array<{ value: Appointment['status']; label: string }> = [
@@ -355,6 +374,12 @@ export function AgendaClient({
   ))
   const agendaGrid = getAgendaGridRange(selectedBusinessHours, visibleDayAppointments, visibleDayBlocks)
   const agendaGridHeight = agendaGrid.hours.length * AGENDA_HOUR_HEIGHT
+  const now = new Date()
+  const currentMinutes = now.getHours() * 60 + now.getMinutes()
+  const showCurrentTime = selectedDate === toDateKey(now)
+    && currentMinutes >= agendaGrid.startMinutes
+    && currentMinutes <= agendaGrid.endMinutes
+  const currentTimeTop = ((currentMinutes - agendaGrid.startMinutes) / 60) * AGENDA_HOUR_HEIGHT
   const linkedOrder = editingAppointment ? findLinkedOrder(editingAppointment.id, orders) : undefined
 
   function changePeriod(direction: -1 | 1) {
@@ -427,7 +452,7 @@ export function AgendaClient({
       </div>
 
       {/* Controles */}
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+      <div className="mb-4 flex flex-col gap-3 rounded-xl border border-border bg-card p-2 shadow-sm sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-2">
           <Button variant="outline" size="icon-sm" aria-label="Período anterior" onClick={() => changePeriod(-1)}>
             <ChevronLeft className="size-4" />
@@ -490,7 +515,7 @@ export function AgendaClient({
           ) : null}
           <div className="flex overflow-x-auto">
             {/* Coluna de horas */}
-            <div className="w-16 shrink-0 border-r border-border pb-4 pt-12">
+            <div className="w-16 shrink-0 border-r border-border pb-4 pt-14">
               {agendaGrid.hours.map((h) => (
                 <div key={h} className="relative h-16 pr-2 text-right">
                   <span className="text-xs text-muted-foreground">{String(h).padStart(2, '0')}:00</span>
@@ -507,22 +532,42 @@ export function AgendaClient({
             <div className="flex min-w-0 flex-1">
               {columns.map((barber) => {
                 const appts = selectedDayAppointments.filter((a) => a.employeeId === barber.id)
+                const appointmentLayouts = new Map(
+                  getAppointmentColumns(appts).map((layout) => [layout.id, layout]),
+                )
                 const dayBlocks = scheduleBlocks.filter((block) => block.employeeId === barber.id && block.date === selectedDate)
                 const dayBlocked = dayBlocks.some((block) => !block.startTime || !block.endTime)
                 const hasBlocks = dayBlocks.length > 0
+                const occupiedMinutes = appts
+                  .filter((appointment) => appointment.status !== 'cancelado')
+                  .reduce((sum, appointment) => sum + appointment.durationMin, 0)
+                const occupancy = Math.min(100, Math.round(
+                  (occupiedMinutes / Math.max(60, agendaGrid.endMinutes - agendaGrid.startMinutes)) * 100,
+                ))
                 return (
                   <div key={barber.id} className="min-w-40 flex-1 border-r border-border last:border-r-0">
                     <button
                       type="button"
                       onClick={() => openBlockDialog(barber)}
                       className={cn(
-                        'flex h-12 w-full items-center gap-2 border-b border-border px-3 text-left transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                        'flex h-14 w-full items-center gap-2 border-b border-border px-3 text-left transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
                         hasBlocks ? 'bg-destructive/10' : 'bg-muted/40',
                       )}
                       aria-label={`Gerenciar bloqueios da agenda de ${barber.name} em ${selectedDate}`}
                     >
                       <Avatar name={barber.name} src={barber.avatarUrl} color={barber.avatarColor} className="size-6 text-[10px]" />
-                      <span className="truncate text-xs font-semibold text-foreground">{barber.name}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-xs font-semibold text-foreground">{barber.name}</span>
+                        <span className="block text-[10px] text-muted-foreground">
+                          {appts.length} {appts.length === 1 ? 'agendamento' : 'agendamentos'}
+                        </span>
+                      </span>
+                      <span className="hidden items-center gap-1.5 text-[10px] font-medium text-muted-foreground sm:flex">
+                        <span className="h-1.5 w-10 overflow-hidden rounded-full bg-muted">
+                          <span className="block h-full rounded-full bg-primary" style={{ width: `${occupancy}%` }} />
+                        </span>
+                        {occupancy}%
+                      </span>
                       {hasBlocks ? <Ban className="ml-auto size-3.5 text-destructive" /> : null}
                     </button>
                     <div className={cn('relative', dayBlocked && 'bg-destructive/[0.04]')} style={{ height: agendaGridHeight }}>
@@ -542,6 +587,18 @@ export function AgendaClient({
                           />
                         )
                       })}
+                      {showCurrentTime ? (
+                        <div
+                          className="pointer-events-none absolute inset-x-0 z-30 border-t border-red-500"
+                          style={{ top: currentTimeTop }}
+                        >
+                          {barber.id === columns[0]?.id ? (
+                            <span className="absolute left-1 top-0 -translate-y-1/2 rounded bg-red-500 px-1.5 py-0.5 text-[9px] font-bold text-white shadow-sm">
+                              Agora
+                            </span>
+                          ) : null}
+                        </div>
+                      ) : null}
                       {dayBlocks.filter((block) => block.startTime && block.endTime).map((block) => (
                         <div
                           key={block.id}
@@ -554,35 +611,47 @@ export function AgendaClient({
                           Bloqueado · {formatScheduleBlockPeriod(block)}
                         </div>
                       ))}
-                      {appts.map((a) => (
-                        <button
-                          type="button"
-                          key={a.id}
-                          onClick={() => openAppointment(a)}
-                          aria-label={`Abrir agendamento de ${a.clientName} às ${a.start}`}
-                          className={cn(
-                            'absolute left-1 right-1 z-20 cursor-pointer overflow-hidden rounded-md border-l-2 px-2 py-1 text-left shadow-sm transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                            statusColor[a.status],
-                            quickPreferences.alertDelays
-                              && selectedDate === toDateKey(new Date())
-                              && timeToMinutes(a.start) < new Date().getHours() * 60 + new Date().getMinutes()
-                              && ['agendado', 'confirmado'].includes(a.status)
-                              && 'ring-2 ring-warning',
-                          )}
-                          style={{
-                            top: minutesToGridTop(a.start, agendaGrid.startMinutes),
-                            height: (a.durationMin / 60) * AGENDA_HOUR_HEIGHT - 4,
-                          }}
-                        >
-                          <p className="truncate text-xs font-semibold text-foreground">{a.start} · {a.clientName}</p>
-                          <p className="truncate text-[11px] text-muted-foreground">{a.serviceName}</p>
-                          {a.status === 'concluido' ? (
-                            <span className="mt-0.5 flex items-center gap-1 text-[10px] font-semibold text-emerald-700">
-                              <CheckCircle2 className="size-3" /> Concluído
+                      {appts.map((a) => {
+                        const layout = appointmentLayouts.get(a.id) ?? { column: 0, columnCount: 1 }
+                        const width = 100 / layout.columnCount
+                        return (
+                          <button
+                            type="button"
+                            key={a.id}
+                            onClick={() => openAppointment(a)}
+                            aria-label={`Abrir agendamento de ${a.clientName} às ${a.start}`}
+                            className={cn(
+                              'absolute z-20 cursor-pointer overflow-hidden rounded-lg border px-2.5 py-1 text-left shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                              statusColor[a.status],
+                              quickPreferences.alertDelays
+                                && selectedDate === toDateKey(new Date())
+                                && timeToMinutes(a.start) < new Date().getHours() * 60 + new Date().getMinutes()
+                                && ['agendado', 'confirmado'].includes(a.status)
+                                && 'ring-2 ring-warning',
+                            )}
+                            style={{
+                              left: `calc(${layout.column * width}% + 4px)`,
+                              width: `calc(${width}% - 8px)`,
+                              top: minutesToGridTop(a.start, agendaGrid.startMinutes),
+                              height: (a.durationMin / 60) * AGENDA_HOUR_HEIGHT - 4,
+                            }}
+                          >
+                            <span className="flex min-w-0 items-center gap-1.5">
+                              <span className="shrink-0 text-[11px] font-bold text-foreground">{a.start}</span>
+                              <span className="truncate text-xs font-semibold text-foreground">{a.clientName}</span>
+                              <span className="ml-auto hidden shrink-0 items-center gap-1 rounded-full bg-background/80 px-1.5 py-0.5 text-[9px] font-semibold text-muted-foreground xl:flex">
+                                <span className={cn('size-1.5 rounded-full', statusDotColor[a.status])} />
+                                {layout.columnCount > 1 ? 'Conflito' : compactStatusLabel[a.status]}
+                              </span>
                             </span>
-                          ) : null}
-                        </button>
-                      ))}
+                            {a.durationMin >= 35 ? (
+                              <span className="block truncate text-[10px] text-muted-foreground">
+                                {a.serviceName} · {a.durationMin} min
+                              </span>
+                            ) : null}
+                          </button>
+                        )
+                      })}
                       {dayBlocked ? (
                         <div className="pointer-events-none absolute inset-x-2 top-3 z-10 rounded-md border border-destructive/30 bg-background/95 px-2 py-1.5 text-center text-xs font-semibold text-destructive shadow-sm">
                           Agenda bloqueada neste dia
