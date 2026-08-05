@@ -3,6 +3,7 @@ import type { Appointment, Order } from './types'
 import {
   findLinkedOrder,
   getAgendaStats,
+  getAgendaUrlSelection,
   isActionableOrderNotification,
   isFreshAppointmentNotification,
 } from './agenda-operations'
@@ -74,6 +75,20 @@ describe('getAgendaStats', () => {
 })
 
 describe('notification and link helpers', () => {
+  it('volta para hoje quando a URL normal da agenda nao tem parametros antigos', () => {
+    expect(getAgendaUrlSelection('', '2026-08-05')).toEqual({
+      date: '2026-08-05',
+      appointmentId: null,
+    })
+    expect(getAgendaUrlSelection(
+      'data=2026-08-04&agendamento=appointment-1',
+      '2026-08-05',
+    )).toEqual({
+      date: '2026-08-04',
+      appointmentId: 'appointment-1',
+    })
+  })
+
   it('considera novidade somente dentro de 24 horas', () => {
     const now = new Date('2026-08-05T15:00:00.000Z')
     expect(isFreshAppointmentNotification('2026-08-04T15:01:00.000Z', now)).toBe(true)

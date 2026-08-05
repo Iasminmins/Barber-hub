@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 import Link from 'next/link'
+import { useRouter, useSearchParams } from 'next/navigation'
 import posthog from 'posthog-js'
 import { ChevronLeft, ChevronRight, Plus, CalendarDays, Ban, CheckCircle2, Coffee, Copy, ExternalLink, MessageCircle, ReceiptText, Share2, Save, Trash2 } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
@@ -21,7 +22,7 @@ import { isBarberRole } from '@/lib/employees'
 import { appointmentConflictsWithScheduleBlock, formatScheduleBlockPeriod, getBlockTimeOptions, timeToMinutes } from '@/lib/schedule-blocks'
 import type { BusinessDayKey } from '@/lib/barbershop-settings'
 import { useAppData } from '@/components/data/app-data-provider'
-import { findLinkedOrder, getAgendaStats } from '@/lib/agenda-operations'
+import { findLinkedOrder, getAgendaStats, getAgendaUrlSelection } from '@/lib/agenda-operations'
 
 const HOURS = Array.from({ length: 12 }, (_, i) => 8 + i) // 08:00 - 19:00
 const BUSINESS_DAY_KEYS: BusinessDayKey[] = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado']
@@ -85,6 +86,9 @@ export function AgendaClient({
   barbershopName: string
   barbershopId: string
 }) {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const agendaSearch = searchParams.toString()
   const { barbershop, catalog, clients, orders, insertRecord, updateRecord, deleteRecord } = useAppData()
   const quickPreferences = barbershop.agendaSettings.quickPreferences
   const [view, setView] = React.useState('dia')
@@ -106,28 +110,27 @@ export function AgendaClient({
   const [blockMode, setBlockMode] = React.useState<'day' | 'period'>('day')
   const [blockStart, setBlockStart] = React.useState('08:00')
   const [blockEnd, setBlockEnd] = React.useState('14:00')
-  const handledAgendaLink = React.useRef(false)
+  const handledAgendaLink = React.useRef<string | null>(null)
   const agendaAppointments = appointments
 
   React.useEffect(() => {
-    if (handledAgendaLink.current) return
-    handledAgendaLink.current = true
-    const params = new URLSearchParams(window.location.search)
-    const requestedDate = params.get('data') ?? ''
-    if (/^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) {
-      setSelectedDate(requestedDate)
-      setView('dia')
-    }
-    const requestedAppointmentId = params.get('agendamento')
-    const requestedAppointment = appointments.find((appointment) => appointment.id === requestedAppointmentId)
+    if (handledAgendaLink.current === agendaSearch) return
+    handledAgendaLink.current = agendaSearch
+    const selection = getAgendaUrlSelection(agendaSearch, toDateKey(new Date()))
+    setSelectedDate(selection.date)
+    setView('dia')
+
+    const requestedAppointment = appointments.find((appointment) => appointment.id === selection.appointmentId)
     if (requestedAppointment) {
       const client = clients.find((item) => item.id === requestedAppointment.clientId)
       setEditingAppointment({ ...requestedAppointment })
       setEditingPhone(client?.phone ?? '')
       setAppointmentError('')
       setConfirmingDelete(false)
+    } else {
+      setEditingAppointment(null)
     }
-  }, [appointments, clients])
+  }, [agendaSearch, appointments, clients])
 
   React.useEffect(() => {
     setPublicBookingUrl(`${window.location.origin}/agendar/${encodeURIComponent(publicSlug.trim())}`)
@@ -152,6 +155,9 @@ export function AgendaClient({
     setEditingAppointment(null)
     setAppointmentError('')
     setConfirmingDelete(false)
+    if (searchParams.has('agendamento')) {
+      router.replace(`/agenda?data=${encodeURIComponent(selectedDate)}`, { scroll: false })
+    }
   }
 
   function updateAppointmentDraft(values: Partial<Appointment>) {
