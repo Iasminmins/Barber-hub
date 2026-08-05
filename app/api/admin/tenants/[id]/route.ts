@@ -4,10 +4,12 @@ import { addComplimentaryPeriod } from '@/lib/admin-billing'
 import { asaasRequest } from '@/lib/asaas'
 import { getSaasPlan, type SaasPlanId } from '@/lib/saas-plans'
 import { effectiveBillingStatus } from '@/lib/billing-status'
+import { buildAsaasBillingUpdate, type AsaasSubscriptionPayment } from '@/lib/admin-asaas-update'
 
 export const dynamic = 'force-dynamic'
 
 type Ctx = { params: Promise<{ id: string }> }
+type PaymentList = { data?: AsaasSubscriptionPayment[] }
 
 const PLANS = ['starter', 'pro', 'premium']
 const STATUSES = ['trialing', 'active', 'past_due', 'canceled']
@@ -67,11 +69,12 @@ export async function PATCH(request: Request, ctx: Ctx) {
     }
     if (typeof body.plan === 'string') {
       if (!PLANS.includes(body.plan)) throw new Error('Plano inválido.')
-      patch.plan = body.plan
+      if (body.plan !== current.plan) patch.plan = body.plan
     }
     if (typeof body.billing_status === 'string') {
       if (!STATUSES.includes(body.billing_status)) throw new Error('Status inválido.')
-      patch.billing_status = effectiveBillingStatus(body.billing_status, current.trial_ends_at)
+      const status = effectiveBillingStatus(body.billing_status, current.trial_ends_at)
+      if (status !== current.billing_status) patch.billing_status = status
     }
     if (typeof body.trialDays === 'number' && Number.isFinite(body.trialDays)) {
       const end = new Date()
@@ -114,20 +117,35 @@ export async function PATCH(request: Request, ctx: Ctx) {
       patch.billing_status = current.asaas_subscription_id ? 'active' : 'trialing'
       if (current.asaas_subscription_id) patch.next_billing_date = effectiveBillingDate
       else patch.trial_ends_at = effectiveBillingDate
-    } else if (effectiveBillingDate) {
+    } else if (effectiveBillingDate && effectiveBillingDate !== current.next_billing_date) {
       patch.next_billing_date = effectiveBillingDate
     }
 
-    const asaasUpdate: Record<string, unknown> = {}
-    if (effectiveBillingDate && current.asaas_subscription_id) asaasUpdate.nextDueDate = effectiveBillingDate
-    if (typeof patch.plan === 'string' && current.asaas_subscription_id) {
-      const plan = getSaasPlan(patch.plan as SaasPlanId)
-      Object.assign(asaasUpdate, { value: plan.monthlyPrice, cycle: 'MONTHLY', description: `BarberHub - Plano ${plan.name}`, updatePendingPayments: true })
-    }
-    if (Object.keys(asaasUpdate).length && current.asaas_subscription_id) {
-      await asaasRequest(`/subscriptions/${current.asaas_subscription_id}`, {
+    if (current.asaas_subscription_id) {
+      const dateChanged = Boolean(effectiveBillingDate && effectiveBillingDate !== current.next_billing_date)
+      const payments = dateChanged
+        ? await asaasRequest<PaymentList>(`/subscriptions/${current.asaas_subscription_id}/payments`)
+        : { data: [] }
+      const requestedPlan = typeof body.plan === 'string' ? body.plan : current.plan
+      const plan = getSaasPlan(requestedPlan as SaasPlanId)
+      const asaasUpdate = buildAsaasBillingUpdate({
+        currentPlan: current.plan,
+        requestedPlan,
+        currentNextBillingDate: current.next_billing_date,
+        requestedNextBillingDate: dateChanged ? effectiveBillingDate : undefined,
+        requestedPlanDetails: { value: plan.monthlyPrice, description: `BarberHub - Plano ${plan.name}` },
+        payments: payments.data ?? [],
+      })
+
+      if (asaasUpdate.paymentUpdate) {
+        await asaasRequest(`/payments/${asaasUpdate.paymentUpdate.id}`, {
+          method: 'PUT',
+          body: JSON.stringify({ dueDate: asaasUpdate.paymentUpdate.dueDate }),
+        })
+      }
+      if (Object.keys(asaasUpdate.subscriptionUpdate).length) await asaasRequest(`/subscriptions/${current.asaas_subscription_id}`, {
         method: 'PUT',
-        body: JSON.stringify(asaasUpdate),
+        body: JSON.stringify(asaasUpdate.subscriptionUpdate),
       })
     }
     if (!Object.keys(patch).length) throw new Error('Nenhuma alteração informada.')
