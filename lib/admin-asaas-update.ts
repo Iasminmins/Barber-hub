@@ -49,7 +49,7 @@ export function buildAsaasBillingUpdate(input: BillingUpdateInput): BillingUpdat
     .filter((payment) => payment.id && payment.dueDate && EDITABLE_PAYMENT_STATUSES.has(payment.status ?? ''))
     .sort((left, right) => (left.dueDate ?? '').localeCompare(right.dueDate ?? ''))
   const payment = editablePayments.find((item) => item.dueDate === input.currentNextBillingDate)
-    ?? editablePayments.find((item) => (item.dueDate ?? '') >= input.currentNextBillingDate!)
+    ?? editablePayments[0]
 
   if (payment) {
     return {

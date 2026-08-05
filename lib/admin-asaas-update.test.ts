@@ -49,6 +49,24 @@ describe('buildAsaasBillingUpdate', () => {
     expect(result).toEqual({ subscriptionUpdate: { nextDueDate: '2026-09-16' } })
   })
 
+  test('atualiza a cobrança aberta mais antiga mesmo quando ela vence antes do nextDueDate da assinatura', () => {
+    const result = buildAsaasBillingUpdate({
+      currentPlan: 'pro',
+      requestedPlan: 'pro',
+      currentNextBillingDate: '2026-09-16',
+      requestedNextBillingDate: '2026-09-28',
+      requestedPlanDetails: proPlan,
+      payments: [
+        { id: 'pay_generated', dueDate: '2026-08-16', status: 'PENDING' },
+      ],
+    })
+
+    expect(result).toEqual({
+      subscriptionUpdate: {},
+      paymentUpdate: { id: 'pay_generated', dueDate: '2026-09-28' },
+    })
+  })
+
   test('ignora cobranças liquidadas ao escolher o vencimento que pode ser alterado', () => {
     const result = buildAsaasBillingUpdate({
       currentPlan: 'pro',
