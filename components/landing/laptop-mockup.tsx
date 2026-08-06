@@ -25,6 +25,7 @@ export function LaptopMockup({
   // largura da tela + 7px de moldura e 1px de borda de cada lado
   const bodyWidth = `calc(${DASHBOARD_BASE_WIDTH}px * var(--lp-dash-scale) + 16px)`
 
+
   return (
     <div
       className={cn(
@@ -113,61 +114,42 @@ export function LaptopMockup({
         }}
       />
 
-      {/* Base: deck com teclado em perspectiva */}
-      <div aria-hidden="true" className="relative" style={{ perspective: '620px' }}>
+      {/* Base: deck plano — visto de frente só aparece a borda fina, como num MacBook real */}
+      <div aria-hidden="true" className="flex flex-col items-center">
+        {/* Superfície superior do deck (teclado) — faixa fina com gradiente */}
         <div
-          className="relative mx-auto origin-top overflow-hidden"
+          className="w-[105%] rounded-b-[4px]"
           style={{
-            width: '104%',
-            height: `calc(46px * var(--lp-dash-scale) * 2.1)`,
-            transform: 'rotateX(70deg)',
-            transformStyle: 'preserve-3d',
-            borderRadius: '4px 4px 10px 10px',
+            height: `calc(10px * var(--lp-dash-scale) + 3px)`,
             background:
-              'linear-gradient(180deg, oklch(0.66 0.005 250) 0%, oklch(0.55 0.005 250) 40%, oklch(0.42 0.005 250) 100%)',
-            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.35)',
+              'linear-gradient(180deg, oklch(0.60 0.005 250) 0%, oklch(0.50 0.005 250) 60%, oklch(0.40 0.005 250) 100%)',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.18)',
           }}
         >
-
-          {/* Teclas */}
-          <div className="flex h-[62%] w-full flex-col justify-between px-[6%] pt-[3%]">
-            {[14, 14, 14, 13, 12].map((count, row) => (
+          {/* Fileiras de teclas — detalhes visíveis mesmo na faixa fina */}
+          <div className="flex h-full flex-col justify-evenly px-[8%] py-[10%]">
+            {[1, 1, 1].map((_, row) => (
               <div key={row} className="flex w-full gap-[1.5px]">
-                {Array.from({ length: count }).map((_, key) => (
-                  <span
-                    key={key}
-                    className="h-[3.5px] flex-1 rounded-[1px] bg-lp-ink-950/72 sm:h-[5px]"
-                  />
+                {Array.from({ length: 14 }).map((_, key) => (
+                  <span key={key} className="h-[1.5px] flex-1 rounded-[0.5px] bg-lp-ink-950/60" />
                 ))}
               </div>
             ))}
-            <div className="flex w-full justify-center">
-              <span className="h-[3.5px] w-[38%] rounded-[1px] bg-lp-ink-950/72 sm:h-[5px]" />
-            </div>
-          </div>
-
-          {/* Trackpad */}
-          <div className="flex h-[38%] w-full items-start justify-center pt-[2%]">
-            <span
-              className="h-[68%] w-[26%] rounded-[3px]"
-              style={{
-                background:
-                  'linear-gradient(180deg, oklch(0.6 0.005 250) 0%, oklch(0.52 0.005 250) 100%)',
-                boxShadow: 'inset 0 0 0 0.5px rgba(0,0,0,0.22)',
-              }}
-            />
           </div>
         </div>
 
-        {/* Espessura da base e sombra de contato */}
+        {/* Borda de espessura — a fatia lateral do chassi */}
         <div
-          className="mx-auto h-[5px] w-[106%] rounded-b-[7px]"
+          className="w-[107%] rounded-b-[6px]"
           style={{
+            height: '4px',
             background:
-              'linear-gradient(180deg, oklch(0.46 0.005 250) 0%, oklch(0.3 0.005 250) 70%, oklch(0.22 0.005 250) 100%)',
+              'linear-gradient(180deg, oklch(0.44 0.005 250) 0%, oklch(0.28 0.005 250) 100%)',
           }}
         />
-        <div className="mx-auto h-[10px] w-[92%] rounded-[50%] bg-lp-ink-950/60 blur-md" />
+
+        {/* Sombra de contato com a superfície */}
+        <div className="mt-1 h-[8px] w-[90%] rounded-[50%] bg-lp-ink-950/55 blur-md" />
       </div>
     </div>
   )
