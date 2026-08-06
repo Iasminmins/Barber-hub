@@ -23,8 +23,38 @@ export function getBillingStatusLabel(status: Barbershop['billingStatus'], nextB
 }
 
 export function getBillingState(barbershop: Barbershop): BillingState {
-  const dueDate = barbershop.billingStatus === 'trialing' ? barbershop.trialEndsAt : barbershop.nextBillingDate
+  const canceled = barbershop.billingStatus === 'canceled'
+  // Num cancelamento durante o teste grátis não existe `nextBillingDate`; o
+  // limite do acesso continua sendo o fim do trial. Sem esse fallback, quem
+  // cancela no período de teste seria bloqueado imediatamente.
+  const dueDate = barbershop.billingStatus === 'trialing'
+    ? barbershop.trialEndsAt
+    : canceled
+      ? (barbershop.nextBillingDate ?? barbershop.trialEndsAt)
+      : barbershop.nextBillingDate
   const remaining = daysUntil(dueDate)
+
+  // Assinatura cancelada pelo próprio cliente: o acesso segue até o fim do
+  // período já contratado. Não faz sentido falar em "pagamento pendente" aqui.
+  if (canceled) {
+    if (!Number.isFinite(remaining) || remaining < 0) {
+      return {
+        visible: true,
+        blocked: true,
+        tone: 'danger',
+        title: 'Assinatura cancelada',
+        description: 'Seus dados continuam guardados. Reative a assinatura para voltar a usar agenda, comandas, cadastros e financeiro.',
+      }
+    }
+    return {
+      visible: true,
+      blocked: false,
+      tone: 'warning',
+      title: remaining === 0 ? 'Assinatura cancelada — acesso encerra hoje' : `Assinatura cancelada — acesso até ${formatDate(dueDate)}`,
+      description: `Você cancelou a assinatura e não haverá novas cobranças. A plataforma continua liberada por mais ${remaining} ${remaining === 1 ? 'dia' : 'dias'}. Se mudar de ideia, é só reativar.`,
+    }
+  }
+
   if (!Number.isFinite(remaining)) return { visible: false, blocked: false, title: '', description: '', tone: 'warning' }
 
   if (remaining >= 0 && remaining <= 3) {
@@ -48,7 +78,7 @@ export function BillingNotice({ barbershop, member, compact = false }: { barbers
   return <div className={`border px-4 py-3 ${state.tone === 'danger' ? 'border-red-200 bg-red-50 text-red-950' : 'border-amber-200 bg-amber-50 text-amber-950'} ${compact ? 'rounded-xl' : 'border-x-0 border-t-0'}`}>
     <div className="mx-auto flex max-w-7xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex min-w-0 gap-3">{state.tone === 'danger' ? <AlertTriangle className="mt-0.5 size-5 shrink-0 text-red-600" /> : <CalendarClock className="mt-0.5 size-5 shrink-0 text-amber-600" />}<div><p className="text-sm font-semibold">{state.title}</p><p className="mt-0.5 text-xs opacity-80">{state.description}</p></div></div>
-      {canManage ? <Link href="/configuracoes" className={cn(buttonVariants({ size: 'sm', variant: state.tone === 'danger' ? 'destructive' : 'outline' }), 'shrink-0')}><CreditCard className="size-4" />Regularizar assinatura</Link> : <p className="shrink-0 text-xs font-medium">Avise o proprietário da conta.</p>}
+      {canManage ? <Link href="/configuracoes" className={cn(buttonVariants({ size: 'sm', variant: state.tone === 'danger' ? 'destructive' : 'outline' }), 'shrink-0')}><CreditCard className="size-4" />{barbershop.billingStatus === 'canceled' ? 'Reativar assinatura' : 'Regularizar assinatura'}</Link> : <p className="shrink-0 text-xs font-medium">Avise o proprietário da conta.</p>}
     </div>
   </div>
 }

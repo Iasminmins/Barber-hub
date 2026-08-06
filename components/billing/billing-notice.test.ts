@@ -54,3 +54,52 @@ describe('getBillingState', () => {
     })
   })
 })
+
+describe('assinatura cancelada', () => {
+  beforeEach(() => vi.setSystemTime(new Date('2026-08-04T12:00:00-03:00')))
+  afterEach(() => vi.useRealTimers())
+
+  const canceled: Barbershop = { ...shop, billingStatus: 'canceled' }
+
+  test('mantém o acesso liberado até o fim do período já pago', () => {
+    const state = getBillingState({ ...canceled, nextBillingDate: '2026-08-16' })
+
+    expect(state).toMatchObject({ visible: true, blocked: false, tone: 'warning' })
+    expect(state.title).toContain('Assinatura cancelada')
+  })
+
+  test('não chama o cliente cancelado de inadimplente', () => {
+    const state = getBillingState({ ...canceled, nextBillingDate: '2026-08-16' })
+
+    expect(state.title).not.toContain('Pagamento pendente')
+    expect(state.description).not.toContain('Regularize')
+  })
+
+  test('bloqueia assim que o período contratado termina, sem tolerância de 7 dias', () => {
+    expect(getBillingState({ ...canceled, nextBillingDate: '2026-08-03' })).toMatchObject({
+      visible: true,
+      blocked: true,
+      title: 'Assinatura cancelada',
+    })
+  })
+
+  test('avisa que os dados continuam guardados após o bloqueio', () => {
+    const state = getBillingState({ ...canceled, nextBillingDate: '2026-08-03' })
+
+    expect(state.description).toContain('dados continuam guardados')
+  })
+
+  test('usa o fim do teste como limite quando o cancelamento ocorre durante o trial', () => {
+    const state = getBillingState({
+      ...canceled,
+      trialEndsAt: '2026-08-20',
+      nextBillingDate: undefined,
+    })
+
+    expect(state).toMatchObject({ visible: true, blocked: false })
+  })
+
+  test('exibe o rótulo Cancelada', () => {
+    expect(getBillingStatusLabel('canceled', '2026-08-16')).toBe('Cancelada')
+  })
+})

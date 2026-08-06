@@ -20,3 +20,12 @@ tsconfig.tsbuildinfo
 .vercel
 .env*
 !.env.example
+
+# Artefatos de inspeção visual e auditoria (screenshots, relatórios locais)
+.playwright-mcp/
+outputs/
+# script de auditoria pré-existente, mantido versionado
+!outputs/csv-audit/
+!outputs/csv-audit/audit-history.mjs
+test-results/
+playwright-report/

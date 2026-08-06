@@ -168,3 +168,221 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* ============================================================================
+   LANDING PAGE — design tokens dedicados (prefixo `lp-`)
+   Escopo: apenas a landing pública (/). Nada aqui altera a plataforma,
+   pois todos os nomes são prefixados e nenhum token existente foi tocado.
+   ============================================================================ */
+
+@theme {
+  /* Superfícies — verde profundo → verde médio */
+  --color-lp-ink-950: oklch(0.158 0.024 166);
+  --color-lp-ink-900: oklch(0.202 0.030 166);
+  --color-lp-ink-800: oklch(0.252 0.035 166);
+  --color-lp-ink-700: oklch(0.312 0.039 166);
+  --color-lp-ink-600: oklch(0.385 0.043 166);
+  --color-lp-ink-500: oklch(0.462 0.044 166);
+
+  /* Ação — dourado / mostarda */
+  --color-lp-gold-300: oklch(0.858 0.098 88);
+  --color-lp-gold-400: oklch(0.802 0.124 87);
+  --color-lp-gold-500: oklch(0.742 0.128 86);
+  --color-lp-gold-600: oklch(0.658 0.122 84);
+  --color-lp-gold-ink: oklch(0.238 0.028 80);
+
+  /* Neutros levemente quentes */
+  --color-lp-cream: oklch(0.980 0.006 85);
+  --color-lp-cream-2: oklch(0.958 0.008 85);
+  --color-lp-cream-3: oklch(0.928 0.009 85);
+  --color-lp-slate: oklch(0.520 0.012 250);
+  --color-lp-graphite: oklch(0.268 0.008 250);
+
+  /* Estados positivos */
+  --color-lp-green-300: oklch(0.848 0.082 155);
+  --color-lp-green-500: oklch(0.662 0.128 155);
+  --color-lp-amber-500: oklch(0.782 0.138 78);
+}
+
+:root {
+  /* Velocidades e curvas de transição */
+  --lp-dur-fast: 160ms;
+  --lp-dur: 260ms;
+  --lp-dur-slow: 520ms;
+  --lp-dur-enter: 720ms;
+  --lp-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --lp-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --lp-ease-soft: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Elevação — sombras naturais, multicamada */
+  --lp-shadow-sm: 0 1px 2px oklch(0.18 0.02 166 / 0.06), 0 2px 6px oklch(0.18 0.02 166 / 0.05);
+  --lp-shadow-md: 0 2px 4px oklch(0.18 0.02 166 / 0.06), 0 8px 24px oklch(0.18 0.02 166 / 0.1);
+  --lp-shadow-lg: 0 4px 8px oklch(0.16 0.02 166 / 0.1), 0 24px 60px oklch(0.16 0.02 166 / 0.18);
+  --lp-shadow-card: 0 1px 1px oklch(0.16 0.02 166 / 0.05), 0 6px 18px oklch(0.16 0.02 166 / 0.1);
+  --lp-shadow-gold: 0 6px 22px oklch(0.742 0.128 86 / 0.26);
+
+  /* Dispositivos — sombra de contato + ambiental */
+  --lp-shadow-device:
+    0 2px 4px oklch(0.1 0.02 166 / 0.35),
+    0 16px 34px oklch(0.1 0.02 166 / 0.38),
+    0 44px 88px oklch(0.09 0.02 166 / 0.42);
+  --lp-shadow-phone:
+    0 2px 3px oklch(0.1 0.02 166 / 0.4),
+    0 10px 22px oklch(0.1 0.02 166 / 0.4),
+    0 26px 50px oklch(0.09 0.02 166 / 0.38);
+
+  /* Raios */
+  --lp-r-sm: 0.5rem;
+  --lp-r-md: 0.75rem;
+  --lp-r-lg: 1rem;
+  --lp-r-xl: 1.5rem;
+  --lp-r-2xl: 2rem;
+
+  /* Espaçamento vertical de seção */
+  --lp-section-y: clamp(4rem, 7vw, 7.5rem);
+
+  /* Gradientes reutilizáveis */
+  --lp-grad-ink: linear-gradient(168deg, oklch(0.235 0.033 166) 0%, oklch(0.19 0.029 166) 48%, oklch(0.162 0.025 166) 100%);
+  --lp-grad-gold: linear-gradient(135deg, oklch(0.812 0.122 88) 0%, oklch(0.73 0.128 85) 100%);
+  --lp-grad-screen: linear-gradient(180deg, oklch(0.985 0.005 85) 0%, oklch(0.962 0.007 85) 100%);
+}
+
+/* --- Keyframes: apenas transform e opacity (sem reflow) ------------------- */
+
+@keyframes lp-rise {
+  from { opacity: 0; transform: translate3d(0, 20px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes lp-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes lp-laptop-in {
+  from { opacity: 0; transform: translate3d(56px, 10px, 0) scale(0.94) rotate(-2.4deg); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0) scale(1) rotate(0deg); }
+}
+
+@keyframes lp-phone-in {
+  from { opacity: 0; transform: translate3d(0, 64px, 0) scale(0.95); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+
+@keyframes lp-card-in {
+  from { opacity: 0; transform: translate3d(0, 16px, 0) scale(0.96); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+
+@keyframes lp-float {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50%      { transform: translate3d(0, -4px, 0); }
+}
+
+@keyframes lp-float-soft {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50%      { transform: translate3d(0, -2px, 0); }
+}
+
+@keyframes lp-bar-grow {
+  from { transform: scaleY(0.04); }
+  to   { transform: scaleY(1); }
+}
+
+@keyframes lp-sheen {
+  0%        { opacity: 0; transform: translate3d(-140%, 0, 0) skewX(-18deg); }
+  12%, 22%  { opacity: 0.5; }
+  40%, 100% { opacity: 0; transform: translate3d(240%, 0, 0) skewX(-18deg); }
+}
+
+/* --- Classes de animação da landing --------------------------------------- */
+
+.lp-anim {
+  animation-duration: var(--lp-dur-enter);
+  animation-timing-function: var(--lp-ease-out);
+  animation-fill-mode: both;
+}
+
+.lp-rise       { animation-name: lp-rise; }
+.lp-fade       { animation-name: lp-fade; }
+.lp-laptop-in  { animation-name: lp-laptop-in; animation-duration: 900ms; }
+.lp-phone-in   { animation-name: lp-phone-in; animation-duration: 800ms; }
+.lp-card-in    { animation-name: lp-card-in; animation-duration: 620ms; }
+
+/* Movimento ambiental contínuo, quase imperceptível */
+.lp-ambient {
+  animation: lp-float 7s var(--lp-ease-soft) infinite;
+  animation-delay: 1.4s;
+}
+.lp-ambient-soft {
+  animation: lp-float-soft 9s var(--lp-ease-soft) infinite;
+  animation-delay: 1.8s;
+}
+
+/* Barras de gráfico crescendo a partir da base */
+.lp-bar {
+  transform-origin: bottom;
+  animation: lp-bar-grow 760ms var(--lp-ease-out) both;
+}
+
+/* Reflexo discreto que cruza a tela do notebook, uma única vez */
+.lp-sheen {
+  animation: lp-sheen 5.5s var(--lp-ease-soft) 2.2s 1 both;
+}
+
+/* Textura de ruído quase imperceptível sobre o fundo escuro */
+.lp-noise::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.035;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Superfície de vidro do header, sem glassmorphism exagerado */
+.lp-header-solid {
+  background-color: oklch(0.202 0.03 166 / 0.88);
+  backdrop-filter: blur(12px) saturate(140%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  border-bottom-color: oklch(0.98 0.006 85 / 0.08);
+}
+
+/* Rolagem suave por âncoras, com compensação do header fixo */
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 5.5rem;
+}
+
+/* --- Acessibilidade: respeitar prefers-reduced-motion --------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .lp-anim,
+  .lp-rise,
+  .lp-fade,
+  .lp-laptop-in,
+  .lp-phone-in,
+  .lp-card-in,
+  .lp-bar,
+  .lp-sheen,
+  .lp-ambient,
+  .lp-ambient-soft {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
+/* Em telas pequenas o movimento ambiental é removido para economizar bateria */
+@media (max-width: 767px) {
+  .lp-ambient,
+  .lp-ambient-soft,
+  .lp-sheen {
+    animation: none;
+  }
+}

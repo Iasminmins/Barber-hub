@@ -23,6 +23,8 @@ export function BillingCard({ planId }: { planId: SaasPlanId }) {
   const [billing, setBilling] = React.useState<BillingStatus | null>(null)
   const [message, setMessage] = React.useState('')
   const [loading, setLoading] = React.useState(false)
+  const [canceling, setCanceling] = React.useState(false)
+  const [confirmingCancel, setConfirmingCancel] = React.useState(false)
   const [loadedAt] = React.useState(() => Date.now())
 
   const authenticatedFetch = React.useCallback(async (url: string, init?: RequestInit) => {
@@ -65,6 +67,31 @@ export function BillingCard({ planId }: { planId: SaasPlanId }) {
     }
   }
 
+  /**
+   * Cancela a assinatura. Não apaga nenhum dado da barbearia: a rota altera
+   * apenas o status de cobrança, e o acesso segue até o fim do período pago.
+   */
+  async function cancelSubscription() {
+    setCanceling(true)
+    setMessage('')
+    try {
+      const response = await authenticatedFetch('/api/billing/subscription', { method: 'DELETE' })
+      const body = await response.json()
+      if (!response.ok) throw new Error(body.error)
+      posthog.capture('billing_subscription_canceled', {
+        previous_status: billing?.status,
+        had_subscription: billing?.hasSubscription ?? false,
+      })
+      setBilling((current) => (current ? { ...current, status: 'canceled' } : current))
+      setConfirmingCancel(false)
+      setMessage(body.message ?? 'Assinatura cancelada.')
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Não foi possível cancelar a assinatura.')
+    } finally {
+      setCanceling(false)
+    }
+  }
+
   const trialDays = billing?.trialEndsAt
     ? Math.max(0, Math.ceil((new Date(billing.trialEndsAt).getTime() - loadedAt) / 86_400_000))
     : 0
@@ -96,6 +123,45 @@ export function BillingCard({ planId }: { planId: SaasPlanId }) {
         <p className="mt-2 text-center text-xs text-muted-foreground">
           Os 30 dias são grátis; cadastrar pagamento só prepara a cobrança para depois do teste.
         </p>
+      ) : null}
+
+      {/* Cancelamento — discreto, separado da ação principal e com confirmação. */}
+      {billing && billing.status !== 'canceled' ? (
+        <div className="mt-5 border-t pt-4">
+          {confirmingCancel ? (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+              <p className="text-sm font-semibold text-foreground">Cancelar a assinatura?</p>
+              <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+                <li>• Não haverá novas cobranças.</li>
+                <li>
+                  •{' '}
+                  {dateLabel
+                    ? `Você continua com acesso até ${new Intl.DateTimeFormat('pt-BR').format(new Date(`${dateLabel.slice(0, 10)}T12:00:00`))}.`
+                    : 'Você continua com acesso até o fim do período contratado.'}
+                </li>
+                <li>• Nenhum dado é apagado: agenda, clientes, comandas e financeiro continuam salvos.</li>
+                <li>• Você pode reativar quando quiser.</li>
+              </ul>
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                <Button variant="destructive" size="sm" onClick={cancelSubscription} disabled={canceling}>
+                  {canceling ? <LoaderCircle className="size-4 animate-spin" /> : null}
+                  Confirmar cancelamento
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setConfirmingCancel(false)} disabled={canceling}>
+                  Manter assinatura
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConfirmingCancel(true)}
+              className="text-xs text-muted-foreground underline underline-offset-4 transition-colors hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              Cancelar assinatura
+            </button>
+          )}
+        </div>
       ) : null}
     </Card>
   )

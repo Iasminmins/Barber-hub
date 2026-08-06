@@ -17,4 +17,12 @@ export default tseslint.config(
       'no-undef': 'off',
     },
   },
+  {
+    // Scripts utilitários rodam em Node, fora do bundle da aplicação.
+    files: ['scripts/**/*.mjs'],
+    rules: {
+      'no-undef': 'off',
+      '@typescript-eslint/no-unused-expressions': 'off',
+    },
+  },
 )
