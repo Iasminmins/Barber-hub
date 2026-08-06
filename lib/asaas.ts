@@ -1,6 +1,21 @@
 const DEFAULT_ASAAS_URL = 'https://api-sandbox.asaas.com/v3'
 
-type AsaasError = { errors?: Array<{ description?: string }> }
+export type AsaasErrorDetail = { code?: string; description?: string }
+type AsaasError = { errors?: AsaasErrorDetail[] }
+
+export class AsaasApiError extends Error {
+  errors: AsaasErrorDetail[]
+  constructor(message: string, errors: AsaasErrorDetail[]) {
+    super(message)
+    this.name = 'AsaasApiError'
+    this.errors = errors
+  }
+}
+
+/** O Asaas apaga assinaturas junto com o cliente removido; esse erro sinaliza que o `asaas_customer_id` salvo está obsoleto. */
+export function isRemovedCustomerError(error: unknown): boolean {
+  return error instanceof AsaasApiError && error.errors.some((detail) => /cliente removido/i.test(detail.description ?? ''))
+}
 
 export async function asaasRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const apiKey = process.env.ASAAS_API_KEY
@@ -19,8 +34,9 @@ export async function asaasRequest<T>(path: string, init?: RequestInit): Promise
 
   const body = (await response.json().catch(() => ({}))) as T & AsaasError
   if (!response.ok) {
-    const message = body.errors?.map((error) => error.description).filter(Boolean).join(' ') || 'O Asaas recusou a operação.'
-    throw new Error(message)
+    const errors = body.errors ?? []
+    const message = errors.map((error) => error.description).filter(Boolean).join(' ') || 'O Asaas recusou a operação.'
+    throw new AsaasApiError(message, errors)
   }
   return body
 }

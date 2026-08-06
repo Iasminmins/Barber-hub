@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { asaasRequest, type AsaasPayment, type AsaasSubscription } from '@/lib/asaas'
+import { asaasRequest, isRemovedCustomerError, type AsaasPayment, type AsaasSubscription } from '@/lib/asaas'
 import { getBillingContext } from '@/lib/billing-auth'
 import { getSaasPlan, type SaasPlanId } from '@/lib/saas-plans'
 import { onlyDigits } from '@/lib/billing-document'
@@ -11,13 +11,20 @@ export async function POST(request: Request) {
   try {
     const { member, barbershop } = await getBillingContext(request)
 
+    let customerId = barbershop.asaas_customer_id as string | null
+
     if (barbershop.asaas_subscription_id) {
-      const payments = await asaasRequest<PaymentList>(`/subscriptions/${barbershop.asaas_subscription_id}/payments`)
-      const payment = payments.data?.find((item) => item.status !== 'RECEIVED' && item.status !== 'CONFIRMED') ?? payments.data?.[0]
-      if (payment?.invoiceUrl) return NextResponse.json({ url: payment.invoiceUrl })
+      try {
+        const payments = await asaasRequest<PaymentList>(`/subscriptions/${barbershop.asaas_subscription_id}/payments`)
+        const payment = payments.data?.find((item) => item.status !== 'RECEIVED' && item.status !== 'CONFIRMED') ?? payments.data?.[0]
+        if (payment?.invoiceUrl) return NextResponse.json({ url: payment.invoiceUrl })
+      } catch (error) {
+        // O Asaas remove a assinatura junto com o cliente removido: descarta o customerId salvo e recria abaixo.
+        if (!isRemovedCustomerError(error)) throw error
+        customerId = null
+      }
     }
 
-    let customerId = barbershop.asaas_customer_id as string | null
     if (!customerId) {
       const cpfCnpj = onlyDigits(String(barbershop.billing_document ?? ''))
       if (cpfCnpj.length !== 11 && cpfCnpj.length !== 14) {
