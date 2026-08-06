@@ -35,6 +35,7 @@ import {
 } from '@/lib/saas-plans'
 import posthog from 'posthog-js'
 import { createBrowserSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/client'
+import { trackMetaEvent } from '@/lib/meta-pixel'
 import { cn } from '@/lib/utils'
 import { formatBillingDocument, isValidBillingDocument, onlyDigits } from '@/lib/billing-document'
 
@@ -189,7 +190,9 @@ export function CadastroClient({ selectedPlanId }: { selectedPlanId: SaasPlanId 
         console.error('Welcome email could not be sent.')
       }
 
-      router.push('/dashboard')
+      trackMetaEvent('CompleteRegistration', { plan })
+
+      router.replace(`/bem-vindo?plano=${plan}&nome=${encodeURIComponent(shop.trim())}`)
       return
     }
 

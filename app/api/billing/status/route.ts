@@ -10,6 +10,7 @@ export async function GET(request: Request) {
       trialEndsAt: barbershop.trial_ends_at,
       nextBillingDate: barbershop.next_billing_date,
       hasSubscription: Boolean(barbershop.asaas_subscription_id),
+      subscriptionId: barbershop.asaas_subscription_id ?? undefined,
     })
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Não foi possível carregar a cobrança.' }, { status: 400 })

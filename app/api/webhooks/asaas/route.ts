@@ -3,6 +3,7 @@ import type { AsaasPayment } from '@/lib/asaas'
 import { createAdminSupabaseClient } from '@/lib/supabase/server'
 import { isUuid, readLimitedJson, RequestBodyError, safeTokenEqual } from '@/lib/http-security'
 import { effectiveBillingStatus } from '@/lib/billing-status'
+import { sendMetaPurchaseEvent } from '@/lib/meta-conversions-api'
 
 type AsaasWebhook = { event?: string; payment?: AsaasPayment }
 
@@ -33,7 +34,7 @@ export async function POST(request: Request) {
 
   const { data: barbershop, error: barbershopError } = await admin
     .from('barbershops')
-    .select('id, network_id, asaas_subscription_id, trial_ends_at')
+    .select('id, network_id, asaas_subscription_id, trial_ends_at, billing_status')
     .eq('id', barbershopId)
     .maybeSingle()
   if (barbershopError) return NextResponse.json({ error: 'Falha interna.' }, { status: 500 })
@@ -48,6 +49,7 @@ export async function POST(request: Request) {
     return barbershop.network_id ? query.eq('network_id', barbershop.network_id) : query.eq('id', barbershopId)
   }
   if (payload.event === 'PAYMENT_CONFIRMED' || payload.event === 'PAYMENT_RECEIVED') {
+    const wasAlreadyActive = barbershop.billing_status === 'active'
     const dueDate = payment.dueDate ? new Date(`${payment.dueDate}T12:00:00`) : new Date()
     dueDate.setMonth(dueDate.getMonth() + 1)
     const result = await updateBillingGroup({
@@ -56,6 +58,10 @@ export async function POST(request: Request) {
       next_billing_date: dueDate.toISOString().slice(0, 10),
     })
     updateError = result.error
+    const subscriptionId = barbershop.asaas_subscription_id ?? payment.subscription
+    if (!updateError && !wasAlreadyActive && typeof payment.value === 'number' && subscriptionId) {
+      await sendMetaPurchaseEvent({ barbershopId, value: payment.value, eventId: subscriptionId })
+    }
   } else if (payload.event === 'PAYMENT_OVERDUE') {
     const status = effectiveBillingStatus('past_due', barbershop.trial_ends_at)
     const result = await updateBillingGroup({ billing_status: status, ...(payment.dueDate ? { next_billing_date: payment.dueDate } : {}) })

@@ -33,6 +33,7 @@ export type AsaasPayment = {
   status?: string
   subscription?: string
   externalReference?: string
+  value?: number
 }
 
 export type AsaasSubscription = { id: string; nextDueDate?: string }

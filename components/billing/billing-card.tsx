@@ -10,12 +10,21 @@ import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import { formatCurrency } from '@/lib/format'
 import { getSaasPlan, type SaasPlanId } from '@/lib/saas-plans'
 import { getBillingStatusLabel } from '@/components/billing/billing-notice'
+import { trackMetaEvent } from '@/lib/meta-pixel'
 
 type BillingStatus = {
   status: 'trialing' | 'active' | 'past_due' | 'canceled'
   trialEndsAt: string
   nextBillingDate?: string
   hasSubscription: boolean
+  subscriptionId?: string
+}
+
+function trackPurchaseOnce(subscriptionId: string, value: number) {
+  const key = `meta_purchase_tracked_${subscriptionId}`
+  if (window.localStorage.getItem(key)) return
+  trackMetaEvent('Purchase', { value, currency: 'BRL' }, subscriptionId)
+  window.localStorage.setItem(key, '1')
 }
 
 export function BillingCard({ planId }: { planId: SaasPlanId }) {
@@ -41,13 +50,16 @@ export function BillingCard({ planId }: { planId: SaasPlanId }) {
         const body = await response.json()
         if (!response.ok) throw new Error(body.error)
         setBilling(body)
+        if (body.status === 'active' && body.subscriptionId) {
+          trackPurchaseOnce(body.subscriptionId, plan.monthlyPrice)
+        }
       })
       .catch((error) => {
         if (error instanceof DOMException && error.name === 'AbortError') return
         setMessage(error instanceof Error ? error.message : 'Cobrança indisponível.')
       })
     return () => controller.abort()
-  }, [authenticatedFetch])
+  }, [authenticatedFetch, plan.monthlyPrice])
 
   async function openPayment() {
     setLoading(true)
@@ -60,6 +72,7 @@ export function BillingCard({ planId }: { planId: SaasPlanId }) {
         billing_status: billing?.status,
         has_subscription: billing?.hasSubscription ?? false,
       })
+      trackMetaEvent('InitiateCheckout', { value: plan.monthlyPrice, currency: 'BRL' })
       window.location.assign(body.url)
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Não foi possível abrir o pagamento.')
