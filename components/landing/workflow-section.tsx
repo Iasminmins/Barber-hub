@@ -44,14 +44,14 @@ export function WorkflowSection() {
           {WORKFLOW_STEPS.map((step, index) => (
             <li
               key={step.title}
-              className="lp-anim lp-rise relative"
+              className="lp-anim lp-rise relative flex h-full flex-col"
               style={{ animationDelay: `${index * 90}ms`, animationDuration: 'var(--lp-dur-slow)' }}
             >
-              <span className="relative z-10 flex size-11 items-center justify-center rounded-full bg-lp-ink-800 text-[15px] font-bold text-lp-gold-400 ring-1 ring-lp-cream/15">
+              <span className="relative z-10 flex size-11 shrink-0 items-center justify-center rounded-full bg-lp-ink-800 text-[15px] font-bold text-lp-gold-400 ring-1 ring-lp-cream/15">
                 {index + 1}
               </span>
               <h3 className="mt-4 text-[16px] font-semibold text-lp-cream">{step.title}</h3>
-              <p className="mt-2 text-[13.5px] leading-6 text-lp-cream/65">{step.text}</p>
+              <p className="mt-2 flex-1 text-[13.5px] leading-6 text-lp-cream/65">{step.text}</p>
               <p className="mt-3 truncate rounded-lg border border-lp-cream/12 bg-lp-cream/[0.06] px-2.5 py-2 font-mono text-[11px] text-lp-cream/75">
                 {step.sample}
               </p>

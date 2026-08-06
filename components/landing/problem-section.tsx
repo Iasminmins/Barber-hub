@@ -57,11 +57,11 @@ export function ProblemSection() {
             aria-hidden="true"
             className="flex items-center justify-center lg:w-14 lg:flex-col"
           >
-            <span className="hidden h-full w-px bg-lp-cream-3 lg:block" />
-            <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-lp-ink-900 text-lp-cream shadow-[var(--lp-shadow-md)] lg:-my-5">
+            <span className="hidden w-px flex-1 bg-lp-cream-3 lg:block" />
+            <span className="relative z-10 flex size-11 shrink-0 items-center justify-center rounded-full bg-lp-ink-900 text-lp-cream shadow-[var(--lp-shadow-md)] lg:my-3">
               <ArrowRight className="size-5 rotate-90 lg:rotate-0" />
             </span>
-            <span className="hidden h-full w-px bg-lp-cream-3 lg:block" />
+            <span className="hidden w-px flex-1 bg-lp-cream-3 lg:block" />
           </div>
 
           {/* DEPOIS */}
