@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { asaasRequest, isRemovedCustomerError, type AsaasPayment, type AsaasSubscription } from '@/lib/asaas'
+import { asaasRequest, isStaleAsaasLinkError, type AsaasPayment, type AsaasSubscription } from '@/lib/asaas'
 import { getBillingContext } from '@/lib/billing-auth'
 import { getSaasPlan, type SaasPlanId } from '@/lib/saas-plans'
 import { onlyDigits } from '@/lib/billing-document'
@@ -20,7 +20,7 @@ export async function POST(request: Request) {
         if (payment?.invoiceUrl) return NextResponse.json({ url: payment.invoiceUrl })
       } catch (error) {
         // O Asaas remove a assinatura junto com o cliente removido: descarta o customerId salvo e recria abaixo.
-        if (!isRemovedCustomerError(error)) throw error
+        if (!isStaleAsaasLinkError(error)) throw error
         customerId = null
       }
     }

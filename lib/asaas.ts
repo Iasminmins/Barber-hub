@@ -12,9 +12,12 @@ export class AsaasApiError extends Error {
   }
 }
 
-/** O Asaas apaga assinaturas junto com o cliente removido; esse erro sinaliza que o `asaas_customer_id` salvo está obsoleto. */
-export function isRemovedCustomerError(error: unknown): boolean {
-  return error instanceof AsaasApiError && error.errors.some((detail) => /cliente removido/i.test(detail.description ?? ''))
+const STALE_LINK_PATTERNS = [/cliente removido/i, /assinatura.*não pode ser atualizada/i]
+
+/** O Asaas apaga a assinatura junto com o cliente removido; esses erros sinalizam que o `asaas_customer_id`/`asaas_subscription_id` salvos estão obsoletos. */
+export function isStaleAsaasLinkError(error: unknown): boolean {
+  return error instanceof AsaasApiError
+    && error.errors.some((detail) => STALE_LINK_PATTERNS.some((pattern) => pattern.test(detail.description ?? '')))
 }
 
 export async function asaasRequest<T>(path: string, init?: RequestInit): Promise<T> {

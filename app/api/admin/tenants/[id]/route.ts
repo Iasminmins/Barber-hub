@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requirePlatformAdmin, platformErrorResponse, logPlatformAction } from '@/lib/platform-admin'
 import { addComplimentaryPeriod } from '@/lib/admin-billing'
-import { asaasRequest } from '@/lib/asaas'
+import { asaasRequest, isStaleAsaasLinkError } from '@/lib/asaas'
 import { getSaasPlan, type SaasPlanId } from '@/lib/saas-plans'
 import { effectiveBillingStatus } from '@/lib/billing-status'
 import { buildAsaasBillingUpdate, type AsaasSubscriptionPayment } from '@/lib/admin-asaas-update'
@@ -54,7 +54,7 @@ export async function PATCH(request: Request, ctx: Ctx) {
 
     const { data: current, error: currentError } = await admin
       .from('barbershops')
-      .select('id, name, plan, billing_status, trial_ends_at, next_billing_date, asaas_subscription_id')
+      .select('id, name, plan, billing_status, trial_ends_at, next_billing_date, asaas_customer_id, asaas_subscription_id')
       .eq('id', id)
       .maybeSingle()
     if (currentError || !current) throw new Error('Conta não encontrada.')
@@ -62,10 +62,17 @@ export async function PATCH(request: Request, ctx: Ctx) {
     const patch: Record<string, unknown> = {}
     if (body.syncAsaas === true) {
       if (!current.asaas_subscription_id) throw new Error('Esta conta ainda não possui assinatura no Asaas.')
-      const subscription = await asaasRequest<{ nextDueDate?: string; status?: string }>(`/subscriptions/${current.asaas_subscription_id}`)
-      if (subscription.nextDueDate) patch.next_billing_date = subscription.nextDueDate
-      if (subscription.status === 'INACTIVE' || subscription.status === 'EXPIRED') patch.billing_status = 'canceled'
-      else if (subscription.status === 'ACTIVE') patch.billing_status = 'active'
+      try {
+        const subscription = await asaasRequest<{ nextDueDate?: string; status?: string }>(`/subscriptions/${current.asaas_subscription_id}`)
+        if (subscription.nextDueDate) patch.next_billing_date = subscription.nextDueDate
+        if (subscription.status === 'INACTIVE' || subscription.status === 'EXPIRED') patch.billing_status = 'canceled'
+        else if (subscription.status === 'ACTIVE') patch.billing_status = 'active'
+      } catch (error) {
+        if (!isStaleAsaasLinkError(error)) throw error
+        // A assinatura/cliente foi removida do lado do Asaas: desvincula para que o próximo checkout do dono crie um par novo.
+        patch.asaas_customer_id = null
+        patch.asaas_subscription_id = null
+      }
     }
     if (typeof body.plan === 'string') {
       if (!PLANS.includes(body.plan)) throw new Error('Plano inválido.')
@@ -121,32 +128,39 @@ export async function PATCH(request: Request, ctx: Ctx) {
       patch.next_billing_date = effectiveBillingDate
     }
 
-    if (current.asaas_subscription_id) {
-      const dateChanged = Boolean(effectiveBillingDate && effectiveBillingDate !== current.next_billing_date)
-      const payments = dateChanged
-        ? await asaasRequest<PaymentList>(`/subscriptions/${current.asaas_subscription_id}/payments`)
-        : { data: [] }
-      const requestedPlan = typeof body.plan === 'string' ? body.plan : current.plan
-      const plan = getSaasPlan(requestedPlan as SaasPlanId)
-      const asaasUpdate = buildAsaasBillingUpdate({
-        currentPlan: current.plan,
-        requestedPlan,
-        currentNextBillingDate: current.next_billing_date,
-        requestedNextBillingDate: dateChanged ? effectiveBillingDate : undefined,
-        requestedPlanDetails: { value: plan.monthlyPrice, description: `BarberHub - Plano ${plan.name}` },
-        payments: payments.data ?? [],
-      })
-
-      if (asaasUpdate.paymentUpdate) {
-        await asaasRequest(`/payments/${asaasUpdate.paymentUpdate.id}`, {
-          method: 'PUT',
-          body: JSON.stringify({ dueDate: asaasUpdate.paymentUpdate.dueDate }),
+    if (current.asaas_subscription_id && patch.asaas_subscription_id !== null) {
+      try {
+        const dateChanged = Boolean(effectiveBillingDate && effectiveBillingDate !== current.next_billing_date)
+        const payments = dateChanged
+          ? await asaasRequest<PaymentList>(`/subscriptions/${current.asaas_subscription_id}/payments`)
+          : { data: [] }
+        const requestedPlan = typeof body.plan === 'string' ? body.plan : current.plan
+        const plan = getSaasPlan(requestedPlan as SaasPlanId)
+        const asaasUpdate = buildAsaasBillingUpdate({
+          currentPlan: current.plan,
+          requestedPlan,
+          currentNextBillingDate: current.next_billing_date,
+          requestedNextBillingDate: dateChanged ? effectiveBillingDate : undefined,
+          requestedPlanDetails: { value: plan.monthlyPrice, description: `BarberHub - Plano ${plan.name}` },
+          payments: payments.data ?? [],
         })
+
+        if (asaasUpdate.paymentUpdate) {
+          await asaasRequest(`/payments/${asaasUpdate.paymentUpdate.id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ dueDate: asaasUpdate.paymentUpdate.dueDate }),
+          })
+        }
+        if (Object.keys(asaasUpdate.subscriptionUpdate).length) await asaasRequest(`/subscriptions/${current.asaas_subscription_id}`, {
+          method: 'PUT',
+          body: JSON.stringify(asaasUpdate.subscriptionUpdate),
+        })
+      } catch (error) {
+        if (!isStaleAsaasLinkError(error)) throw error
+        // Mesmo motivo do bloco de sincronização acima: link morto não deve bloquear a alteração local (ex.: cortesia).
+        patch.asaas_customer_id = null
+        patch.asaas_subscription_id = null
       }
-      if (Object.keys(asaasUpdate.subscriptionUpdate).length) await asaasRequest(`/subscriptions/${current.asaas_subscription_id}`, {
-        method: 'PUT',
-        body: JSON.stringify(asaasUpdate.subscriptionUpdate),
-      })
     }
     if (!Object.keys(patch).length) throw new Error('Nenhuma alteração informada.')
 
