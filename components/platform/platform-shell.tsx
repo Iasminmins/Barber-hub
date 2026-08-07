@@ -159,7 +159,7 @@ export function PlatformShell({
           </div>
         </header>
 
-        <main className={cn('flex-1 px-4 py-6 lg:px-6', 'animate-in fade-in duration-300')}>
+        <main className={cn('flex-1 px-4 py-6 lg:px-6', 'animate-in fade-in slide-in-from-bottom-1 duration-300')}>
           {children}
         </main>
       </div>

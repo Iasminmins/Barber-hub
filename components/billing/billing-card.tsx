@@ -6,6 +6,7 @@ import { CalendarClock, CreditCard, ExternalLink, LoaderCircle } from 'lucide-re
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import { formatCurrency } from '@/lib/format'
 import { getSaasPlan, type SaasPlanId } from '@/lib/saas-plans'
@@ -32,6 +33,7 @@ export function BillingCard({ planId }: { planId: SaasPlanId }) {
   const [billing, setBilling] = React.useState<BillingStatus | null>(null)
   const [message, setMessage] = React.useState('')
   const [loading, setLoading] = React.useState(false)
+  const [couponCode, setCouponCode] = React.useState('')
   const [canceling, setCanceling] = React.useState(false)
   const [confirmingCancel, setConfirmingCancel] = React.useState(false)
   const [loadedAt] = React.useState(() => Date.now())
@@ -65,7 +67,11 @@ export function BillingCard({ planId }: { planId: SaasPlanId }) {
     setLoading(true)
     setMessage('')
     try {
-      const response = await authenticatedFetch('/api/billing/checkout', { method: 'POST' })
+      const response = await authenticatedFetch('/api/billing/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ couponCode: couponCode.trim() || undefined }),
+      })
       const body = await response.json()
       if (!response.ok) throw new Error(body.error)
       posthog.capture('billing_checkout_started', {
@@ -127,6 +133,18 @@ export function BillingCard({ planId }: { planId: SaasPlanId }) {
         </div>
         {dateLabel ? <p className="mt-3 flex items-center gap-2 text-sm text-muted-foreground"><CalendarClock className="size-4" /> {billing?.status === 'trialing' ? 'Teste termina' : 'Próxima cobrança'} em {new Intl.DateTimeFormat('pt-BR').format(new Date(`${dateLabel.slice(0, 10)}T12:00:00`))}</p> : null}
       </div>
+      {billing && !billing.hasSubscription ? (
+        <div className="mt-3">
+          <label className="mb-1 block text-xs font-medium text-muted-foreground">Cupom de desconto (opcional)</label>
+          <Input
+            value={couponCode}
+            onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+            placeholder="Ex.: BARBER-4F9K2X"
+            className="text-sm"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">O desconto vale só na primeira cobrança.</p>
+        </div>
+      ) : null}
       {message ? <p className="mt-3 text-sm text-destructive">{message}</p> : null}
       <Button className="mt-4 w-full" variant="gold" onClick={openPayment} disabled={loading || !billing}>
         {loading ? <LoaderCircle className="size-4 animate-spin" /> : <ExternalLink className="size-4" />}

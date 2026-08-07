@@ -37,12 +37,22 @@ export function MetricCard({
   const trend = delta === null || delta === undefined ? null : delta > 0 ? 'up' : delta < 0 ? 'down' : 'flat'
 
   return (
-    <Card className="group relative overflow-hidden rounded-2xl border-border/70 bg-card p-5 shadow-sm transition-shadow hover:shadow-md">
+    <Card className="pf-card-lift group relative overflow-hidden rounded-2xl border-border/70 bg-card p-5">
+      <div
+        className={cn(
+          'absolute inset-x-0 top-0 h-0.5 opacity-0 transition-opacity group-hover:opacity-100',
+          accent === 'gold' && 'bg-gold',
+          accent === 'success' && 'bg-emerald-500',
+          accent === 'warning' && 'bg-amber-500',
+          accent === 'danger' && 'bg-destructive',
+          accent === 'default' && 'bg-primary',
+        )}
+      />
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium text-muted-foreground">{label}</p>
           {loading ? (
-            <div className="mt-3 h-8 w-24 animate-pulse rounded-lg bg-muted" />
+            <div className="pf-skeleton mt-3 h-8 w-24 rounded-lg" />
           ) : (
             <p className="mt-2 text-2xl font-bold tabular-nums tracking-tight text-foreground">{value}</p>
           )}

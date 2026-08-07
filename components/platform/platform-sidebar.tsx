@@ -66,7 +66,10 @@ export function PlatformSidebar({
         </div>
         {!collapsed ? (
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-bold text-sidebar-foreground">Barber Hub</p>
+            <div className="flex items-center gap-1.5">
+              <p className="truncate text-sm font-bold text-sidebar-foreground">Barber Hub</p>
+              <span className="pf-premium-badge shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide">Premium</span>
+            </div>
             <p className="truncate text-[11px] text-muted-foreground">Administração SaaS</p>
           </div>
         ) : null}

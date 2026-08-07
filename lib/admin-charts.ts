@@ -28,12 +28,21 @@ function lastMonths(count: number, now = new Date()) {
   return keys
 }
 
-export function buildAdminCharts(shops: ShopRow[], receivedThisMonth: number, now = new Date()) {
+type MessageRow = { created_at: string; status: string }
+
+const SENT_MESSAGE_STATUSES = new Set(['sent', 'delivered', 'read', 'replied'])
+
+export function buildAdminCharts(shops: ShopRow[], receivedThisMonth: number, now = new Date(), messages: MessageRow[] = []) {
   const months = lastMonths(6, now)
 
   const newBarbershops = months.map((key) => ({
     label: monthLabel(key),
     total: shops.filter((s) => s.created_at.startsWith(key)).length,
+  }))
+
+  const messagesSent = months.map((key) => ({
+    label: monthLabel(key),
+    total: messages.filter((m) => m.created_at.startsWith(key) && SENT_MESSAGE_STATUSES.has(m.status)).length,
   }))
 
   const mrrEvolution = months.map((key) => {
@@ -86,6 +95,7 @@ export function buildAdminCharts(shops: ShopRow[], receivedThisMonth: number, no
     monthlyRevenue,
     mrrEvolution,
     newBarbershops,
+    messagesSent,
     conversion,
     planDistribution,
     statusDistribution,

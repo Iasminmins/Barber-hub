@@ -24,7 +24,7 @@ export type TenantRow = {
 }
 
 export type Overview = {
-  totals: { barbershops: number; users: number; newLast7Days: number; newLast30Days: number }
+  totals: { barbershops: number; users: number; newLast7Days: number; newLast30Days: number; messagesSent: number }
   billing: {
     trialing: number
     active: number
@@ -45,11 +45,13 @@ export type Overview = {
     newThisMonth: number
     receivedThisMonth: number
     asaasAvailable: boolean
+    delinquencyRate: number
   }
   charts?: {
     monthlyRevenue: { label: string; receita: number }[]
     mrrEvolution: { label: string; mrr: number }[]
     newBarbershops: { label: string; total: number }[]
+    messagesSent: { label: string; total: number }[]
     conversion: { trialing: number; converted: number; rate: number }
     planDistribution: { name: string; value: number }[]
     statusDistribution: { name: string; value: number; key: string }[]
@@ -102,4 +104,46 @@ export type PlatformNavItem = {
   label: string
   icon: string
   badge?: number
+}
+
+export type Coupon = {
+  id: string
+  code: string
+  description: string | null
+  discount_type: 'percentage' | 'fixed'
+  discount_value: number
+  applicable_plans: string[]
+  max_redemptions: number | null
+  redemptions_count: number
+  starts_at: string | null
+  expires_at: string | null
+  status: 'active' | 'expired' | 'disabled'
+  created_by_email: string | null
+  created_at: string
+}
+
+export type CouponRedemption = {
+  id: string
+  coupon_id: string
+  coupon_code: string
+  barbershop_id: string | null
+  barbershop_name: string
+  discount_applied: number | null
+  note: string | null
+  redeemed_by_email: string | null
+  redeemed_at: string
+}
+
+export type MessageContact = {
+  ownerId: string | null
+  ownerName: string
+  ownerEmail: string | null
+  ownerPhone: string | null
+  barbershopId: string
+  barbershopName: string
+  barbershopSlug: string
+  plan: 'starter' | 'pro' | 'premium'
+  billingStatus: 'trialing' | 'active' | 'past_due' | 'canceled'
+  trialEndsAt: string | null
+  nextBillingDate: string | null
 }

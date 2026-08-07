@@ -20,13 +20,13 @@ async function resolveRecipients(admin: Awaited<ReturnType<typeof requirePlatfor
 
   const ids = (shops ?? []).map((s) => s.id)
   const { data: members } = ids.length
-    ? await admin.from('members').select('barbershop_id, name, email, role, active').in('barbershop_id', ids)
+    ? await admin.from('members').select('barbershop_id, name, email, role, active, phone').in('barbershop_id', ids)
     : { data: [] }
 
-  const owners = new Map<string, { name: string; email: string }>()
+  const owners = new Map<string, { name: string; email: string; phone: string | null }>()
   for (const member of members ?? []) {
     if (member.role === 'owner' && member.active) {
-      owners.set(member.barbershop_id, { name: member.name, email: member.email })
+      owners.set(member.barbershop_id, { name: member.name, email: member.email, phone: member.phone ?? null })
     }
   }
 
@@ -131,7 +131,7 @@ export async function POST(request: Request) {
           barbershop_id: shop.id,
           recipient_name: owner?.name ?? null,
           recipient_email: owner?.email ?? null,
-          recipient_phone: null,
+          recipient_phone: owner?.phone ?? null,
           personalized_body: personalizeMessage(messageBody, context),
           status: scheduledAt ? 'pending' : 'queued',
         }

@@ -2,17 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Building2, Users, Timer, ShieldAlert, DollarSign, TrendingUp, Gift, Percent, ArrowRight } from 'lucide-react'
-import { buttonVariants } from '@/components/ui/button'
+import { Building2, Users, Timer, ShieldAlert, DollarSign, TrendingUp, Gift, Percent, ArrowRight, MessageSquare, AlertOctagon, Download } from 'lucide-react'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Select } from '@/components/ui/select'
 import { PlatformShell } from '@/components/platform/platform-shell'
 import { MetricCard } from '@/components/platform/metric-card'
 import { AdminCharts } from '@/components/platform/admin-charts'
 import { AttentionPanel } from '@/components/platform/attention-panel'
+import { SectionHeader } from '@/components/platform/section-header'
 import { usePlatformSession } from './use-platform-session'
 import type { Overview, TenantRow } from './types'
-import { formatDate } from '@/lib/format'
+import { formatDate, formatPercent } from '@/lib/format'
 
 const statusLabel: Record<string, string> = {
   trialing: 'Em teste',
@@ -86,6 +87,33 @@ export function AdminClient() {
     return () => window.clearTimeout(timer)
   }, [gate, load])
 
+  const topKpis = useMemo(() => {
+    if (!overview) return []
+    return [
+      { label: 'Total de barbearias', value: overview.totals.barbershops, hint: `+${overview.totals.newLast7Days} em 7 dias`, icon: Building2 },
+      { label: 'Receita mensal (MRR)', value: formatMoney(overview.revenue.mrr), hint: `${overview.revenue.contractedCompanies} contratos ativos`, icon: DollarSign, accent: 'gold' as const },
+      { label: 'Taxa de inadimplência', value: formatPercent(overview.revenue.delinquencyRate), hint: `${overview.billing.pastDue} conta(s) em atraso`, icon: AlertOctagon, accent: overview.revenue.delinquencyRate > 10 ? 'danger' as const : 'default' as const },
+      { label: 'Mensagens enviadas', value: overview.totals.messagesSent, hint: `Últimos ${period} dia(s)`, icon: MessageSquare, accent: 'success' as const },
+    ]
+  }, [overview, period])
+
+  const executiveInsights = useMemo(() => {
+    if (!overview) return []
+    return [
+      { label: 'MRR', value: formatMoney(overview.revenue.mrr), tone: 'gold' as const },
+      { label: 'Inadimplência', value: formatPercent(overview.revenue.delinquencyRate), tone: overview.revenue.delinquencyRate > 10 ? 'danger' as const : 'success' as const },
+      { label: 'Novas barbearias', value: `${overview.comparisons?.newBarbershops.current ?? 0} no período`, tone: 'default' as const },
+      { label: 'Conversão', value: `${overview.revenue.conversionRate}%`, tone: 'default' as const },
+    ]
+  }, [overview])
+
+  async function handleExport() {
+    if (!overview) return
+    const { buildPlatformReportSheets } = await import('@/lib/platform-report-export')
+    const { downloadExcelWorkbook } = await import('@/lib/spreadsheet-export')
+    downloadExcelWorkbook(`barber-hub-visao-geral-${new Date().toISOString().slice(0, 10)}`, buildPlatformReportSheets(overview, tenants))
+  }
+
   const revenueCards = useMemo(() => {
     if (!overview) return []
     const r = overview.revenue
@@ -131,11 +159,30 @@ export function AdminClient() {
       onGlobalSearchSubmit={() => void load()}
     >
       <div className="mx-auto max-w-[1600px] space-y-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <SectionHeader
+            title="Visão geral"
+            description="Resumo executivo da operação da plataforma."
+            insights={executiveInsights}
+            className="flex-1"
+          />
+          <Button variant="outline" size="sm" className="rounded-xl" disabled={!overview} onClick={() => void handleExport()}>
+            <Download className="size-4" />
+            <span className="ml-2">Exportar</span>
+          </Button>
+        </div>
+
         {error ? (
           <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
             {error}
           </div>
         ) : null}
+
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {topKpis.map((card) => (
+            <MetricCard key={card.label} {...card} loading={loading && !overview} />
+          ))}
+        </section>
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {revenueCards.map((card) => (
@@ -168,7 +215,7 @@ export function AdminClient() {
           <AttentionPanel items={overview.attention} loading={loading && !overview} />
         ) : null}
 
-        <Card className="overflow-hidden rounded-2xl border-border/70 shadow-sm">
+        <Card className="pf-card-lift overflow-hidden rounded-2xl border-border/70">
           <div className="flex flex-wrap items-center gap-3 border-b border-border/70 p-4">
             <p className="text-sm font-semibold text-foreground">Barbearias</p>
             <div className="ml-auto flex flex-wrap gap-2">

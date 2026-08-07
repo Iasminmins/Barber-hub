@@ -49,15 +49,15 @@ export async function GET(request: Request) {
     const { data: members } = ids.length
       ? await admin
           .from('members')
-          .select('barbershop_id, name, email, role, active')
+          .select('barbershop_id, name, email, role, active, phone')
           .in('barbershop_id', ids)
-      : { data: [] as { barbershop_id: string; name: string; email: string; role: string; active: boolean }[] }
+      : { data: [] as { barbershop_id: string; name: string; email: string; role: string; active: boolean; phone: string | null }[] }
 
-    const grouped = new Map<string, { total: number; owner: { name: string; email: string } | null }>()
+    const grouped = new Map<string, { total: number; owner: { name: string; email: string } | null; ownerPhone: string | null }>()
     for (const member of members ?? []) {
-      const entry = grouped.get(member.barbershop_id) ?? { total: 0, owner: null }
+      const entry = grouped.get(member.barbershop_id) ?? { total: 0, owner: null, ownerPhone: null }
       if (member.active) entry.total += 1
-      if (member.role === 'owner' && !entry.owner) entry.owner = { name: member.name, email: member.email }
+      if (member.role === 'owner' && !entry.owner) { entry.owner = { name: member.name, email: member.email }; entry.ownerPhone = member.phone ?? null }
       grouped.set(member.barbershop_id, entry)
     }
 
@@ -73,7 +73,7 @@ export async function GET(request: Request) {
         hasSubscription: Boolean(shop.asaas_subscription_id),
         usersCount: info?.total ?? 0,
         owner: info?.owner ?? null,
-        ownerPhone: null as string | null,
+        ownerPhone: info?.ownerPhone ?? null,
         trialDaysLeft,
         lastAccessAt: shop.last_payment_at ?? shop.updated_at,
         financialStatus: billingStatus === 'past_due' ? 'inadimplente' : billingStatus === 'active' ? 'em_dia' : billingStatus === 'trialing' ? 'teste' : billingStatus === 'canceled' ? 'cancelada' : 'pendente',

@@ -3,13 +3,16 @@ import { requirePlatformAdmin, platformErrorResponse, logPlatformAction } from '
 
 export const dynamic = 'force-dynamic'
 
-/** Suspende ou reativa o acesso de um usuario dentro de uma barbearia. */
+/** Suspende/reativa o acesso de um usuario e/ou atualiza o telefone de contato (WhatsApp). */
 export async function PATCH(request: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
     const { admin, user, adminRow } = await requirePlatformAdmin(request)
     const { id } = await ctx.params
     const body = await request.json().catch(() => ({}))
-    if (typeof body.active !== 'boolean') throw new Error('Informe o novo estado do acesso.')
+
+    const hasActive = typeof body.active === 'boolean'
+    const hasPhone = typeof body.phone === 'string' || body.phone === null
+    if (!hasActive && !hasPhone) throw new Error('Informe o campo a ser atualizado.')
 
     const { data: member } = await admin
       .from('members')
@@ -17,30 +20,40 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       .eq('id', id)
       .maybeSingle()
     if (!member) throw new Error('Usuário não encontrado.')
-    if (member.user_id === user.id) throw new Error('Você não pode suspender o seu próprio acesso.')
 
-    if (member.role === 'owner' && body.active === false) {
-      const { count } = await admin
-        .from('members')
-        .select('id', { count: 'exact', head: true })
-        .eq('barbershop_id', member.barbershop_id)
-        .eq('role', 'owner')
-        .eq('active', true)
-      if ((count ?? 0) <= 1) {
-        throw new Error('Esta conta ficaria sem nenhum proprietário ativo.')
+    const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
+
+    if (hasActive) {
+      if (member.user_id === user.id && body.active === false) throw new Error('Você não pode suspender o seu próprio acesso.')
+      if (member.role === 'owner' && body.active === false) {
+        const { count } = await admin
+          .from('members')
+          .select('id', { count: 'exact', head: true })
+          .eq('barbershop_id', member.barbershop_id)
+          .eq('role', 'owner')
+          .eq('active', true)
+        if ((count ?? 0) <= 1) {
+          throw new Error('Esta conta ficaria sem nenhum proprietário ativo.')
+        }
       }
+      patch.active = body.active
+    }
+
+    if (hasPhone) {
+      const phone = typeof body.phone === 'string' ? body.phone.trim() : null
+      patch.phone = phone || null
     }
 
     const { data: updated, error } = await admin
       .from('members')
-      .update({ active: body.active, updated_at: new Date().toISOString() })
+      .update(patch)
       .eq('id', id)
-      .select('id, name, email, role, active')
+      .select('id, name, email, role, active, phone')
       .maybeSingle()
-    if (error || !updated) throw new Error('Não foi possível atualizar o acesso.')
+    if (error || !updated) throw new Error('Não foi possível atualizar o usuário.')
 
     await logPlatformAction(admin, { id: user.id, email: adminRow.email }, {
-      action: body.active ? 'member.reactivate' : 'member.suspend',
+      action: hasActive ? (body.active ? 'member.reactivate' : 'member.suspend') : 'member.update_phone',
       targetType: 'member',
       targetId: id,
       details: { email: member.email, role: member.role, barbershopId: member.barbershop_id },

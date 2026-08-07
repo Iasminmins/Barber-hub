@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { TenantListView } from '@/components/platform/tenant-list-view'
+import { CouponsClient } from './coupons-client'
 
 export const metadata: Metadata = {
   title: 'Cupons e cortesias · Barber Hub',
@@ -9,11 +9,5 @@ export const metadata: Metadata = {
 export const dynamic = 'force-dynamic'
 
 export default function CortesiasPage() {
-  return (
-    <TenantListView
-      title="Cupons e cortesias"
-      description="Contas com cortesia ativa concedida pela plataforma."
-      initialBilling="complimentary"
-    />
-  )
+  return <CouponsClient />
 }

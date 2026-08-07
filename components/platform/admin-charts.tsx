@@ -8,6 +8,8 @@ import {
   CartesianGrid,
   Cell,
   Legend,
+  Line,
+  LineChart,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -34,8 +36,8 @@ export function AdminCharts({ charts, loading }: AdminChartsProps) {
   if (loading) {
     return (
       <div className="grid gap-4 lg:grid-cols-2">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <Card key={i} className="h-72 animate-pulse rounded-2xl bg-muted/40" />
+        {Array.from({ length: 6 }).map((_, i) => (
+          <Card key={i} className="pf-skeleton h-72 rounded-2xl" />
         ))}
       </div>
     )
@@ -91,6 +93,18 @@ export function AdminCharts({ charts, loading }: AdminChartsProps) {
         </ResponsiveContainer>
       </ChartCard>
 
+      <ChartCard title="Mensagens enviadas" description="Volume de mensagens registradas por mês">
+        <ResponsiveContainer width="100%" height={240}>
+          <LineChart data={charts.messagesSent}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" />
+            <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: 'var(--color-muted-foreground)' }} />
+            <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'var(--color-muted-foreground)' }} />
+            <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid var(--color-border)' }} />
+            <Line type="monotone" dataKey="total" stroke="#C9A227" strokeWidth={2.5} dot={{ r: 3, fill: '#C9A227' }} />
+          </LineChart>
+        </ResponsiveContainer>
+      </ChartCard>
+
       <ChartCard
         title="Conversão teste → assinatura"
         description={`${charts.conversion.rate}% · ${charts.conversion.converted} convertidas de ${charts.conversion.trialing + charts.conversion.converted} elegíveis`}
@@ -107,33 +121,33 @@ export function AdminCharts({ charts, loading }: AdminChartsProps) {
         </div>
       </ChartCard>
 
-      <ChartCard title="Distribuição por plano" description="Starter, Pro e Premium">
+      <ChartCard title="Distribuição por plano" description="Comparativo Starter, Pro e Premium">
         <ResponsiveContainer width="100%" height={240}>
-          <PieChart>
-            <Pie data={charts.planDistribution} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={52} outerRadius={80} paddingAngle={3}>
+          <BarChart data={charts.planDistribution}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" />
+            <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: 'var(--color-muted-foreground)' }} />
+            <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'var(--color-muted-foreground)' }} />
+            <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid var(--color-border)' }} />
+            <Bar dataKey="value" radius={[6, 6, 0, 0]}>
               {charts.planDistribution.map((entry) => (
                 <Cell key={entry.name} fill={PLAN_COLORS[entry.name as keyof typeof PLAN_COLORS] ?? CHART_COLORS[0]} />
               ))}
-            </Pie>
-            <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid var(--color-border)' }} />
-            <Legend />
-          </PieChart>
+            </Bar>
+          </BarChart>
         </ResponsiveContainer>
       </ChartCard>
 
       <ChartCard title="Status das contas" description="Teste, ativa, atrasada e cancelada">
         <ResponsiveContainer width="100%" height={240}>
-          <BarChart data={charts.statusDistribution} layout="vertical">
-            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--color-border)" />
-            <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} />
-            <YAxis type="category" dataKey="name" width={90} tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
-            <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid var(--color-border)' }} />
-            <Bar dataKey="value" radius={[0, 6, 6, 0]}>
+          <PieChart>
+            <Pie data={charts.statusDistribution} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={52} outerRadius={80} paddingAngle={3}>
               {charts.statusDistribution.map((entry, index) => (
                 <Cell key={entry.key} fill={CHART_COLORS[index % CHART_COLORS.length]} />
               ))}
-            </Bar>
-          </BarChart>
+            </Pie>
+            <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid var(--color-border)' }} />
+            <Legend />
+          </PieChart>
         </ResponsiveContainer>
       </ChartCard>
     </div>
@@ -142,7 +156,7 @@ export function AdminCharts({ charts, loading }: AdminChartsProps) {
 
 function ChartCard({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
   return (
-    <Card className="rounded-2xl border-border/70 p-5 shadow-sm">
+    <Card className="pf-card-lift rounded-2xl border-border/70 p-5">
       <div className="mb-4">
         <h3 className="font-semibold text-foreground">{title}</h3>
         <p className="text-sm text-muted-foreground">{description}</p>

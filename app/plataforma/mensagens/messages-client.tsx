@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import {
   Send, FileText, Inbox, MessageSquare, Loader2, Save, Calendar, Eye, X, Check,
   AlertTriangle, Mail, MessageCircle, Smartphone, Bell, MailOpen, Users, Ban,
+  Phone, Pencil, ExternalLink,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -12,10 +13,15 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select } from '@/components/ui/select'
 import { PlatformShell } from '@/components/platform/platform-shell'
+import { EmptyState } from '@/components/platform/empty-state'
+import { FeedbackBanner } from '@/components/platform/feedback-banner'
+import { SectionHeader } from '@/components/platform/section-header'
 import { usePlatformSession } from '../use-platform-session'
-import type { MessageTemplate, PlatformMessage } from '../types'
+import type { MessageTemplate, PlatformMessage, MessageContact } from '../types'
 import { formatDate } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { buildRecipientContext, personalizeMessage } from '@/lib/platform-messaging'
+import { whatsappUrl } from '@/lib/whatsapp'
 
 type Channel = 'whatsapp' | 'email' | 'sms' | 'in_app'
 type Tab = 'compose' | 'templates' | 'history' | 'inbox'
@@ -49,6 +55,12 @@ const STATUS_STYLE: Record<string, string> = {
   cancelled: 'bg-muted text-muted-foreground line-through',
 }
 
+const BILLING_STATUS_LABEL: Record<string, string> = { trialing: 'Em teste', active: 'Ativa', past_due: 'Em atraso', canceled: 'Cancelada' }
+const BILLING_STATUS_STYLE: Record<string, string> = {
+  trialing: 'bg-amber-100 text-amber-800', active: 'bg-emerald-100 text-emerald-800',
+  past_due: 'bg-red-100 text-red-800', canceled: 'bg-muted text-muted-foreground',
+}
+
 function money(v: number | null) {
   return v === null ? '—' : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
@@ -76,6 +88,13 @@ export function MessagesClient() {
   const [sendPreview, setSendPreview] = useState<SendPreview | null>(null)
   const [sending, setSending] = useState(false)
   const bodyRef = useRef<HTMLTextAreaElement | null>(null)
+
+  // contacts table (envio manual via WhatsApp)
+  const [contacts, setContacts] = useState<MessageContact[]>([])
+  const [loadingContacts, setLoadingContacts] = useState(false)
+  const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set())
+  const [phoneEdit, setPhoneEdit] = useState<{ barbershopId: string; value: string } | null>(null)
+  const [savingPhone, setSavingPhone] = useState(false)
 
   useEffect(() => {
     const t = params.get('tab')
@@ -124,9 +143,10 @@ export function MessagesClient() {
     setCountingRecipients(true)
     const timer = window.setTimeout(async () => {
       try {
+        const barbershopIds = selectedContacts.size > 0 ? Array.from(selectedContacts) : undefined
         const res = await fetch('/api/admin/messages/recipients', {
           method: 'POST', headers: authHeaders,
-          body: JSON.stringify({ ...filters, channel }),
+          body: JSON.stringify({ ...filters, channel, barbershopIds }),
         })
         const data = await res.json()
         if (res.ok) setRecipients(data)
@@ -135,7 +155,30 @@ export function MessagesClient() {
       }
     }, 400)
     return () => window.clearTimeout(timer)
-  }, [gate, tab, filters, channel, authHeaders])
+  }, [gate, tab, filters, channel, authHeaders, selectedContacts])
+
+  // lista de contatos (telefones cadastrados) para envio manual, respeitando os mesmos filtros
+  useEffect(() => {
+    if (gate !== 'granted' || tab !== 'compose') return
+    setLoadingContacts(true)
+    const timer = window.setTimeout(async () => {
+      try {
+        const qs = new URLSearchParams()
+        if (filters.status) qs.set('status', filters.status)
+        if (filters.plan) qs.set('plan', filters.plan)
+        if (filters.city) qs.set('city', filters.city)
+        if (filters.trialExpiring) qs.set('trialExpiring', 'true')
+        if (filters.pastDue) qs.set('pastDue', 'true')
+        if (filters.inactive) qs.set('inactive', 'true')
+        const res = await fetch(`/api/admin/messages/contacts?${qs}`, { headers: authHeaders })
+        const data = await res.json()
+        if (res.ok) setContacts(data.items ?? [])
+      } finally {
+        setLoadingContacts(false)
+      }
+    }, 400)
+    return () => window.clearTimeout(timer)
+  }, [gate, tab, filters, authHeaders])
 
   function insertVariable(v: string) {
     const el = bodyRef.current
@@ -156,15 +199,55 @@ export function MessagesClient() {
     setFeedback({ type: 'ok', text: `Modelo "${t.name}" carregado no editor.` })
   }
 
+  function buildWaLink(contact: MessageContact) {
+    if (!contact.ownerPhone) return null
+    const context = buildRecipientContext(
+      { name: contact.barbershopName, plan: contact.plan, trial_ends_at: contact.trialEndsAt, next_billing_date: contact.nextBillingDate, slug: contact.barbershopSlug },
+      { name: contact.ownerName, email: contact.ownerEmail ?? '' },
+    )
+    const text = personalizeMessage(msgBody || '{{nome_responsavel}}, tudo bem?', context)
+    return whatsappUrl(contact.ownerPhone, text) || null
+  }
+
+  function toggleContact(id: string) {
+    setSelectedContacts((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function toggleAllContacts() {
+    setSelectedContacts((prev) => (prev.size === contacts.length ? new Set() : new Set(contacts.map((c) => c.barbershopId))))
+  }
+
+  async function savePhone(contact: MessageContact) {
+    if (!contact.ownerId || !phoneEdit) return
+    setSavingPhone(true)
+    try {
+      const res = await fetch(`/api/admin/members/${contact.ownerId}`, {
+        method: 'PATCH', headers: authHeaders, body: JSON.stringify({ phone: phoneEdit.value.trim() || null }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setFeedback({ type: 'error', text: data.error ?? 'Não foi possível salvar o telefone.' }); return }
+      setContacts((list) => list.map((c) => (c.barbershopId === contact.barbershopId ? { ...c, ownerPhone: data.member.phone } : c)))
+      setPhoneEdit(null)
+    } finally {
+      setSavingPhone(false)
+    }
+  }
+
   async function submit(saveAsDraft: boolean, confirmed = false) {
     setSending(true)
     setFeedback(null)
     try {
+      const barbershopIds = selectedContacts.size > 0 ? Array.from(selectedContacts) : undefined
       const res = await fetch('/api/admin/messages', {
         method: 'POST', headers: authHeaders,
         body: JSON.stringify({
           channel, subject: channel === 'email' ? subject : null, body: msgBody,
-          filter: filters, scheduledAt: scheduledAt || null, saveAsDraft, templateId, confirmed,
+          filter: filters, barbershopIds, scheduledAt: scheduledAt || null, saveAsDraft, templateId, confirmed,
         }),
       })
       const data = await res.json()
@@ -172,7 +255,7 @@ export function MessagesClient() {
       if (data.preview) { setSendPreview(data); return }
       setSendPreview(null)
       setFeedback({ type: 'ok', text: saveAsDraft ? 'Rascunho salvo.' : `Mensagem registrada (${STATUS_LABEL[data.status] ?? data.status}) para ${data.recipientCount} destinatário(s).` })
-      if (!saveAsDraft) { setMsgBody(''); setSubject(''); setScheduledAt(''); setTemplateId(null) }
+      if (!saveAsDraft) { setMsgBody(''); setSubject(''); setScheduledAt(''); setTemplateId(null); setSelectedContacts(new Set()) }
     } finally {
       setSending(false)
     }
@@ -213,7 +296,19 @@ export function MessagesClient() {
       showNewMessage={false}
       unreadMessages={unreadCount}
     >
-      <div className="mx-auto max-w-5xl space-y-5">
+      <div className="mx-auto max-w-6xl space-y-5">
+        <SectionHeader
+          title="Central de mensagens"
+          description="Envio manual e registrado, modelos reutilizáveis e histórico completo."
+          icon={MessageSquare}
+          insights={[
+            { label: 'Modelos', value: String(templates.length) },
+            { label: 'Não lidas', value: String(unreadCount), tone: unreadCount > 0 ? 'warning' : 'default' },
+            { label: 'Contatos no filtro', value: String(contacts.length) },
+            { label: 'Com telefone', value: String(contacts.filter((c) => c.ownerPhone).length), tone: 'success' },
+          ]}
+        />
+
         <div className="flex flex-wrap gap-1 rounded-xl border border-border/70 bg-card p-1">
           {tabs.map((t) => (
             <button
@@ -234,19 +329,11 @@ export function MessagesClient() {
           ))}
         </div>
 
-        {feedback ? (
-          <div className={cn(
-            'flex items-center gap-2 rounded-xl border p-3 text-sm',
-            feedback.type === 'ok' ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-destructive/40 bg-destructive/10 text-destructive',
-          )}>
-            {feedback.type === 'ok' ? <Check className="size-4" /> : <AlertTriangle className="size-4" />}
-            {feedback.text}
-          </div>
-        ) : null}
+        {feedback ? <FeedbackBanner type={feedback.type} text={feedback.text} onDismiss={() => setFeedback(null)} /> : null}
 
         {tab === 'compose' ? (
           <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
-            <Card className="space-y-4 rounded-2xl border-border/70 p-5 shadow-sm">
+            <Card className="space-y-4 rounded-2xl border-border/70 p-5 pf-card-lift">
               <div>
                 <label className="mb-2 block text-sm font-medium">Canal</label>
                 <div className="flex flex-wrap gap-2">
@@ -296,7 +383,7 @@ export function MessagesClient() {
             </Card>
 
             <div className="space-y-5">
-              <Card className="space-y-3 rounded-2xl border-border/70 p-5 shadow-sm">
+              <Card className="space-y-3 rounded-2xl border-border/70 p-5 pf-card-lift">
                 <p className="flex items-center gap-2 text-sm font-semibold"><Users className="size-4" /> Destinatários</p>
                 <Select value={filters.status} onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))} className="text-sm">
                   <option value="">Todos os status</option>
@@ -322,13 +409,19 @@ export function MessagesClient() {
                 </div>
               </Card>
 
-              <Card className="space-y-3 rounded-2xl border-border/70 p-5 shadow-sm">
+              <Card className="space-y-3 rounded-2xl border-border/70 p-5 pf-card-lift">
                 <div className="flex items-baseline justify-between">
-                  <span className="text-sm text-muted-foreground">Alcançará</span>
+                  <span className="text-sm text-muted-foreground">{selectedContacts.size > 0 ? 'Selecionados' : 'Alcançará'}</span>
                   <span className="text-2xl font-bold tabular-nums">
                     {countingRecipients ? <Loader2 className="size-5 animate-spin" /> : (recipients?.count ?? 0)}
                   </span>
                 </div>
+                {selectedContacts.size > 0 ? (
+                  <p className="text-xs text-primary">
+                    {selectedContacts.size} contato(s) selecionado(s) na tabela abaixo — o envio será restrito a eles.{' '}
+                    <button type="button" className="underline" onClick={() => setSelectedContacts(new Set())}>Limpar seleção</button>
+                  </p>
+                ) : null}
                 {recipients?.estimatedCost != null ? (
                   <p className="text-xs text-muted-foreground">Custo estimado: <strong>{money(recipients.estimatedCost)}</strong></p>
                 ) : null}
@@ -353,14 +446,113 @@ export function MessagesClient() {
           </div>
         ) : null}
 
+        {tab === 'compose' ? (
+          <Card className="overflow-hidden rounded-2xl border-border/70 pf-card-lift">
+            <div className="flex flex-wrap items-center gap-2 border-b border-border/70 p-4">
+              <p className="flex items-center gap-2 text-sm font-semibold"><Phone className="size-4" /> Contatos</p>
+              <p className="text-xs text-muted-foreground">Telefones cadastrados dos responsáveis, conforme os filtros ao lado. Envie manualmente pelo WhatsApp Web sem precisar de provedor configurado.</p>
+            </div>
+
+            {loadingContacts ? (
+              <div className="p-10 text-center text-sm text-muted-foreground"><Loader2 className="mx-auto size-5 animate-spin" /></div>
+            ) : contacts.length === 0 ? (
+              <EmptyState icon={Phone} title="Nenhum contato encontrado" description="Ajuste os filtros de destinatários para ver os telefones cadastrados." className="border-none" />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50 text-left text-xs uppercase text-muted-foreground">
+                    <tr>
+                      <th className="w-10 px-4 py-3">
+                        <input type="checkbox" className="size-4 rounded border-border" checked={contacts.length > 0 && selectedContacts.size === contacts.length} onChange={toggleAllContacts} />
+                      </th>
+                      <th className="px-4 py-3">Responsável</th>
+                      <th className="px-4 py-3">Barbearia</th>
+                      <th className="px-4 py-3">Telefone / WhatsApp</th>
+                      <th className="px-4 py-3">Plano</th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3 text-right">Ação</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {contacts.map((contact) => {
+                      const waLink = buildWaLink(contact)
+                      const editing = phoneEdit?.barbershopId === contact.barbershopId
+                      return (
+                        <tr key={contact.barbershopId} className="border-t border-border/70 align-middle transition-colors hover:bg-muted/30">
+                          <td className="px-4 py-3">
+                            <input type="checkbox" className="size-4 rounded border-border" checked={selectedContacts.has(contact.barbershopId)} onChange={() => toggleContact(contact.barbershopId)} />
+                          </td>
+                          <td className="px-4 py-3">
+                            <p className="font-medium">{contact.ownerName}</p>
+                            {contact.ownerEmail ? <p className="text-xs text-muted-foreground">{contact.ownerEmail}</p> : null}
+                          </td>
+                          <td className="px-4 py-3 text-muted-foreground">{contact.barbershopName}</td>
+                          <td className="px-4 py-3">
+                            {editing ? (
+                              <div className="flex items-center gap-1.5">
+                                <Input
+                                  autoFocus
+                                  value={phoneEdit.value}
+                                  onChange={(e) => setPhoneEdit({ barbershopId: contact.barbershopId, value: e.target.value })}
+                                  placeholder="(11) 91234-5678"
+                                  className="h-8 w-40 text-xs"
+                                />
+                                <Button size="icon-sm" className="rounded-lg" disabled={savingPhone} onClick={() => void savePhone(contact)}>
+                                  {savingPhone ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
+                                </Button>
+                                <Button size="icon-sm" variant="ghost" onClick={() => setPhoneEdit(null)}><X className="size-3.5" /></Button>
+                              </div>
+                            ) : contact.ownerPhone ? (
+                              <button
+                                type="button"
+                                className="flex items-center gap-1.5 text-foreground hover:text-primary"
+                                onClick={() => contact.ownerId && setPhoneEdit({ barbershopId: contact.barbershopId, value: contact.ownerPhone ?? '' })}
+                                disabled={!contact.ownerId}
+                              >
+                                {contact.ownerPhone}
+                                {contact.ownerId ? <Pencil className="size-3 text-muted-foreground" /> : null}
+                              </button>
+                            ) : contact.ownerId ? (
+                              <button type="button" className="text-xs text-primary underline" onClick={() => setPhoneEdit({ barbershopId: contact.barbershopId, value: '' })}>
+                                Adicionar telefone
+                              </button>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">Sem responsável ativo</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 capitalize">{contact.plan}</td>
+                          <td className="px-4 py-3">
+                            <span className={cn('rounded-full px-2 py-1 text-xs font-medium', BILLING_STATUS_STYLE[contact.billingStatus] ?? 'bg-muted')}>
+                              {BILLING_STATUS_LABEL[contact.billingStatus] ?? contact.billingStatus}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            {waLink ? (
+                              <a href={waLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-800 hover:bg-emerald-100">
+                                <ExternalLink className="size-3.5" /> Enviar manual
+                              </a>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">Sem telefone</span>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+        ) : null}
+
         {tab === 'templates' ? (
           <div className="grid gap-4 sm:grid-cols-2">
             {templates.length === 0 ? (
-              <Card className="col-span-full rounded-2xl border-border/70 p-10 text-center text-sm text-muted-foreground shadow-sm">
-                Nenhum modelo cadastrado ainda.
+              <Card className="col-span-full rounded-2xl border-border/70 p-2">
+                <EmptyState icon={FileText} title="Nenhum modelo cadastrado" description="Modelos com variáveis agilizam o envio de mensagens personalizadas." className="border-none" />
               </Card>
             ) : templates.map((t) => (
-              <Card key={t.id} className="flex flex-col gap-3 rounded-2xl border-border/70 p-5 shadow-sm">
+              <Card key={t.id} className="flex flex-col gap-3 rounded-2xl border-border/70 p-5 pf-card-lift">
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <p className="font-semibold">{t.name}</p>
@@ -379,11 +571,11 @@ export function MessagesClient() {
         ) : null}
 
         {tab === 'history' ? (
-          <Card className="overflow-hidden rounded-2xl border-border/70 shadow-sm">
+          <Card className="overflow-hidden rounded-2xl border-border/70 pf-card-lift">
             {loading ? (
               <div className="p-10 text-center text-sm text-muted-foreground"><Loader2 className="mx-auto size-5 animate-spin" /></div>
             ) : history.length === 0 ? (
-              <div className="p-10 text-center text-sm text-muted-foreground">Nenhuma mensagem registrada ainda.</div>
+              <EmptyState icon={MessageSquare} title="Nenhuma mensagem registrada" description="O histórico de envios e agendamentos aparecerá aqui." className="border-none" />
             ) : (
               <div className="divide-y divide-border/60">
                 {history.map((m) => (
@@ -409,11 +601,11 @@ export function MessagesClient() {
         ) : null}
 
         {tab === 'inbox' ? (
-          <Card className="overflow-hidden rounded-2xl border-border/70 shadow-sm">
+          <Card className="overflow-hidden rounded-2xl border-border/70 pf-card-lift">
             {loading ? (
               <div className="p-10 text-center text-sm text-muted-foreground"><Loader2 className="mx-auto size-5 animate-spin" /></div>
             ) : inbox.length === 0 ? (
-              <div className="p-10 text-center text-sm text-muted-foreground">Nenhuma mensagem recebida. Respostas dos clientes aparecerão aqui quando os canais estiverem integrados.</div>
+              <EmptyState icon={Inbox} title="Nenhuma mensagem recebida" description="Respostas dos clientes aparecerão aqui quando os canais estiverem integrados." className="border-none" />
             ) : (
               <div className="divide-y divide-border/60">
                 {inbox.map((m) => (

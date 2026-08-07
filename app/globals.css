@@ -170,6 +170,65 @@
 }
 
 /* ============================================================================
+   PAINEL ADMINISTRATIVO — polish premium (prefixo `pf-`)
+   Escopo: apenas app/plataforma/** e components/platform/**. Aditivo only —
+   nenhum token de cor existente é alterado.
+   ============================================================================ */
+
+:root {
+  --pf-shadow-card: 0 1px 2px oklch(0.2 0.03 165 / 0.05), 0 6px 16px oklch(0.2 0.03 165 / 0.07);
+  --pf-shadow-card-hover: 0 2px 4px oklch(0.2 0.03 165 / 0.07), 0 14px 32px oklch(0.2 0.03 165 / 0.12);
+  --pf-shadow-gold: 0 4px 14px oklch(0.74 0.128 86 / 0.22);
+}
+
+.dark {
+  --pf-shadow-card: 0 1px 2px oklch(0 0 0 / 0.25), 0 6px 18px oklch(0 0 0 / 0.3);
+  --pf-shadow-card-hover: 0 2px 6px oklch(0 0 0 / 0.3), 0 16px 36px oklch(0 0 0 / 0.4);
+  --pf-shadow-gold: 0 4px 16px oklch(0.78 0.13 86 / 0.18);
+}
+
+.pf-card-lift {
+  box-shadow: var(--pf-shadow-card);
+  transition: box-shadow 200ms var(--lp-ease-out, ease), transform 200ms var(--lp-ease-out, ease);
+}
+.pf-card-lift:hover {
+  box-shadow: var(--pf-shadow-card-hover);
+  transform: translateY(-1px);
+}
+
+.pf-premium-badge {
+  background: linear-gradient(135deg, oklch(0.82 0.12 88) 0%, oklch(0.72 0.13 85) 100%);
+  color: oklch(0.24 0.03 80);
+}
+
+@keyframes pf-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.pf-skeleton {
+  background-image: linear-gradient(
+    90deg,
+    var(--color-muted) 25%,
+    color-mix(in oklch, var(--color-muted), var(--color-background) 40%) 50%,
+    var(--color-muted) 75%
+  );
+  background-size: 200% 100%;
+  animation: pf-shimmer 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pf-card-lift {
+    transition: none;
+  }
+  .pf-card-lift:hover {
+    transform: none;
+  }
+  .pf-skeleton {
+    animation: none;
+  }
+}
+
+/* ============================================================================
    LANDING PAGE — design tokens dedicados (prefixo `lp-`)
    Escopo: apenas a landing pública (/). Nada aqui altera a plataforma,
    pois todos os nomes são prefixados e nenhum token existente foi tocado.

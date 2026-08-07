@@ -37,6 +37,12 @@ export async function GET(request: Request) {
       .is('read_at', null)
       .eq('direction', 'inbound')
 
+    const sixMonthsAgo = daysAgoIso(180)
+    const { data: messageRows } = await admin
+      .from('platform_messages')
+      .select('created_at, status')
+      .gte('created_at', sixMonthsAgo)
+
     const rows = shops ?? []
     const normalizedRows = rows.map((shop) => ({
       ...shop,
@@ -86,9 +92,16 @@ export async function GET(request: Request) {
       asaasAvailable = false
     }
 
-    const charts = buildAdminCharts(normalizedRows, receivedThisMonth)
+    const messages = messageRows ?? []
+    const charts = buildAdminCharts(normalizedRows, receivedThisMonth, new Date(), messages)
     const attention = buildAttentionItems(normalizedRows, unreadCount ?? 0)
     const newShopsComparison = computePeriodComparison(normalizedRows, periodDays)
+
+    const nonTrialing = rows.length - byStatus.trialing
+    const delinquencyRate = nonTrialing > 0 ? Number(((byStatus.past_due / nonTrialing) * 100).toFixed(1)) : 0
+    const periodStart = daysAgoIso(periodDays)
+    const sentStatuses = new Set(['sent', 'delivered', 'read', 'replied'])
+    const messagesSent = messages.filter((m) => m.created_at >= periodStart && sentStatuses.has(m.status)).length
 
     return NextResponse.json({
       totals: {
@@ -96,6 +109,7 @@ export async function GET(request: Request) {
         users: membersCount ?? 0,
         newLast7Days: rows.filter((shop) => shop.created_at >= last7).length,
         newLast30Days: rows.filter((shop) => shop.created_at >= last30).length,
+        messagesSent,
       },
       billing: {
         trialing: byStatus.trialing,
@@ -105,7 +119,7 @@ export async function GET(request: Request) {
         trialExpiringSoon,
         trialExpired,
       },
-      revenue: { ...revenue, receivedThisMonth, asaasAvailable },
+      revenue: { ...revenue, receivedThisMonth, asaasAvailable, delinquencyRate },
       plans: byPlan,
       charts,
       attention,
