@@ -15,6 +15,7 @@ import {
   IdCard,
   Lock,
   Mail,
+  Phone,
   Scissors,
   ShieldCheck,
   Store,
@@ -38,8 +39,17 @@ import { createBrowserSupabaseClient, isSupabaseConfigured } from '@/lib/supabas
 import { trackMetaEvent } from '@/lib/meta-pixel'
 import { cn } from '@/lib/utils'
 import { formatBillingDocument, isValidBillingDocument, onlyDigits } from '@/lib/billing-document'
+import { formatPhone, isValidPhone, onlyPhoneDigits } from '@/lib/phone'
 
-type FieldKey = 'owner' | 'email' | 'shop' | 'city' | 'billingDocument' | 'password' | 'confirm'
+type FieldKey =
+  | 'owner'
+  | 'email'
+  | 'phone'
+  | 'shop'
+  | 'city'
+  | 'billingDocument'
+  | 'password'
+  | 'confirm'
 
 /** Classes aplicadas a um campo em erro, sobre o estado padrão do `Input`. */
 const fieldErrorClass =
@@ -57,6 +67,7 @@ export function CadastroClient({ selectedPlanId }: { selectedPlanId: SaasPlanId 
   const router = useRouter()
   const [owner, setOwner] = useState('')
   const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
   const [shop, setShop] = useState('')
   const [city, setCity] = useState('')
   const [billingDocument, setBillingDocument] = useState('')
@@ -101,13 +112,21 @@ export function CadastroClient({ selectedPlanId }: { selectedPlanId: SaasPlanId 
       return
     }
 
-    if (!owner.trim() || !email.trim() || !shop.trim() || !billingDocument.trim() || !password) {
+    if (
+      !owner.trim() ||
+      !email.trim() ||
+      !phone.trim() ||
+      !shop.trim() ||
+      !billingDocument.trim() ||
+      !password
+    ) {
       showError(
-        'Preencha nome, e-mail, barbearia, CPF/CNPJ e senha.',
+        'Preencha nome, e-mail, telefone, barbearia, CPF/CNPJ e senha.',
         (
           [
             ['owner', owner.trim()],
             ['email', email.trim()],
+            ['phone', phone.trim()],
             ['shop', shop.trim()],
             ['billingDocument', billingDocument.trim()],
             ['password', password],
@@ -116,6 +135,11 @@ export function CadastroClient({ selectedPlanId }: { selectedPlanId: SaasPlanId 
           .filter(([, value]) => !value)
           .map(([field]) => field),
       )
+      return
+    }
+
+    if (!isValidPhone(phone)) {
+      showError('Informe um telefone válido com DDD, como (24) 99836-9828.', ['phone'])
       return
     }
 
@@ -141,6 +165,7 @@ export function CadastroClient({ selectedPlanId }: { selectedPlanId: SaasPlanId 
       options: {
         data: {
           owner_name: owner.trim(),
+          owner_phone: onlyPhoneDigits(phone),
           barbershop_name: shop.trim(),
           barbershop_city: city.trim(),
           barbershop_document: onlyDigits(billingDocument),
@@ -167,6 +192,7 @@ export function CadastroClient({ selectedPlanId }: { selectedPlanId: SaasPlanId 
         owner_name: owner.trim(),
         selected_plan: plan,
         billing_document: onlyDigits(billingDocument),
+        owner_phone: onlyPhoneDigits(phone),
       })
 
       if (onboardingError) {
@@ -288,6 +314,31 @@ export function CadastroClient({ selectedPlanId }: { selectedPlanId: SaasPlanId 
                         className={cn('h-11 pl-9', hasError('email') && fieldErrorClass)}
                       />
                     </div>
+                  </div>
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label htmlFor="phone">Telefone / WhatsApp</Label>
+                    <div className="relative">
+                      <Phone className={fieldIconClass(hasError('phone'))} />
+                      <Input
+                        id="phone"
+                        name="phone"
+                        type="tel"
+                        inputMode="tel"
+                        autoComplete="tel"
+                        value={phone}
+                        onChange={(event) => {
+                          setPhone(formatPhone(event.target.value))
+                          clearError('phone')
+                        }}
+                        placeholder="(99) 99999-9999"
+                        aria-invalid={hasError('phone')}
+                        aria-describedby={status ? 'cadastro-status telefone-ajuda' : 'telefone-ajuda'}
+                        className={cn('h-11 pl-9', hasError('phone') && fieldErrorClass)}
+                      />
+                    </div>
+                    <p id="telefone-ajuda" className="text-xs text-muted-foreground">
+                      Usamos para falar com você sobre a conta e o suporte.
+                    </p>
                   </div>
                 </div>
               </section>
