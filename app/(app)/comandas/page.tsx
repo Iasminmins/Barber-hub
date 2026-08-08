@@ -651,7 +651,14 @@ export default function ComandasPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="edit-order-method">Pagamento</Label>
-                <Select id="edit-order-method" value={editingOrder.method ?? ''} disabled={editingOrder.status !== 'paga'} onChange={(event) => setEditingOrder({ ...editingOrder, method: event.target.value as PaymentMethod })}>
+                <Select id="edit-order-method" value={editingOrder.method ?? ''} onChange={(event) => {
+                  const method = event.target.value as PaymentMethod | ''
+                  setEditingOrder({
+                    ...editingOrder,
+                    method: method || undefined,
+                    status: method && editingOrder.status !== 'paga' ? 'paga' : editingOrder.status,
+                  })
+                }}>
                   <option value="">Selecione</option>
                   <option value="dinheiro">Dinheiro</option>
                   <option value="pix">Pix</option>
@@ -659,6 +666,9 @@ export default function ComandasPage() {
                   <option value="debito">Débito</option>
                   <option value="outro">Outro</option>
                 </Select>
+                {editingOrder.status !== 'paga' ? (
+                  <p className="text-xs text-muted-foreground">Ao escolher o pagamento, a comanda é marcada como paga.</p>
+                ) : null}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
