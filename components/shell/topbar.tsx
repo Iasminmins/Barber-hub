@@ -358,7 +358,7 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
     month: 'long',
   }).format(new Date())
 
-  const unreadNotifications = notifications.agendamentos.length
+  const totalNotifications = Object.values(notifications).reduce((sum, items) => sum + items.length, 0)
   const activeNotifications = notifications[activeTab]
 
   return (
@@ -429,9 +429,9 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
             onClick={() => setNotificationsOpen((value) => !value)}
           >
             <Bell className="size-5" />
-            {unreadNotifications > 0 ? (
+            {totalNotifications > 0 ? (
               <span className="absolute -right-0.5 -top-0.5 flex size-5 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">
-                {unreadNotifications}
+                {totalNotifications}
               </span>
             ) : null}
           </Button>
@@ -445,7 +445,7 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="rounded-md bg-muted px-2.5 py-1 text-xs font-semibold text-foreground">
-                    {unreadNotifications} {unreadNotifications === 1 ? 'nova' : 'novas'}
+                    {totalNotifications} {totalNotifications === 1 ? 'nova' : 'novas'}
                   </span>
                   <Button variant="ghost" size="icon-sm" aria-label="Marcar agendamentos como lidos" onClick={markNotificationsAsRead}>
                     <CheckCheck className="size-4" />
