@@ -35,6 +35,7 @@ export interface Member {
   barbershopId: string
   name: string
   email: string
+  phone: string
   role: Role
   active: boolean
   employeeId?: string

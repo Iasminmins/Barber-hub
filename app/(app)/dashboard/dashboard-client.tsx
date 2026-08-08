@@ -26,6 +26,7 @@ import {
 } from '@/components/dashboard/period-controls'
 import { RevenueChart } from '@/components/dashboard/revenue-chart'
 import { MethodChart } from '@/components/dashboard/method-chart'
+import { OwnerPhoneReminder } from '@/components/dashboard/owner-phone-reminder'
 import { daysUntil, formatCurrency, formatDateShort } from '@/lib/format'
 import type {
   Appointment,
@@ -245,6 +246,9 @@ export function DashboardClient({
   subscriptions,
   lowStockThreshold,
   isBarber = false,
+  memberId,
+  memberPhone,
+  updateMemberPhone,
 }: {
   barbershopName: string
   appointments: Appointment[]
@@ -258,6 +262,9 @@ export function DashboardClient({
   subscriptions: Subscription[]
   lowStockThreshold: number
   isBarber?: boolean
+  memberId: string
+  memberPhone: string
+  updateMemberPhone: (phone: string) => Promise<{ error?: string }>
 }) {
   const dashboardOrders = orders
   const dashboardAppointments = appointments
@@ -372,6 +379,8 @@ export function DashboardClient({
         title={isBarber ? 'Meu painel' : 'Dashboard'}
         description={isBarber ? 'Sua agenda, produção, faturamento e comissões.' : 'Visão geral da operação da sua barbearia.'}
       />
+
+      <OwnerPhoneReminder memberId={memberId} phone={memberPhone} updateMemberPhone={updateMemberPhone} />
 
       <DashboardPeriodControls
         period={period}

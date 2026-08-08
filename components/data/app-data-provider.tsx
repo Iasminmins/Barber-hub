@@ -102,7 +102,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     const { data: memberships, error: memberError } = await withTimeout(
       supabase
         .from('members')
-        .select('id, barbershop_id, employee_id, name, email, role, active, permissions')
+        .select('id, barbershop_id, employee_id, name, email, phone, role, active, permissions')
         .eq('user_id', user.id)
         .eq('active', true)
         .order('created_at'),
@@ -136,7 +136,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
     const results = await withTimeout(
       Promise.all([
-        supabase.from('members').select('id, barbershop_id, employee_id, name, email, role, active, permissions').eq('barbershop_id', shopId).order('name'),
+        supabase.from('members').select('id, barbershop_id, employee_id, name, email, phone, role, active, permissions').eq('barbershop_id', shopId).order('name'),
         supabase.from('employees').select('*').eq('barbershop_id', shopId).order('name'),
         fetchAllRows((from, to) => supabase.from('clients').select('*').eq('barbershop_id', shopId).order('name').range(from, to)),
         supabase.from('catalog_items').select('*').eq('barbershop_id', shopId).order('name'),
@@ -200,8 +200,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         paymentMethods: normalizePaymentMethods(shop.payment_methods),
         agendaSettings: normalizeAgendaSettings(shop.agenda_settings),
       },
-      member: { id: currentMembership.id, barbershopId: shopId, employeeId: linkedEmployeeId || undefined, name: currentMembership.name, email: currentMembership.email, role: currentMembership.role, active: currentMembership.active, permissions:currentMembership.permissions??['dashboard','agenda'] },
-      staffMembers: staffMembers.map((r: any) => ({ id:r.id, barbershopId:r.barbershop_id, employeeId:r.employee_id??undefined, name:r.name, email:r.email, role:r.role, active:r.active, permissions:r.permissions??['dashboard','agenda'] })),
+      member: { id: currentMembership.id, barbershopId: shopId, employeeId: linkedEmployeeId || undefined, name: currentMembership.name, email: currentMembership.email, phone: currentMembership.phone ?? '', role: currentMembership.role, active: currentMembership.active, permissions:currentMembership.permissions??['dashboard','agenda'] },
+      staffMembers: staffMembers.map((r: any) => ({ id:r.id, barbershopId:r.barbershop_id, employeeId:r.employee_id??undefined, name:r.name, email:r.email, phone:r.phone??'', role:r.role, active:r.active, permissions:r.permissions??['dashboard','agenda'] })),
       employees: visibleEmployees.map((r: any) => ({ id:r.id, barbershopId:r.barbershop_id, name:r.name, role:r.role, phone:r.phone??'', email:r.email??'', active:r.active, serviceCommission:num(r.service_commission), productCommission:num(r.product_commission), subscriptionCommission:num(r.subscription_commission), avatarColor:r.avatar_color??undefined, avatarUrl:r.avatar_url??undefined })),
       clients: clients.map((r: any) => ({ id:safeText(r.id), barbershopId:safeText(r.barbershop_id), name:safeText(r.name), phone:safeText(r.phone), email:safeText(r.email), birthDate:safeText(r.birth_date), postalCode:safeText(r.postal_code), address:safeText(r.address), addressNumber:safeText(r.address_number), addressComplement:safeText(r.address_complement), neighborhood:safeText(r.neighborhood), city:safeText(r.city), state:safeText(r.state), preferredDay:safeText(r.preferred_day), notes:safeText(r.notes), tags:safeStringArray(r.tags), totalSpent:num(r.total_spent), visits:num(r.visits), lastVisit:safeText(r.last_visit), favoriteService:safeText(r.favorite_service), preferredBarber:safeText(r.preferred_barber), createdAt:safeText(r.created_at) })),
       catalog: catalog.map((r: any) => ({ id:safeText(r.id), barbershopId:safeText(r.barbershop_id), type:safeText(r.type), name:safeText(r.name), category:safeText(r.category), price:num(r.price), cost:num(r.cost), durationMin:r.duration_min??undefined, stock:r.stock??undefined, minStock:r.min_stock??undefined, commission:num(r.commission), active:Boolean(r.active) })),
