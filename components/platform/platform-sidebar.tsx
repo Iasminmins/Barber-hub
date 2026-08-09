@@ -56,41 +56,43 @@ export function PlatformSidebar({
   return (
     <aside
       className={cn(
-        'flex h-full flex-col border-r border-sidebar-border bg-sidebar transition-[width] duration-200',
+        'flex h-screen flex-col border-r border-sidebar-border bg-sidebar transition-[width] duration-200 ease-out',
         collapsed ? 'w-[72px]' : 'w-64',
       )}
     >
-      <div className={cn('flex h-16 items-center border-b border-sidebar-border px-4', collapsed ? 'justify-center' : 'gap-3')}>
-        <div className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
-          <Scissors className="size-4" />
-        </div>
-        {!collapsed ? (
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5">
-              <p className="truncate text-sm font-bold text-sidebar-foreground">Barber Hub</p>
-              <span className="pf-premium-badge shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide">Premium</span>
-            </div>
-            <p className="truncate text-[11px] text-muted-foreground">Administração SaaS</p>
-          </div>
-        ) : null}
-        {!collapsed ? (
+      <div className={cn('flex h-16 items-center border-b border-sidebar-border', collapsed ? 'flex-col justify-center gap-1 px-2 py-2' : 'gap-3 px-4')}>
+        {collapsed ? (
           <button
             type="button"
             onClick={onToggle}
-            className="hidden size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-sidebar-accent lg:flex"
-            aria-label="Recolher menu"
+            title="Expandir menu"
+            aria-label="Expandir menu"
+            className="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors duration-150 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
           >
-            <PanelLeftClose className="size-4" />
+            <PanelLeft className="size-4" />
           </button>
         ) : (
-          <button
-            type="button"
-            onClick={onToggle}
-            className="sr-only"
-            aria-label="Expandir menu"
-          >
-            Expandir
-          </button>
+          <>
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+              <Scissors className="size-4" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <p className="truncate text-sm font-medium text-sidebar-foreground">Barber Hub</p>
+                <span className="pf-premium-badge shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide">Premium</span>
+              </div>
+              <p className="truncate text-[11px] text-muted-foreground">Administração SaaS</p>
+            </div>
+            <button
+              type="button"
+              onClick={onToggle}
+              title="Recolher menu"
+              aria-label="Recolher menu"
+              className="hidden size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors duration-150 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground lg:flex"
+            >
+              <PanelLeftClose className="size-4" />
+            </button>
+          </>
         )}
       </div>
 
@@ -119,7 +121,7 @@ export function PlatformSidebar({
                     <>
                       <span className="flex-1 truncate">{item.label}</span>
                       {badge > 0 ? (
-                        <span className="rounded-full bg-gold px-1.5 py-0.5 text-[10px] font-bold text-gold-foreground">
+                        <span className="rounded-full bg-gold px-1.5 py-0.5 text-[10px] font-medium text-gold-foreground">
                           {badge > 99 ? '99+' : badge}
                         </span>
                       ) : null}
@@ -146,8 +148,8 @@ export function PlatformSidebar({
           </button>
         ) : (
           <div className="mb-3 rounded-xl bg-sidebar-accent/60 px-3 py-2.5">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Conectado</p>
-            <p className="truncate text-sm font-medium text-sidebar-foreground">{adminName || 'Administrador'}</p>
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Conectado</p>
+            <p className="truncate text-sm text-sidebar-foreground">{adminName || 'Administrador'}</p>
           </div>
         )}
         <Button

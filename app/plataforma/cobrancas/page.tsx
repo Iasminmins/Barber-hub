@@ -12,8 +12,9 @@ export default function CobrancasPage() {
   return (
     <TenantListView
       title="Cobranças"
-      description="Próximas cobranças, vencimentos e inadimplência."
-      initialBilling="due7"
+      description="Vencimentos dos próximos 7 dias e contas em atraso."
+      initialBilling="attention"
+      variant="billing"
     />
   )
 }

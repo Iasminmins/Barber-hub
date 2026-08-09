@@ -1,13 +1,14 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import {
   Send, FileText, Inbox, MessageSquare, Loader2, Save, Calendar, Eye, X, Check,
   AlertTriangle, Mail, MessageCircle, Smartphone, Bell, MailOpen, Users, Ban,
-  Phone, Pencil, ExternalLink,
+  Phone, Pencil, ExternalLink, Search, Info, PlugZap,
 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -15,16 +16,18 @@ import { Select } from '@/components/ui/select'
 import { PlatformShell } from '@/components/platform/platform-shell'
 import { EmptyState } from '@/components/platform/empty-state'
 import { FeedbackBanner } from '@/components/platform/feedback-banner'
-import { SectionHeader } from '@/components/platform/section-header'
+import { StatusBadge, billingLabel, billingTone } from '@/components/platform/status-badge'
+import { PlanPill } from '@/components/platform/plan-pill'
 import { usePlatformSession } from '../use-platform-session'
 import type { MessageTemplate, PlatformMessage, MessageContact } from '../types'
 import { formatDate } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { buildRecipientContext, personalizeMessage } from '@/lib/platform-messaging'
+import { situationalWhatsAppMessage, QUICK_TEMPLATES } from '@/lib/platform-whatsapp-templates'
 import { whatsappUrl } from '@/lib/whatsapp'
 
 type Channel = 'whatsapp' | 'email' | 'sms' | 'in_app'
-type Tab = 'compose' | 'templates' | 'history' | 'inbox'
+type Tab = 'contacts' | 'history' | 'bulk' | 'templates' | 'inbox'
 
 type RecipientPreview = { count: number; estimatedCost: number | null; sample: { id: string; name: string; owner: string | null }[] }
 type SendPreview = { recipientCount: number; channel: Channel; estimatedCost: number | null; message: string }
@@ -43,40 +46,64 @@ const CHANNELS = [
 
 const VARIABLES = ['nome_responsavel', 'nome_barbearia', 'plano', 'dias_restantes', 'data_vencimento', 'link_pagamento']
 
+/** Só entram no histórico os envios que realmente saíram — filas de provedores stub poluem a lista. */
+const HISTORY_STATUSES = ['sent', 'delivered', 'read', 'replied']
+
 const STATUS_LABEL: Record<string, string> = {
   draft: 'Rascunho', scheduled: 'Agendada', queued: 'Na fila', sent: 'Enviada',
   delivered: 'Entregue', read: 'Lida', replied: 'Respondida', failed: 'Com erro', cancelled: 'Cancelada',
 }
-const STATUS_STYLE: Record<string, string> = {
-  draft: 'bg-muted text-muted-foreground', scheduled: 'bg-amber-100 text-amber-800',
-  queued: 'bg-sky-100 text-sky-800', sent: 'bg-emerald-100 text-emerald-800',
-  delivered: 'bg-emerald-100 text-emerald-800', read: 'bg-emerald-100 text-emerald-800',
-  replied: 'bg-emerald-100 text-emerald-800', failed: 'bg-red-100 text-red-800',
-  cancelled: 'bg-muted text-muted-foreground line-through',
+const HISTORY_TONE: Record<string, 'success' | 'warning' | 'neutral'> = {
+  sent: 'success', delivered: 'success', read: 'success', replied: 'warning',
 }
 
-const BILLING_STATUS_LABEL: Record<string, string> = { trialing: 'Em teste', active: 'Ativa', past_due: 'Em atraso', canceled: 'Cancelada' }
-const BILLING_STATUS_STYLE: Record<string, string> = {
-  trialing: 'bg-amber-100 text-amber-800', active: 'bg-emerald-100 text-emerald-800',
-  past_due: 'bg-red-100 text-red-800', canceled: 'bg-muted text-muted-foreground',
-}
+const STATUS_FILTERS: { key: string; label: string }[] = [
+  { key: '', label: 'Todos' },
+  { key: 'active', label: 'Ativos' },
+  { key: 'trialing', label: 'Em teste' },
+  { key: 'past_due', label: 'Em atraso' },
+  { key: 'canceled', label: 'Cancelados' },
+]
+
+const PLAN_FILTERS: { key: string; label: string }[] = [
+  { key: '', label: 'Todos os planos' },
+  { key: 'starter', label: 'Starter' },
+  { key: 'pro', label: 'Pro' },
+  { key: 'premium', label: 'Premium' },
+]
 
 function money(v: number | null) {
   return v === null ? '—' : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
+function FilterChip({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'shrink-0 rounded-full border px-3 py-1.5 text-[13px] transition-colors duration-150',
+        active ? 'border-primary/30 bg-primary/[0.08] text-primary' : 'border-border/60 text-muted-foreground hover:bg-muted/40',
+      )}
+    >
+      {label}
+    </button>
+  )
+}
+
 export function MessagesClient() {
-  const { gate, adminName, token, signOut } = usePlatformSession()
+  const { gate, adminName, signOut } = usePlatformSession()
   const params = useSearchParams()
 
-  const [tab, setTab] = useState<Tab>('compose')
+  const [tab, setTab] = useState<Tab>('contacts')
   const [templates, setTemplates] = useState<MessageTemplate[]>([])
   const [history, setHistory] = useState<PlatformMessage[]>([])
   const [inbox, setInbox] = useState<InboxItem[]>([])
   const [loading, setLoading] = useState(false)
   const [feedback, setFeedback] = useState<{ type: 'ok' | 'error'; text: string } | null>(null)
+  const [configuredChannels, setConfiguredChannels] = useState<string[]>([])
 
-  // compose state
+  // composição (compartilhada entre envio manual e disparo em massa)
   const [channel, setChannel] = useState<Channel>('whatsapp')
   const [subject, setSubject] = useState('')
   const [msgBody, setMsgBody] = useState('')
@@ -87,27 +114,44 @@ export function MessagesClient() {
   const [countingRecipients, setCountingRecipients] = useState(false)
   const [sendPreview, setSendPreview] = useState<SendPreview | null>(null)
   const [sending, setSending] = useState(false)
+  const [showBlockedForm, setShowBlockedForm] = useState(false)
   const bodyRef = useRef<HTMLTextAreaElement | null>(null)
+  const bulkBodyRef = useRef<HTMLTextAreaElement | null>(null)
 
-  // contacts table (envio manual via WhatsApp)
+  // contatos (envio manual via WhatsApp)
   const [contacts, setContacts] = useState<MessageContact[]>([])
   const [loadingContacts, setLoadingContacts] = useState(false)
+  const [contactSearch, setContactSearch] = useState('')
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set())
   const [phoneEdit, setPhoneEdit] = useState<{ barbershopId: string; value: string } | null>(null)
   const [savingPhone, setSavingPhone] = useState(false)
 
   useEffect(() => {
     const t = params.get('tab')
-    if (t === 'inbox' || t === 'history' || t === 'templates' || t === 'compose') setTab(t)
+    if (t === 'inbox' || t === 'history' || t === 'templates' || t === 'contacts') setTab(t)
+    else if (t === 'compose' || t === 'bulk') setTab('bulk')
+    else if (params.get('compose') === '1') setTab('contacts')
   }, [params])
 
-  const authHeaders = useMemo(() => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }), [token])
+  const authHeaders = useMemo(() => ({ 'Content-Type': 'application/json' }), [])
 
   const loadTemplates = useCallback(async () => {
     const res = await fetch('/api/admin/messages/templates', { headers: authHeaders })
     const data = await res.json()
     if (res.ok) setTemplates(data.items ?? [])
   }, [authHeaders])
+
+  const loadIntegrations = useCallback(async () => {
+    const res = await fetch('/api/admin/settings', { cache: 'no-store' })
+    const data = await res.json()
+    if (res.ok) {
+      setConfiguredChannels(
+        (data.integrations ?? [])
+          .filter((i: { configured: boolean }) => i.configured)
+          .map((i: { key: string }) => i.key),
+      )
+    }
+  }, [])
 
   const loadHistory = useCallback(async () => {
     setLoading(true)
@@ -129,7 +173,8 @@ export function MessagesClient() {
     if (gate === 'anon') { window.location.replace('/login'); return }
     if (gate !== 'granted') return
     void loadTemplates()
-  }, [gate, loadTemplates])
+    void loadIntegrations()
+  }, [gate, loadTemplates, loadIntegrations])
 
   useEffect(() => {
     if (gate !== 'granted') return
@@ -137,9 +182,9 @@ export function MessagesClient() {
     if (tab === 'inbox') void loadInbox()
   }, [gate, tab, loadHistory, loadInbox])
 
-  // live recipient count (debounced) when composing
+  // contagem de destinatários (debounce) no disparo em massa
   useEffect(() => {
-    if (gate !== 'granted' || tab !== 'compose') return
+    if (gate !== 'granted' || tab !== 'bulk') return
     setCountingRecipients(true)
     const timer = window.setTimeout(async () => {
       try {
@@ -157,9 +202,9 @@ export function MessagesClient() {
     return () => window.clearTimeout(timer)
   }, [gate, tab, filters, channel, authHeaders, selectedContacts])
 
-  // lista de contatos (telefones cadastrados) para envio manual, respeitando os mesmos filtros
+  // lista de contatos, respeitando os mesmos filtros
   useEffect(() => {
-    if (gate !== 'granted' || tab !== 'compose') return
+    if (gate !== 'granted' || tab !== 'contacts') return
     setLoadingContacts(true)
     const timer = window.setTimeout(async () => {
       try {
@@ -180,8 +225,8 @@ export function MessagesClient() {
     return () => window.clearTimeout(timer)
   }, [gate, tab, filters, authHeaders])
 
-  function insertVariable(v: string) {
-    const el = bodyRef.current
+  function insertVariable(v: string, target: 'contacts' | 'bulk') {
+    const el = target === 'bulk' ? bulkBodyRef.current : bodyRef.current
     const snippet = `{{${v}}}`
     if (!el) { setMsgBody((b) => b + snippet); return }
     const start = el.selectionStart ?? msgBody.length
@@ -195,19 +240,41 @@ export function MessagesClient() {
     setSubject(t.subject ?? '')
     setMsgBody(t.body)
     setTemplateId(t.id)
-    setTab('compose')
+    setTab(t.channel === 'whatsapp' ? 'contacts' : 'bulk')
     setFeedback({ type: 'ok', text: `Modelo "${t.name}" carregado no editor.` })
   }
 
+  /** Mensagem personalizada do contato — usa o texto digitado ou o modelo situacional do status. */
   function buildWaLink(contact: MessageContact) {
     if (!contact.ownerPhone) return null
-    const context = buildRecipientContext(
-      { name: contact.barbershopName, plan: contact.plan, trial_ends_at: contact.trialEndsAt, next_billing_date: contact.nextBillingDate, slug: contact.barbershopSlug },
-      { name: contact.ownerName, email: contact.ownerEmail ?? '' },
-    )
-    const text = personalizeMessage(msgBody || '{{nome_responsavel}}, tudo bem?', context)
+    const text = msgBody.trim()
+      ? personalizeMessage(
+          msgBody,
+          buildRecipientContext(
+            { name: contact.barbershopName, plan: contact.plan, trial_ends_at: contact.trialEndsAt, next_billing_date: contact.nextBillingDate, slug: contact.barbershopSlug },
+            { name: contact.ownerName, email: contact.ownerEmail ?? '' },
+          ),
+        )
+      : situationalWhatsAppMessage({
+          ownerName: contact.ownerName,
+          barbershopName: contact.barbershopName,
+          plan: contact.plan,
+          billingStatus: contact.billingStatus,
+          trialEndsAt: contact.trialEndsAt,
+          nextBillingDate: contact.nextBillingDate,
+        })
     return whatsappUrl(contact.ownerPhone, text) || null
   }
+
+  const visibleContacts = useMemo(() => {
+    const q = contactSearch.trim().toLowerCase()
+    if (!q) return contacts
+    return contacts.filter((c) => (
+      [c.ownerName, c.barbershopName, c.barbershopCity ?? '', c.ownerEmail ?? ''].join(' ').toLowerCase().includes(q)
+    ))
+  }, [contacts, contactSearch])
+
+  const selectableContacts = useMemo(() => visibleContacts.filter((c) => c.ownerPhone), [visibleContacts])
 
   function toggleContact(id: string) {
     setSelectedContacts((prev) => {
@@ -219,7 +286,24 @@ export function MessagesClient() {
   }
 
   function toggleAllContacts() {
-    setSelectedContacts((prev) => (prev.size === contacts.length ? new Set() : new Set(contacts.map((c) => c.barbershopId))))
+    setSelectedContacts((prev) => (
+      prev.size === selectableContacts.length ? new Set() : new Set(selectableContacts.map((c) => c.barbershopId))
+    ))
+  }
+
+  /** Abre as conversas selecionadas em sequência — o navegador pode pedir permissão para pop-ups. */
+  function openSelectedConversations() {
+    const targets = selectableContacts.filter((c) => selectedContacts.has(c.barbershopId))
+    if (targets.length === 0) return
+    targets.forEach((contact, index) => {
+      const link = buildWaLink(contact)
+      if (!link) return
+      window.setTimeout(() => window.open(link, '_blank', 'noopener,noreferrer'), index * 600)
+    })
+    setFeedback({
+      type: 'ok',
+      text: `Abrindo ${targets.length} conversa(s) no WhatsApp. Se nada aparecer, autorize pop-ups para este site.`,
+    })
   }
 
   async function savePhone(contact: MessageContact) {
@@ -272,16 +356,26 @@ export function MessagesClient() {
     if (res.ok) setInbox((list) => list.map((m) => (m.id === item.id ? { ...m, read_at: read ? new Date().toISOString() : null } : m)))
   }
 
+  /** Modelo rápido em uso: casa pelo texto, então editar a mensagem já desmarca o chip. */
+  const activeQuickTemplate = useMemo(() => {
+    if (!msgBody.trim()) return 'auto'
+    return QUICK_TEMPLATES.find((t) => t.body === msgBody)?.id ?? 'custom'
+  }, [msgBody])
+
   const unreadCount = useMemo(() => inbox.filter((m) => m.direction === 'inbound' && !m.read_at).length, [inbox])
+  const sentHistory = useMemo(() => history.filter((m) => HISTORY_STATUSES.includes(m.status)), [history])
+  const channelBlocked = channel === 'in_app' || !configuredChannels.includes(channel)
+  const channelLabel = CHANNELS.find((c) => c.value === channel)?.label ?? channel
 
   if (gate !== 'granted') {
     return <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">Verificando acesso…</div>
   }
 
   const tabs = [
-    { key: 'compose' as const, label: 'Enviar', icon: Send },
-    { key: 'templates' as const, label: 'Modelos', icon: FileText },
+    { key: 'contacts' as const, label: 'Contatos', icon: Phone },
     { key: 'history' as const, label: 'Histórico', icon: MessageSquare },
+    { key: 'bulk' as const, label: 'Disparos em massa', icon: Send },
+    { key: 'templates' as const, label: 'Modelos', icon: FileText },
     { key: 'inbox' as const, label: 'Caixa de entrada', icon: Inbox, badge: unreadCount },
   ]
 
@@ -289,7 +383,7 @@ export function MessagesClient() {
     <PlatformShell
       adminName={adminName ?? ''}
       title="Central de mensagens"
-      description="Envie mensagens individuais ou em massa, gerencie modelos e responda clientes."
+      description="Contato manual pelo WhatsApp, modelos reutilizáveis e histórico de envios."
       onSignOut={() => void signOut()}
       showGlobalSearch={false}
       showPeriod={false}
@@ -297,33 +391,23 @@ export function MessagesClient() {
       unreadMessages={unreadCount}
     >
       <div className="mx-auto max-w-6xl space-y-5">
-        <SectionHeader
-          title="Central de mensagens"
-          description="Envio manual e registrado, modelos reutilizáveis e histórico completo."
-          icon={MessageSquare}
-          insights={[
-            { label: 'Modelos', value: String(templates.length) },
-            { label: 'Não lidas', value: String(unreadCount), tone: unreadCount > 0 ? 'warning' : 'default' },
-            { label: 'Contatos no filtro', value: String(contacts.length) },
-            { label: 'Com telefone', value: String(contacts.filter((c) => c.ownerPhone).length), tone: 'success' },
-          ]}
-        />
-
-        <div className="flex flex-wrap gap-1 rounded-xl border border-border/70 bg-card p-1">
+        <div className="-mx-1 flex gap-1 overflow-x-auto px-1 no-scrollbar">
           {tabs.map((t) => (
             <button
               key={t.key}
               type="button"
               onClick={() => setTab(t.key)}
               className={cn(
-                'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                tab === t.key ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted',
+                'flex shrink-0 items-center gap-2 rounded-xl border px-3 py-2 text-[13px] transition-colors duration-150',
+                tab === t.key
+                  ? 'border-primary/30 bg-primary/[0.08] font-medium text-primary'
+                  : 'border-border/60 text-muted-foreground hover:bg-muted/40',
               )}
             >
               <t.icon className="size-4" />
               {t.label}
               {t.badge && t.badge > 0 ? (
-                <span className="rounded-full bg-gold px-1.5 py-0.5 text-[10px] font-bold text-gold-foreground">{t.badge}</span>
+                <span className="rounded-full bg-gold px-1.5 py-0.5 text-[10px] font-medium text-gold-foreground">{t.badge}</span>
               ) : null}
             </button>
           ))}
@@ -331,261 +415,366 @@ export function MessagesClient() {
 
         {feedback ? <FeedbackBanner type={feedback.type} text={feedback.text} onDismiss={() => setFeedback(null)} /> : null}
 
-        {tab === 'compose' ? (
-          <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
-            <Card className="space-y-4 rounded-2xl border-border/70 p-5 pf-card-lift">
-              <div>
-                <label className="mb-2 block text-sm font-medium">Canal</label>
-                <div className="flex flex-wrap gap-2">
-                  {CHANNELS.map((c) => (
+        {/* ---------------------------------------------------------------- Contatos */}
+        {tab === 'contacts' ? (
+          <div className="space-y-4">
+            <Card className="pf-card-lift rounded-xl border-border/60 p-4">
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Modelo</p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setMsgBody('')}
+                  title="Cada contato recebe o texto adequado ao status da conta"
+                  className={cn(
+                    'rounded-full border px-3 py-1.5 text-[13px] transition-colors duration-150',
+                    activeQuickTemplate === 'auto'
+                      ? 'border-primary/30 bg-primary/[0.08] text-primary'
+                      : 'border-border/60 text-muted-foreground hover:bg-muted/40',
+                  )}
+                >
+                  Automático por status
+                </button>
+                {QUICK_TEMPLATES.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setMsgBody(activeQuickTemplate === t.id ? '' : t.body)}
+                    className={cn(
+                      'rounded-full border px-3 py-1.5 text-[13px] transition-colors duration-150',
+                      activeQuickTemplate === t.id
+                        ? 'border-primary/30 bg-primary/[0.08] text-primary'
+                        : 'border-border/60 text-muted-foreground hover:bg-muted/40',
+                    )}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="mb-2 mt-4 flex flex-wrap items-center justify-between gap-2">
+                <label htmlFor="mensagem-manual" className="text-sm font-medium text-foreground">
+                  Mensagem
+                  {activeQuickTemplate === 'custom' ? (
+                    <span className="ml-2 text-[11px] font-normal text-muted-foreground">texto personalizado</span>
+                  ) : null}
+                </label>
+                <div className="flex flex-wrap gap-1">
+                  {VARIABLES.map((v) => (
                     <button
-                      key={c.value}
+                      key={v}
                       type="button"
-                      onClick={() => setChannel(c.value)}
-                      className={cn(
-                        'flex items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-colors',
-                        channel === c.value ? 'border-primary bg-primary/10 text-primary' : 'border-border/70 hover:bg-muted',
-                      )}
+                      onClick={() => insertVariable(v, 'contacts')}
+                      className="rounded-md bg-muted/60 px-2 py-0.5 text-[11px] text-muted-foreground transition-colors duration-150 hover:bg-primary/10 hover:text-primary"
                     >
-                      <c.icon className="size-4" />
-                      {c.label}
+                      {`{{${v}}}`}
                     </button>
                   ))}
                 </div>
-                {(channel === 'whatsapp' || channel === 'sms' || channel === 'in_app') ? (
-                  <p className="mt-2 text-xs text-amber-700">Provedor de {CHANNELS.find((c) => c.value === channel)?.label} ainda não configurado — a mensagem será registrada e ficará pronta para envio quando o provedor for ligado.</p>
-                ) : null}
               </div>
-
-              {channel === 'email' ? (
-                <div>
-                  <label className="mb-2 block text-sm font-medium">Assunto</label>
-                  <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Assunto do e-mail" />
-                </div>
-              ) : null}
-
-              <div>
-                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <label className="text-sm font-medium">Mensagem</label>
-                  <div className="flex flex-wrap gap-1">
-                    {VARIABLES.map((v) => (
-                      <button key={v} type="button" onClick={() => insertVariable(v)}
-                        className="rounded-md bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground hover:bg-primary/10 hover:text-primary">
-                        {`{{${v}}}`}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <Textarea ref={bodyRef} value={msgBody} onChange={(e) => setMsgBody(e.target.value)} rows={9}
-                  placeholder="Escreva a mensagem. Use as variáveis acima para personalizar." className="resize-y" />
-                <p className="mt-1 text-xs text-muted-foreground">{msgBody.length} caractere(s)</p>
-              </div>
+              <Textarea
+                id="mensagem-manual"
+                ref={bodyRef}
+                value={msgBody}
+                onChange={(e) => setMsgBody(e.target.value)}
+                rows={4}
+                placeholder="Escreva a mensagem que será aberta no WhatsApp. Use as variáveis acima para personalizar."
+                className="resize-y"
+              />
+              <p className="mt-1.5 flex items-start gap-1.5 text-[11px] text-muted-foreground">
+                <Info className="mt-px size-3.5 shrink-0" />
+                Em branco, cada contato recebe automaticamente o texto adequado ao status da conta (teste, cobrança ou relacionamento).
+              </p>
             </Card>
 
-            <div className="space-y-5">
-              <Card className="space-y-3 rounded-2xl border-border/70 p-5 pf-card-lift">
-                <p className="flex items-center gap-2 text-sm font-semibold"><Users className="size-4" /> Destinatários</p>
-                <Select value={filters.status} onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))} className="text-sm">
-                  <option value="">Todos os status</option>
-                  <option value="trialing">Em teste</option>
-                  <option value="active">Ativas</option>
-                  <option value="past_due">Em atraso</option>
-                  <option value="canceled">Canceladas</option>
-                </Select>
-                <Select value={filters.plan} onChange={(e) => setFilters((f) => ({ ...f, plan: e.target.value }))} className="text-sm">
-                  <option value="">Todos os planos</option>
-                  <option value="starter">Starter</option>
-                  <option value="pro">Pro</option>
-                  <option value="premium">Premium</option>
-                </Select>
-                <Input value={filters.city} onChange={(e) => setFilters((f) => ({ ...f, city: e.target.value }))} placeholder="Cidade (opcional)" className="text-sm" />
-                <div className="space-y-2 pt-1">
-                  {([['trialExpiring', 'Teste vencendo (7 dias)'], ['pastDue', 'Inadimplentes'], ['inactive', 'Inativos (30+ dias)']] as const).map(([key, label]) => (
-                    <label key={key} className="flex items-center gap-2 text-sm">
-                      <input type="checkbox" checked={filters[key]} onChange={(e) => setFilters((f) => ({ ...f, [key]: e.target.checked }))} className="size-4 rounded border-border" />
-                      {label}
-                    </label>
+            <div className="flex flex-col gap-3">
+              <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 no-scrollbar">
+                {STATUS_FILTERS.map((f) => (
+                  <FilterChip
+                    key={f.key || 'all'}
+                    label={f.label}
+                    active={filters.status === f.key}
+                    onClick={() => setFilters((prev) => ({ ...prev, status: f.key }))}
+                  />
+                ))}
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 no-scrollbar">
+                  {PLAN_FILTERS.map((f) => (
+                    <FilterChip
+                      key={f.key || 'all-plans'}
+                      label={f.label}
+                      active={filters.plan === f.key}
+                      onClick={() => setFilters((prev) => ({ ...prev, plan: f.key }))}
+                    />
                   ))}
                 </div>
-              </Card>
-
-              <Card className="space-y-3 rounded-2xl border-border/70 p-5 pf-card-lift">
-                <div className="flex items-baseline justify-between">
-                  <span className="text-sm text-muted-foreground">{selectedContacts.size > 0 ? 'Selecionados' : 'Alcançará'}</span>
-                  <span className="text-2xl font-bold tabular-nums">
-                    {countingRecipients ? <Loader2 className="size-5 animate-spin" /> : (recipients?.count ?? 0)}
-                  </span>
+                <div className="relative sm:ml-auto sm:w-64">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    className="h-9 rounded-xl pl-9 text-sm"
+                    placeholder="Buscar por nome ou cidade"
+                    value={contactSearch}
+                    onChange={(e) => setContactSearch(e.target.value)}
+                  />
                 </div>
-                {selectedContacts.size > 0 ? (
-                  <p className="text-xs text-primary">
-                    {selectedContacts.size} contato(s) selecionado(s) na tabela abaixo — o envio será restrito a eles.{' '}
-                    <button type="button" className="underline" onClick={() => setSelectedContacts(new Set())}>Limpar seleção</button>
-                  </p>
-                ) : null}
-                {recipients?.estimatedCost != null ? (
-                  <p className="text-xs text-muted-foreground">Custo estimado: <strong>{money(recipients.estimatedCost)}</strong></p>
-                ) : null}
-                {recipients?.sample?.length ? (
-                  <p className="text-xs text-muted-foreground">Ex.: {recipients.sample.map((s) => s.name).join(', ')}{recipients.count > recipients.sample.length ? '…' : ''}</p>
-                ) : null}
-
-                <div>
-                  <label className="mb-1 flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><Calendar className="size-3.5" /> Agendar (opcional)</label>
-                  <Input type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} className="text-sm" />
-                </div>
-
-                <Button className="w-full rounded-xl" disabled={sending || msgBody.trim().length < 3} onClick={() => void submit(false, false)}>
-                  {sending ? <Loader2 className="size-4 animate-spin" /> : <Eye className="size-4" />}
-                  <span className="ml-2">Pré-visualizar e enviar</span>
-                </Button>
-                <Button variant="outline" className="w-full rounded-xl" disabled={sending || msgBody.trim().length < 3} onClick={() => void submit(true)}>
-                  <Save className="size-4" /><span className="ml-2">Salvar rascunho</span>
-                </Button>
-              </Card>
-            </div>
-          </div>
-        ) : null}
-
-        {tab === 'compose' ? (
-          <Card className="overflow-hidden rounded-2xl border-border/70 pf-card-lift">
-            <div className="flex flex-wrap items-center gap-2 border-b border-border/70 p-4">
-              <p className="flex items-center gap-2 text-sm font-semibold"><Phone className="size-4" /> Contatos</p>
-              <p className="text-xs text-muted-foreground">Telefones cadastrados dos responsáveis, conforme os filtros ao lado. Envie manualmente pelo WhatsApp Web sem precisar de provedor configurado.</p>
-            </div>
-
-            {loadingContacts ? (
-              <div className="p-10 text-center text-sm text-muted-foreground"><Loader2 className="mx-auto size-5 animate-spin" /></div>
-            ) : contacts.length === 0 ? (
-              <EmptyState icon={Phone} title="Nenhum contato encontrado" description="Ajuste os filtros de destinatários para ver os telefones cadastrados." className="border-none" />
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/50 text-left text-xs uppercase text-muted-foreground">
-                    <tr>
-                      <th className="w-10 px-4 py-3">
-                        <input type="checkbox" className="size-4 rounded border-border" checked={contacts.length > 0 && selectedContacts.size === contacts.length} onChange={toggleAllContacts} />
-                      </th>
-                      <th className="px-4 py-3">Responsável</th>
-                      <th className="px-4 py-3">Barbearia</th>
-                      <th className="px-4 py-3">Telefone / WhatsApp</th>
-                      <th className="px-4 py-3">Plano</th>
-                      <th className="px-4 py-3">Status</th>
-                      <th className="px-4 py-3 text-right">Ação</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {contacts.map((contact) => {
-                      const waLink = buildWaLink(contact)
-                      const editing = phoneEdit?.barbershopId === contact.barbershopId
-                      return (
-                        <tr key={contact.barbershopId} className="border-t border-border/70 align-middle transition-colors hover:bg-muted/30">
-                          <td className="px-4 py-3">
-                            <input type="checkbox" className="size-4 rounded border-border" checked={selectedContacts.has(contact.barbershopId)} onChange={() => toggleContact(contact.barbershopId)} />
-                          </td>
-                          <td className="px-4 py-3">
-                            <p className="font-medium">{contact.ownerName}</p>
-                            {contact.ownerEmail ? <p className="text-xs text-muted-foreground">{contact.ownerEmail}</p> : null}
-                          </td>
-                          <td className="px-4 py-3 text-muted-foreground">{contact.barbershopName}</td>
-                          <td className="px-4 py-3">
-                            {editing ? (
-                              <div className="flex items-center gap-1.5">
-                                <Input
-                                  autoFocus
-                                  value={phoneEdit.value}
-                                  onChange={(e) => setPhoneEdit({ barbershopId: contact.barbershopId, value: e.target.value })}
-                                  placeholder="(11) 91234-5678"
-                                  className="h-8 w-40 text-xs"
-                                />
-                                <Button size="icon-sm" className="rounded-lg" disabled={savingPhone} onClick={() => void savePhone(contact)}>
-                                  {savingPhone ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
-                                </Button>
-                                <Button size="icon-sm" variant="ghost" onClick={() => setPhoneEdit(null)}><X className="size-3.5" /></Button>
-                              </div>
-                            ) : contact.ownerPhone ? (
-                              <button
-                                type="button"
-                                className="flex items-center gap-1.5 text-foreground hover:text-primary"
-                                onClick={() => contact.ownerId && setPhoneEdit({ barbershopId: contact.barbershopId, value: contact.ownerPhone ?? '' })}
-                                disabled={!contact.ownerId}
-                              >
-                                {contact.ownerPhone}
-                                {contact.ownerId ? <Pencil className="size-3 text-muted-foreground" /> : null}
-                              </button>
-                            ) : contact.ownerId ? (
-                              <button type="button" className="text-xs text-primary underline" onClick={() => setPhoneEdit({ barbershopId: contact.barbershopId, value: '' })}>
-                                Adicionar telefone
-                              </button>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">Sem responsável ativo</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 capitalize">{contact.plan}</td>
-                          <td className="px-4 py-3">
-                            <span className={cn('rounded-full px-2 py-1 text-xs font-medium', BILLING_STATUS_STYLE[contact.billingStatus] ?? 'bg-muted')}>
-                              {BILLING_STATUS_LABEL[contact.billingStatus] ?? contact.billingStatus}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            {waLink ? (
-                              <a href={waLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-800 hover:bg-emerald-100">
-                                <ExternalLink className="size-3.5" /> Enviar manual
-                              </a>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">Sem telefone</span>
-                            )}
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
               </div>
-            )}
-          </Card>
-        ) : null}
+            </div>
 
-        {tab === 'templates' ? (
-          <div className="grid gap-4 sm:grid-cols-2">
-            {templates.length === 0 ? (
-              <Card className="col-span-full rounded-2xl border-border/70 p-2">
-                <EmptyState icon={FileText} title="Nenhum modelo cadastrado" description="Modelos com variáveis agilizam o envio de mensagens personalizadas." className="border-none" />
-              </Card>
-            ) : templates.map((t) => (
-              <Card key={t.id} className="flex flex-col gap-3 rounded-2xl border-border/70 p-5 pf-card-lift">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="font-semibold">{t.name}</p>
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">{CHANNELS.find((c) => c.value === t.channel)?.label ?? t.channel}</p>
-                  </div>
-                  <FileText className="size-4 text-muted-foreground" />
-                </div>
-                {t.subject ? <p className="text-sm font-medium">{t.subject}</p> : null}
-                <p className="line-clamp-4 whitespace-pre-wrap text-sm text-muted-foreground">{t.body}</p>
-                <Button variant="outline" size="sm" className="mt-auto w-fit rounded-xl" onClick={() => applyTemplate(t)}>
-                  Usar modelo
+            {selectedContacts.size > 0 ? (
+              <div className="flex flex-wrap items-center gap-3 rounded-xl border border-primary/25 bg-primary/[0.06] px-3.5 py-2.5">
+                <span className="text-[13px] text-primary">{selectedContacts.size} contato(s) selecionado(s)</span>
+                <button
+                  type="button"
+                  className="text-[11px] text-muted-foreground underline-offset-2 hover:underline"
+                  onClick={() => setSelectedContacts(new Set())}
+                >
+                  Limpar seleção
+                </button>
+                <Button size="sm" className="ml-auto rounded-xl" onClick={openSelectedConversations}>
+                  <ExternalLink className="size-4" />
+                  <span className="ml-2">Abrir conversas</span>
                 </Button>
+              </div>
+            ) : null}
+
+            {loadingContacts && contacts.length === 0 ? (
+              <Card className="rounded-xl border-border/60 p-4">
+                <div className="space-y-3">
+                  {[0, 1, 2, 3, 4].map((i) => <div key={i} className="pf-skeleton h-12 rounded-lg" />)}
+                </div>
               </Card>
-            ))}
+            ) : visibleContacts.length === 0 ? (
+              <Card className="rounded-xl border-border/60 p-2">
+                <EmptyState
+                  icon={Phone}
+                  title="Nenhum contato encontrado"
+                  description="Ajuste os filtros ou a busca para ver os responsáveis cadastrados."
+                  className="border-none"
+                />
+              </Card>
+            ) : (
+              <>
+                {/* Desktop */}
+                <Card className="hidden overflow-hidden rounded-xl border-border/60 p-0 lg:block">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="border-b border-border/60 bg-muted/30 text-left">
+                        <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                          <th className="w-10 px-4 py-3 font-normal">
+                            <input
+                              type="checkbox"
+                              className="size-4 rounded border-border"
+                              aria-label="Selecionar todos"
+                              checked={selectableContacts.length > 0 && selectedContacts.size === selectableContacts.length}
+                              onChange={toggleAllContacts}
+                            />
+                          </th>
+                          <th className="px-4 py-3 font-normal">Responsável</th>
+                          <th className="px-4 py-3 font-normal">Telefone</th>
+                          <th className="px-4 py-3 font-normal">Status</th>
+                          <th className="px-4 py-3 text-right font-normal">Ação</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {visibleContacts.map((contact) => {
+                          const waLink = buildWaLink(contact)
+                          const editing = phoneEdit?.barbershopId === contact.barbershopId
+                          return (
+                            <tr
+                              key={contact.barbershopId}
+                              className="border-b border-border/60 align-middle transition-colors duration-150 last:border-b-0 hover:bg-muted/40"
+                            >
+                              <td className="px-4 py-3">
+                                <input
+                                  type="checkbox"
+                                  className="size-4 rounded border-border disabled:opacity-40"
+                                  disabled={!contact.ownerPhone}
+                                  aria-label={`Selecionar ${contact.ownerName}`}
+                                  checked={selectedContacts.has(contact.barbershopId)}
+                                  onChange={() => toggleContact(contact.barbershopId)}
+                                />
+                              </td>
+                              <td className="px-4 py-3">
+                                <p className="font-medium text-foreground">{contact.ownerName}</p>
+                                <p className="truncate text-[11px] text-muted-foreground">
+                                  {contact.barbershopName}{contact.barbershopCity ? ` · ${contact.barbershopCity}` : ''}
+                                </p>
+                              </td>
+                              <td className="px-4 py-3">
+                                {editing ? (
+                                  <div className="flex items-center gap-1.5">
+                                    <Input
+                                      autoFocus
+                                      value={phoneEdit.value}
+                                      onChange={(e) => setPhoneEdit({ barbershopId: contact.barbershopId, value: e.target.value })}
+                                      placeholder="(11) 91234-5678"
+                                      className="h-8 w-36 text-xs"
+                                    />
+                                    <Button size="icon-sm" className="rounded-lg" disabled={savingPhone} onClick={() => void savePhone(contact)}>
+                                      {savingPhone ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
+                                    </Button>
+                                    <Button size="icon-sm" variant="ghost" onClick={() => setPhoneEdit(null)} aria-label="Cancelar">
+                                      <X className="size-3.5" />
+                                    </Button>
+                                  </div>
+                                ) : contact.ownerPhone ? (
+                                  <button
+                                    type="button"
+                                    className="flex items-center gap-1.5 text-[13px] text-foreground transition-colors duration-150 hover:text-primary"
+                                    onClick={() => contact.ownerId && setPhoneEdit({ barbershopId: contact.barbershopId, value: contact.ownerPhone ?? '' })}
+                                    disabled={!contact.ownerId}
+                                  >
+                                    <MessageCircle className="size-3.5 text-emerald-600" />
+                                    {contact.ownerPhone}
+                                    {contact.ownerId ? <Pencil className="size-3 text-muted-foreground" /> : null}
+                                  </button>
+                                ) : contact.ownerId ? (
+                                  <button
+                                    type="button"
+                                    className="flex items-center gap-1.5 text-[11px] text-primary underline-offset-2 hover:underline"
+                                    onClick={() => setPhoneEdit({ barbershopId: contact.barbershopId, value: '' })}
+                                  >
+                                    <AlertTriangle className="size-3.5 text-amber-500" />
+                                    Cadastrar telefone
+                                  </button>
+                                ) : (
+                                  <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                                    <AlertTriangle className="size-3.5 text-amber-500" />
+                                    Sem responsável ativo
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <StatusBadge
+                                    tone={billingTone[contact.billingStatus] ?? 'neutral'}
+                                    label={billingLabel[contact.billingStatus] ?? contact.billingStatus}
+                                  />
+                                  <PlanPill plan={contact.plan} />
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                {waLink ? (
+                                  <a
+                                    href={waLink}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-600/30 bg-emerald-600/[0.08] px-3 py-1.5 text-[13px] text-emerald-700 transition-colors duration-150 hover:bg-emerald-600/[0.14] dark:text-emerald-400"
+                                  >
+                                    <MessageCircle className="size-3.5" /> Enviar pelo WhatsApp
+                                  </a>
+                                ) : (
+                                  <span className="text-[11px] text-muted-foreground">—</span>
+                                )}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+
+                {/* Mobile */}
+                <div className="space-y-3 lg:hidden">
+                  {visibleContacts.map((contact) => {
+                    const waLink = buildWaLink(contact)
+                    const editing = phoneEdit?.barbershopId === contact.barbershopId
+                    return (
+                      <Card key={contact.barbershopId} className="rounded-xl border-border/60 p-4">
+                        <div className="flex items-start gap-3">
+                          <input
+                            type="checkbox"
+                            className="mt-1 size-4 rounded border-border disabled:opacity-40"
+                            disabled={!contact.ownerPhone}
+                            aria-label={`Selecionar ${contact.ownerName}`}
+                            checked={selectedContacts.has(contact.barbershopId)}
+                            onChange={() => toggleContact(contact.barbershopId)}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate font-medium text-foreground">{contact.ownerName}</p>
+                            <p className="truncate text-[11px] text-muted-foreground">
+                              {contact.barbershopName}{contact.barbershopCity ? ` · ${contact.barbershopCity}` : ''}
+                            </p>
+                          </div>
+                          <StatusBadge
+                            tone={billingTone[contact.billingStatus] ?? 'neutral'}
+                            label={billingLabel[contact.billingStatus] ?? contact.billingStatus}
+                          />
+                        </div>
+
+                        <div className="mt-3 flex items-center gap-2">
+                          {editing ? (
+                            <>
+                              <Input
+                                autoFocus
+                                value={phoneEdit.value}
+                                onChange={(e) => setPhoneEdit({ barbershopId: contact.barbershopId, value: e.target.value })}
+                                placeholder="(11) 91234-5678"
+                                className="h-9 flex-1 text-xs"
+                              />
+                              <Button size="icon-sm" className="rounded-lg" disabled={savingPhone} onClick={() => void savePhone(contact)}>
+                                {savingPhone ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
+                              </Button>
+                              <Button size="icon-sm" variant="ghost" onClick={() => setPhoneEdit(null)} aria-label="Cancelar">
+                                <X className="size-3.5" />
+                              </Button>
+                            </>
+                          ) : waLink ? (
+                            <a
+                              href={waLink}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-emerald-600/30 bg-emerald-600/[0.08] px-3 py-2 text-[13px] text-emerald-700 dark:text-emerald-400"
+                            >
+                              <MessageCircle className="size-4" /> Enviar pelo WhatsApp
+                            </a>
+                          ) : contact.ownerId ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="flex-1 rounded-xl"
+                              onClick={() => setPhoneEdit({ barbershopId: contact.barbershopId, value: '' })}
+                            >
+                              <AlertTriangle className="size-4 text-amber-500" />
+                              <span className="ml-2">Cadastrar telefone</span>
+                            </Button>
+                          ) : (
+                            <p className="text-[11px] text-muted-foreground">Sem responsável ativo</p>
+                          )}
+                        </div>
+                      </Card>
+                    )
+                  })}
+                </div>
+              </>
+            )}
           </div>
         ) : null}
 
+        {/* ---------------------------------------------------------------- Histórico */}
         {tab === 'history' ? (
-          <Card className="overflow-hidden rounded-2xl border-border/70 pf-card-lift">
+          <Card className="pf-card-lift overflow-hidden rounded-xl border-border/60 p-0">
             {loading ? (
-              <div className="p-10 text-center text-sm text-muted-foreground"><Loader2 className="mx-auto size-5 animate-spin" /></div>
-            ) : history.length === 0 ? (
-              <EmptyState icon={MessageSquare} title="Nenhuma mensagem registrada" description="O histórico de envios e agendamentos aparecerá aqui." className="border-none" />
+              <div className="space-y-3 p-4">
+                {[0, 1, 2].map((i) => <div key={i} className="pf-skeleton h-12 rounded-lg" />)}
+              </div>
+            ) : sentHistory.length === 0 ? (
+              <EmptyState
+                icon={MessageSquare}
+                title="Nenhuma mensagem enviada"
+                description="Somente envios concluídos aparecem aqui. Rascunhos e filas de canais não configurados ficam fora da lista."
+                className="border-none"
+              />
             ) : (
               <div className="divide-y divide-border/60">
-                {history.map((m) => (
-                  <div key={m.id} className="flex flex-wrap items-center gap-3 px-5 py-4">
-                    <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium', STATUS_STYLE[m.status] ?? 'bg-muted')}>{STATUS_LABEL[m.status] ?? m.status}</span>
+                {sentHistory.map((m) => (
+                  <div key={m.id} className="flex flex-wrap items-center gap-3 px-5 py-4 transition-colors duration-150 hover:bg-muted/40">
+                    <StatusBadge tone={HISTORY_TONE[m.status] ?? 'neutral'} label={STATUS_LABEL[m.status] ?? m.status} />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm">{m.subject || m.body.slice(0, 80)}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {CHANNELS.find((c) => c.value === m.channel)?.label ?? m.channel} · {m.recipient_count} destinatário(s)
-                        {m.scheduled_at ? ` · agendada p/ ${formatDate(m.scheduled_at)}` : ''} · {formatDate(m.created_at)}
+                      <p className="truncate text-[13px] text-foreground">{m.subject || m.body.slice(0, 80)}</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {formatDate(m.sent_at ?? m.created_at)} · {CHANNELS.find((c) => c.value === m.channel)?.label ?? m.channel} · {m.recipient_count} destinatário(s)
                       </p>
                     </div>
                     {['draft', 'scheduled', 'queued'].includes(m.status) ? (
@@ -600,10 +789,239 @@ export function MessagesClient() {
           </Card>
         ) : null}
 
+        {/* ---------------------------------------------------------------- Disparos em massa */}
+        {tab === 'bulk' ? (
+          <div className="space-y-4">
+            <Card className="rounded-xl border-border/60 p-5">
+              <p className="mb-3 text-sm font-medium text-foreground">Canal</p>
+              <div className="flex flex-wrap gap-2">
+                {CHANNELS.map((c) => {
+                  const blocked = c.value === 'in_app' || !configuredChannels.includes(c.value)
+                  return (
+                    <button
+                      key={c.value}
+                      type="button"
+                      onClick={() => setChannel(c.value)}
+                      className={cn(
+                        'flex items-center gap-2 rounded-xl border px-3 py-2 text-[13px] transition-colors duration-150',
+                        channel === c.value ? 'border-primary/30 bg-primary/[0.08] text-primary' : 'border-border/60 text-muted-foreground hover:bg-muted/40',
+                      )}
+                    >
+                      <c.icon className="size-4" />
+                      {c.label}
+                      <span className={cn('size-1.5 rounded-full', blocked ? 'bg-amber-500' : 'bg-primary')} aria-hidden="true" />
+                      <span className="text-[11px] opacity-70">{blocked ? 'não configurado' : 'ativo'}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </Card>
+
+            {channelBlocked ? (
+              <Card className="rounded-xl border-amber-500/30 bg-amber-500/[0.05] p-5">
+                <div className="flex items-start gap-3">
+                  <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                    <PlugZap className="size-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-foreground">
+                      Envio automático por {channelLabel} indisponível
+                    </p>
+                    <p className="mt-1 max-w-xl text-[13px] text-muted-foreground">
+                      Nenhum provedor está conectado a este canal, então a plataforma não entrega, não agenda e não cobra
+                      nada por aqui. Nada é enviado ao cliente por esta tela.
+                    </p>
+
+                    <div className="mt-4 flex flex-wrap items-center gap-2">
+                      <Button size="sm" className="rounded-xl" onClick={() => setTab('contacts')}>
+                        <Phone className="size-4" />
+                        <span className="ml-2">Ir para envio manual</span>
+                      </Button>
+                      <Link
+                        href="/plataforma/configuracoes"
+                        className={buttonVariants({ variant: 'outline', size: 'sm', className: 'rounded-xl' })}
+                      >
+                        Ver integrações
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => setShowBlockedForm((v) => !v)}
+                        className="ml-1 text-[11px] text-muted-foreground underline-offset-2 transition-colors duration-150 hover:text-foreground hover:underline"
+                      >
+                        {showBlockedForm ? 'Ocultar rascunho' : 'Escrever um rascunho mesmo assim'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            ) : null}
+
+            <div className={cn('grid gap-4 lg:grid-cols-[1fr_320px]', channelBlocked && !showBlockedForm && 'hidden')}>
+              <Card className="pf-card-lift space-y-4 rounded-xl border-border/60 p-5">
+                {channelBlocked ? (
+                  <p className="flex items-start gap-1.5 rounded-lg bg-muted/50 px-3 py-2 text-[11px] text-muted-foreground">
+                    <Info className="mt-px size-3.5 shrink-0" />
+                    Modo rascunho — o texto fica salvo na plataforma e não sai para ninguém.
+                  </p>
+                ) : null}
+
+                {channel === 'email' ? (
+                  <div>
+                    <label htmlFor="assunto" className="mb-2 block text-sm font-medium text-foreground">Assunto</label>
+                    <Input id="assunto" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Assunto do e-mail" />
+                  </div>
+                ) : null}
+
+                <div>
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <label htmlFor="mensagem-massa" className="text-sm font-medium text-foreground">Mensagem</label>
+                    <div className="flex flex-wrap gap-1">
+                      {VARIABLES.map((v) => (
+                        <button
+                          key={v}
+                          type="button"
+                          onClick={() => insertVariable(v, 'bulk')}
+                          className="rounded-md bg-muted/60 px-2 py-0.5 text-[11px] text-muted-foreground transition-colors duration-150 hover:bg-primary/10 hover:text-primary"
+                        >
+                          {`{{${v}}}`}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <Textarea
+                    id="mensagem-massa"
+                    ref={bulkBodyRef}
+                    value={msgBody}
+                    onChange={(e) => setMsgBody(e.target.value)}
+                    rows={9}
+                    placeholder="Escreva a mensagem. Use as variáveis acima para personalizar."
+                    className="resize-y"
+                  />
+                  <p className="mt-1 text-[11px] text-muted-foreground">{msgBody.length} caractere(s)</p>
+                </div>
+              </Card>
+
+              <div className="space-y-4">
+                <Card className="pf-card-lift space-y-3 rounded-xl border-border/60 p-5">
+                  <p className="flex items-center gap-2 text-sm font-medium text-foreground"><Users className="size-4" /> Destinatários</p>
+                  <Select value={filters.status} onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))} className="text-sm" aria-label="Status">
+                    <option value="">Todos os status</option>
+                    <option value="trialing">Em teste</option>
+                    <option value="active">Ativas</option>
+                    <option value="past_due">Em atraso</option>
+                    <option value="canceled">Canceladas</option>
+                  </Select>
+                  <Select value={filters.plan} onChange={(e) => setFilters((f) => ({ ...f, plan: e.target.value }))} className="text-sm" aria-label="Plano">
+                    <option value="">Todos os planos</option>
+                    <option value="starter">Starter</option>
+                    <option value="pro">Pro</option>
+                    <option value="premium">Premium</option>
+                  </Select>
+                  <Input value={filters.city} onChange={(e) => setFilters((f) => ({ ...f, city: e.target.value }))} placeholder="Cidade (opcional)" className="text-sm" />
+                  <div className="space-y-2 pt-1">
+                    {([['trialExpiring', 'Teste vencendo (7 dias)'], ['pastDue', 'Inadimplentes'], ['inactive', 'Inativos (30+ dias)']] as const).map(([key, label]) => (
+                      <label key={key} className="flex items-center gap-2 text-[13px] text-foreground">
+                        <input type="checkbox" checked={filters[key]} onChange={(e) => setFilters((f) => ({ ...f, [key]: e.target.checked }))} className="size-4 rounded border-border" />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
+                </Card>
+
+                <Card className="pf-card-lift space-y-3 rounded-xl border-border/60 p-5">
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                      {selectedContacts.size > 0 ? 'Selecionados' : channelBlocked ? 'Contatos no filtro' : 'Alcançará'}
+                    </span>
+                    <span className="text-2xl font-medium tabular-nums text-foreground">
+                      {countingRecipients ? <Loader2 className="size-5 animate-spin" /> : (recipients?.count ?? 0)}
+                    </span>
+                  </div>
+                  {selectedContacts.size > 0 ? (
+                    <p className="text-[11px] text-primary">
+                      {selectedContacts.size} contato(s) selecionado(s) na aba Contatos — o envio será restrito a eles.{' '}
+                      <button type="button" className="underline" onClick={() => setSelectedContacts(new Set())}>Limpar seleção</button>
+                    </p>
+                  ) : null}
+                  {!channelBlocked && recipients?.estimatedCost != null ? (
+                    <p className="text-[11px] text-muted-foreground">Custo estimado: {money(recipients.estimatedCost)}</p>
+                  ) : null}
+                  {recipients?.sample?.length ? (
+                    <p className="text-[11px] text-muted-foreground">Ex.: {recipients.sample.map((s) => s.name).join(', ')}{recipients.count > recipients.sample.length ? '…' : ''}</p>
+                  ) : null}
+
+                  {channelBlocked ? (
+                    <>
+                      <p className="text-[11px] text-muted-foreground">
+                        Este número é só o resultado do filtro. Sem provedor configurado, nada é entregue nem agendado.
+                      </p>
+                      <Button variant="outline" className="w-full rounded-xl" disabled={sending || msgBody.trim().length < 3} onClick={() => void submit(true)}>
+                        <Save className="size-4" /><span className="ml-2">Salvar rascunho</span>
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <label htmlFor="agendar" className="mb-1 flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">
+                          <Calendar className="size-3.5" /> Agendar (opcional)
+                        </label>
+                        <Input id="agendar" type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} className="text-sm" />
+                      </div>
+
+                      <Button
+                        className="w-full rounded-xl"
+                        disabled={sending || msgBody.trim().length < 3}
+                        onClick={() => void submit(false, false)}
+                      >
+                        {sending ? <Loader2 className="size-4 animate-spin" /> : <Eye className="size-4" />}
+                        <span className="ml-2">Pré-visualizar e enviar</span>
+                      </Button>
+                      <Button variant="outline" className="w-full rounded-xl" disabled={sending || msgBody.trim().length < 3} onClick={() => void submit(true)}>
+                        <Save className="size-4" /><span className="ml-2">Salvar rascunho</span>
+                      </Button>
+                    </>
+                  )}
+                </Card>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {/* ---------------------------------------------------------------- Modelos */}
+        {tab === 'templates' ? (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {templates.length === 0 ? (
+              <Card className="col-span-full rounded-xl border-border/60 p-2">
+                <EmptyState icon={FileText} title="Nenhum modelo cadastrado" description="Modelos com variáveis agilizam o envio de mensagens personalizadas." className="border-none" />
+              </Card>
+            ) : templates.map((t) => (
+              <Card key={t.id} className="pf-card-lift flex flex-col gap-3 rounded-xl border-border/60 p-5">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-foreground">{t.name}</p>
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                      {CHANNELS.find((c) => c.value === t.channel)?.label ?? t.channel}
+                    </p>
+                  </div>
+                  <FileText className="size-4 shrink-0 text-muted-foreground" />
+                </div>
+                {t.subject ? <p className="text-[13px] font-medium text-foreground">{t.subject}</p> : null}
+                <p className="line-clamp-4 whitespace-pre-wrap text-[13px] text-muted-foreground">{t.body}</p>
+                <Button variant="outline" size="sm" className="mt-auto w-fit rounded-xl" onClick={() => applyTemplate(t)}>
+                  Usar modelo
+                </Button>
+              </Card>
+            ))}
+          </div>
+        ) : null}
+
+        {/* ---------------------------------------------------------------- Caixa de entrada */}
         {tab === 'inbox' ? (
-          <Card className="overflow-hidden rounded-2xl border-border/70 pf-card-lift">
+          <Card className="pf-card-lift overflow-hidden rounded-xl border-border/60 p-0">
             {loading ? (
-              <div className="p-10 text-center text-sm text-muted-foreground"><Loader2 className="mx-auto size-5 animate-spin" /></div>
+              <div className="space-y-3 p-4">
+                {[0, 1, 2].map((i) => <div key={i} className="pf-skeleton h-16 rounded-lg" />)}
+              </div>
             ) : inbox.length === 0 ? (
               <EmptyState icon={Inbox} title="Nenhuma mensagem recebida" description="Respostas dos clientes aparecerão aqui quando os canais estiverem integrados." className="border-none" />
             ) : (
@@ -613,12 +1031,12 @@ export function MessagesClient() {
                     <div className="mt-0.5">{m.read_at ? <MailOpen className="size-4 text-muted-foreground" /> : <Mail className="size-4 text-gold" />}</div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <p className="truncate text-sm font-medium">{m.sender_name || m.sender_email || 'Cliente'}</p>
-                        <span className="text-[11px] uppercase text-muted-foreground">{m.direction === 'inbound' ? 'Recebida' : 'Enviada'} · {m.channel}</span>
+                        <p className="truncate text-[13px] font-medium text-foreground">{m.sender_name || m.sender_email || 'Cliente'}</p>
+                        <span className="text-[11px] uppercase tracking-wide text-muted-foreground">{m.direction === 'inbound' ? 'Recebida' : 'Enviada'} · {m.channel}</span>
                       </div>
-                      {m.subject ? <p className="text-sm font-medium">{m.subject}</p> : null}
-                      <p className="whitespace-pre-wrap text-sm text-muted-foreground">{m.body}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">{formatDate(m.created_at)}</p>
+                      {m.subject ? <p className="text-[13px] font-medium text-foreground">{m.subject}</p> : null}
+                      <p className="whitespace-pre-wrap text-[13px] text-muted-foreground">{m.body}</p>
+                      <p className="mt-1 text-[11px] text-muted-foreground">{formatDate(m.created_at)}</p>
                     </div>
                     {m.direction === 'inbound' ? (
                       <Button variant="ghost" size="sm" onClick={() => void toggleRead(m)}>
@@ -636,19 +1054,29 @@ export function MessagesClient() {
       {sendPreview ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-foreground/50 backdrop-blur-sm" onClick={() => setSendPreview(null)} aria-hidden="true" />
-          <Card className="relative w-full max-w-lg space-y-4 rounded-2xl border-border/70 p-6 shadow-xl">
+          <Card className="relative w-full max-w-lg space-y-4 rounded-xl border-border/60 p-6 shadow-xl">
             <div className="flex items-center justify-between">
-              <h2 className="flex items-center gap-2 text-lg font-semibold"><AlertTriangle className="size-5 text-gold" /> Confirmar envio</h2>
-              <button type="button" onClick={() => setSendPreview(null)} className="text-muted-foreground hover:text-foreground"><X className="size-5" /></button>
+              <h2 className="flex items-center gap-2 text-base font-medium text-foreground">
+                <AlertTriangle className="size-5 text-gold" /> Confirmar envio
+              </h2>
+              <button type="button" onClick={() => setSendPreview(null)} className="text-muted-foreground hover:text-foreground" aria-label="Fechar">
+                <X className="size-5" />
+              </button>
             </div>
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div className="rounded-xl bg-muted/50 p-3"><p className="text-xs text-muted-foreground">Destinatários</p><p className="text-xl font-bold">{sendPreview.recipientCount}</p></div>
-              <div className="rounded-xl bg-muted/50 p-3"><p className="text-xs text-muted-foreground">Canal</p><p className="text-xl font-bold">{CHANNELS.find((c) => c.value === sendPreview.channel)?.label}</p></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-xl bg-muted/40 p-3">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Destinatários</p>
+                <p className="mt-1 text-xl font-medium tabular-nums">{sendPreview.recipientCount}</p>
+              </div>
+              <div className="rounded-xl bg-muted/40 p-3">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Canal</p>
+                <p className="mt-1 text-xl font-medium">{CHANNELS.find((c) => c.value === sendPreview.channel)?.label}</p>
+              </div>
             </div>
-            {sendPreview.estimatedCost != null ? <p className="text-sm">Custo estimado: <strong>{money(sendPreview.estimatedCost)}</strong></p> : null}
+            {sendPreview.estimatedCost != null ? <p className="text-[13px] text-muted-foreground">Custo estimado: {money(sendPreview.estimatedCost)}</p> : null}
             <div>
-              <p className="mb-1 text-xs font-medium text-muted-foreground">Prévia da mensagem</p>
-              <div className="max-h-48 overflow-y-auto whitespace-pre-wrap rounded-xl border border-border/70 bg-background p-3 text-sm">{sendPreview.message}</div>
+              <p className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Prévia da mensagem</p>
+              <div className="max-h-48 overflow-y-auto whitespace-pre-wrap rounded-xl border border-border/60 bg-background p-3 text-[13px]">{sendPreview.message}</div>
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" className="rounded-xl" onClick={() => setSendPreview(null)}>Voltar</Button>

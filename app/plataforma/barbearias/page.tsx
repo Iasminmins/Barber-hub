@@ -12,7 +12,8 @@ export default function BarbeariasPage() {
   return (
     <TenantListView
       title="Barbearias"
-      description="Todas as contas cadastradas na plataforma."
+      description="Todas as contas cadastradas na plataforma, por cidade e responsável."
+      variant="default"
     />
   )
 }

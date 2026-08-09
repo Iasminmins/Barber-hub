@@ -13,10 +13,12 @@ function monthKey(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
 }
 
+/** "abr/26" — o formato nativo pt-BR ("abr. de 26") é longo demais para o eixo X no mobile. */
 function monthLabel(key: string) {
   const [year, month] = key.split('-')
   const date = new Date(Number(year), Number(month) - 1, 1)
-  return date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' })
+  const shortMonth = date.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '')
+  return `${shortMonth}/${year.slice(-2)}`
 }
 
 function lastMonths(count: number, now = new Date()) {

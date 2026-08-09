@@ -12,8 +12,9 @@ export default function AssinaturasPage() {
   return (
     <TenantListView
       title="Assinaturas"
-      description="Contas com assinatura ativa e status de cobrança."
+      description="Contas ativas por plano contratado e data da próxima cobrança."
       initialStatus="active"
+      variant="subscriptions"
     />
   )
 }

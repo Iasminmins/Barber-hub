@@ -12,8 +12,9 @@ export default function TestesPage() {
   return (
     <TenantListView
       title="Testes gratuitos"
-      description="Contas em período de teste e prazos restantes."
+      description="Contas em período de teste, ordenadas pela urgência do prazo."
       initialStatus="trialing"
+      variant="trials"
     />
   )
 }

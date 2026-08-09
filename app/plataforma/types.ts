@@ -17,8 +17,11 @@ export type TenantRow = {
   hasSubscription: boolean
   usersCount: number
   owner: { name: string; email: string } | null
+  ownerId?: string | null
   ownerPhone?: string | null
   trialDaysLeft: number | null
+  /** Último login real do responsável. `undefined` = Auth indisponível, `null` = nunca acessou. */
+  lastSignInAt?: string | null
   lastAccessAt?: string | null
   financialStatus?: string
 }
@@ -142,6 +145,7 @@ export type MessageContact = {
   barbershopId: string
   barbershopName: string
   barbershopSlug: string
+  barbershopCity?: string | null
   plan: 'starter' | 'pro' | 'premium'
   billingStatus: 'trialing' | 'active' | 'past_due' | 'canceled'
   trialEndsAt: string | null

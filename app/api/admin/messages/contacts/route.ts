@@ -47,6 +47,7 @@ export async function GET(request: Request) {
         barbershopId: shop.id,
         barbershopName: shop.name,
         barbershopSlug: shop.slug,
+        barbershopCity: shop.city ?? null,
         plan: shop.plan,
         billingStatus: effectiveBillingStatus(shop.billing_status, shop.trial_ends_at),
         trialEndsAt: shop.trial_ends_at,

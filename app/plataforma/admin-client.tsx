@@ -11,33 +11,23 @@ import { MetricCard } from '@/components/platform/metric-card'
 import { AdminCharts } from '@/components/platform/admin-charts'
 import { AttentionPanel } from '@/components/platform/attention-panel'
 import { SectionHeader } from '@/components/platform/section-header'
+import { StatusBadge, billingLabel, billingTone, type StatusTone } from '@/components/platform/status-badge'
 import { usePlatformSession } from './use-platform-session'
 import type { Overview, TenantRow } from './types'
-import { formatDate, formatPercent } from '@/lib/format'
-
-const statusLabel: Record<string, string> = {
-  trialing: 'Em teste',
-  active: 'Ativa',
-  past_due: 'Em atraso',
-  canceled: 'Cancelada',
-}
-
-const statusStyle: Record<string, string> = {
-  trialing: 'bg-amber-100 text-amber-800',
-  active: 'bg-emerald-100 text-emerald-800',
-  past_due: 'bg-red-100 text-red-800',
-  canceled: 'bg-muted text-muted-foreground',
-}
+import { formatDate, formatPercent, initials } from '@/lib/format'
 
 function formatMoney(value: number) {
   return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
-function tenantStatus(tenant: TenantRow) {
+function tenantStatus(tenant: TenantRow): { label: string; tone: StatusTone } {
   if (tenant.billing_status === 'past_due' && tenant.next_billing_date && tenant.next_billing_date >= new Date().toISOString().slice(0, 10)) {
-    return { label: 'Cobrança agendada', style: 'bg-amber-100 text-amber-800' }
+    return { label: 'Cobrança agendada', tone: 'warning' }
   }
-  return { label: statusLabel[tenant.billing_status], style: statusStyle[tenant.billing_status] }
+  return {
+    label: billingLabel[tenant.billing_status] ?? tenant.billing_status,
+    tone: billingTone[tenant.billing_status] ?? 'neutral',
+  }
 }
 
 export function AdminClient() {
@@ -159,14 +149,20 @@ export function AdminClient() {
       onGlobalSearchSubmit={() => void load()}
     >
       <div className="mx-auto max-w-[1600px] space-y-6">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <SectionHeader
             title="Visão geral"
             description="Resumo executivo da operação da plataforma."
             insights={executiveInsights}
-            className="flex-1"
+            className="min-w-0 flex-1"
           />
-          <Button variant="outline" size="sm" className="rounded-xl" disabled={!overview} onClick={() => void handleExport()}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full rounded-xl sm:w-auto"
+            disabled={!overview}
+            onClick={() => void handleExport()}
+          >
             <Download className="size-4" />
             <span className="ml-2">Exportar</span>
           </Button>
@@ -178,19 +174,19 @@ export function AdminClient() {
           </div>
         ) : null}
 
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
           {topKpis.map((card) => (
             <MetricCard key={card.label} {...card} loading={loading && !overview} />
           ))}
         </section>
 
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-3">
           {revenueCards.map((card) => (
             <MetricCard key={card.label} {...card} loading={loading && !overview} />
           ))}
         </section>
 
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <section className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
           {summaryCards.map((card) => (
             <MetricCard key={card.label} {...card} loading={loading && !overview} />
           ))}
@@ -215,32 +211,82 @@ export function AdminClient() {
           <AttentionPanel items={overview.attention} loading={loading && !overview} />
         ) : null}
 
-        <Card className="pf-card-lift overflow-hidden rounded-2xl border-border/70">
-          <div className="flex flex-wrap items-center gap-3 border-b border-border/70 p-4">
-            <p className="text-sm font-semibold text-foreground">Barbearias</p>
-            <div className="ml-auto flex flex-wrap gap-2">
-              <Select className="h-9 w-[150px] rounded-xl text-sm" value={status} onChange={(e) => setStatus(e.target.value)}>
+        <Card className="pf-card-lift overflow-hidden rounded-xl border-border/60">
+          <div className="flex flex-col gap-3 border-b border-border/60 p-4 sm:flex-row sm:flex-wrap sm:items-center">
+            <p className="text-sm font-medium text-foreground">Barbearias</p>
+            <div className="grid grid-cols-2 gap-2 sm:ml-auto sm:flex sm:flex-wrap">
+              <Select className="h-9 rounded-xl text-sm sm:w-[150px]" value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status">
                 <option value="">Todos os status</option>
                 <option value="trialing">Em teste</option>
                 <option value="active">Ativas</option>
                 <option value="past_due">Em atraso</option>
                 <option value="canceled">Canceladas</option>
               </Select>
-              <Select className="h-9 w-[140px] rounded-xl text-sm" value={plan} onChange={(e) => setPlan(e.target.value)}>
+              <Select className="h-9 rounded-xl text-sm sm:w-[140px]" value={plan} onChange={(e) => setPlan(e.target.value)} aria-label="Plano">
                 <option value="">Todos os planos</option>
                 <option value="starter">Starter</option>
                 <option value="pro">Pro</option>
                 <option value="premium">Premium</option>
               </Select>
-              <Select className="h-9 w-[170px] rounded-xl text-sm" value={billingFilter} onChange={(e) => setBillingFilter(e.target.value)}>
-                <option value="">Todas as cobranças</option>
-                <option value="complimentary">Cortesias ativas</option>
-                <option value="due7">Vencendo em 7 dias</option>
-              </Select>
+              <div className="col-span-2 sm:col-span-1">
+                <Select className="h-9 rounded-xl text-sm sm:w-[170px]" value={billingFilter} onChange={(e) => setBillingFilter(e.target.value)} aria-label="Cobrança">
+                  <option value="">Todas as cobranças</option>
+                  <option value="complimentary">Cortesias ativas</option>
+                  <option value="due7">Vencendo em 7 dias</option>
+                </Select>
+              </div>
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          {/* Mobile — lista de cards */}
+          <div className="divide-y divide-border/60 lg:hidden">
+            {tenants.length === 0 && !loading ? (
+              <p className="px-4 py-10 text-center text-[13px] text-muted-foreground">
+                Nenhuma conta encontrada com esses filtros.
+              </p>
+            ) : null}
+            {tenants.map((tenant) => {
+              const st = tenantStatus(tenant)
+              return (
+                <div key={tenant.id} className="p-4">
+                  <div className="flex items-start gap-3">
+                    <span className="flex size-[30px] shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-medium uppercase text-primary">
+                      {initials(tenant.name)}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <Link href={`/plataforma/contas/${tenant.id}`} className="block truncate font-medium text-foreground">
+                        {tenant.name}
+                      </Link>
+                      <p className="truncate text-[11px] text-muted-foreground">
+                        /{tenant.slug}{tenant.city ? ` · ${tenant.city}` : ''}
+                      </p>
+                    </div>
+                    <StatusBadge tone={st.tone} label={st.label} />
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                    <span>{tenant.usersCount} usuário(s)</span>
+                    <span>
+                      {tenant.billing_status === 'trialing'
+                        ? (tenant.trialDaysLeft !== null && tenant.trialDaysLeft < 0
+                            ? `Teste expirou em ${formatDate(tenant.trial_ends_at)}`
+                            : `${tenant.trialDaysLeft} dia(s) de teste`)
+                        : tenant.next_billing_date ? `Próx.: ${formatDate(tenant.next_billing_date)}` : '—'}
+                    </span>
+                  </div>
+
+                  <Link
+                    href={`/plataforma/contas/${tenant.id}`}
+                    className={buttonVariants({ variant: 'outline', size: 'sm', className: 'mt-3 w-full rounded-xl' })}
+                  >
+                    Gerenciar <ArrowRight className="ml-1 size-3.5" />
+                  </Link>
+                </div>
+              )
+            })}
+          </div>
+
+          <div className="hidden overflow-x-auto lg:block">
             <table className="w-full text-sm">
               <thead className="bg-muted/50 text-left text-xs uppercase text-muted-foreground">
                 <tr>
@@ -290,9 +336,7 @@ export function AdminClient() {
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`rounded-full px-2 py-1 text-xs font-medium ${tenantStatus(tenant).style}`}>
-                        {tenantStatus(tenant).label}
-                      </span>
+                      <StatusBadge tone={tenantStatus(tenant).tone} label={tenantStatus(tenant).label} />
                     </td>
                     <td className="px-4 py-3">{tenant.usersCount}</td>
                     <td className="px-4 py-3">

@@ -147,7 +147,7 @@ export function LoginClient() {
   }
 
   return (
-    <main className="lp-noise relative min-h-screen overflow-hidden bg-lp-cream-2 lg:grid lg:grid-cols-[1.05fr_0.95fr]">
+    <main className="lp-noise relative flex min-h-screen flex-col overflow-hidden bg-lp-cream-2 lg:grid lg:grid-cols-[1.05fr_0.95fr]">
       {/* --- Coluna esquerda: branding --- */}
       <section className="relative isolate overflow-hidden bg-lp-ink-900 text-lp-cream">
         <div
@@ -181,7 +181,7 @@ export function LoginClient() {
           }}
         />
 
-        <div className="relative flex flex-col gap-9 px-6 py-8 sm:px-10 sm:py-10 lg:min-h-screen lg:justify-between lg:gap-10 lg:px-12 lg:py-12">
+        <div className="relative flex flex-col gap-9 px-4 py-6 sm:px-10 sm:py-10 lg:min-h-screen lg:justify-between lg:gap-10 lg:px-12 lg:py-12">
           <div className="flex items-center justify-between gap-4">
             <Link
               href="/"
@@ -263,18 +263,18 @@ export function LoginClient() {
       </section>
 
       {/* --- Coluna direita: login --- */}
-      <section className="relative flex items-center justify-center px-5 py-10 sm:px-8 sm:py-14 lg:px-12">
+      <section className="relative flex flex-1 items-center justify-center px-4 py-8 sm:px-8 sm:py-14 lg:px-12">
         <div className="lp-anim lp-card-in w-full max-w-md">
-          <div className="rounded-2xl border border-lp-ink-900/8 bg-lp-cream p-7 shadow-[var(--lp-shadow-lg)] sm:p-9">
-            <div className="mb-7 flex items-center gap-3">
+          <div className="rounded-2xl border border-lp-ink-900/8 bg-lp-cream p-5 shadow-[var(--lp-shadow-lg)] sm:p-7 lg:p-8">
+            <div className="mb-6 flex flex-col items-start gap-3 sm:mb-7 sm:flex-row sm:items-center">
               <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-lp-ink-900 text-lp-cream ring-1 ring-lp-gold-400/30">
                 <Building2 className="size-5" />
               </span>
-              <div>
-                <h1 className="text-[1.375rem] font-bold tracking-tight text-lp-graphite">
+              <div className="min-w-0">
+                <h1 className="text-balance text-[1.375rem] font-bold leading-tight tracking-tight text-lp-graphite">
                   Entrar no MeuBarberHub
                 </h1>
-                <p className="mt-0.5 text-sm text-lp-slate">Acesse sua unidade e continue a operação.</p>
+                <p className="mt-1 text-sm text-lp-slate">Acesse sua unidade e continue a operação.</p>
               </div>
             </div>
 
@@ -374,7 +374,7 @@ export function LoginClient() {
               </button>
             </form>
 
-            <p className="mt-7 text-center text-sm text-lp-slate">
+            <p className="mt-6 text-center text-sm text-lp-slate sm:mt-7">
               Ainda não tem conta?{' '}
               <Link
                 href="/cadastro"
