@@ -37,6 +37,14 @@ export type Overview = {
     trialExpired: number
   }
   plans: Record<string, number>
+  assistant?: {
+    period: string
+    questions: number
+    aiCalls: number
+    inputTokens: number
+    outputTokens: number
+    estimatedCostUsd: number
+  }
   revenue: {
     mrr: number
     forecast30Days: number

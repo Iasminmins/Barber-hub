@@ -34,7 +34,11 @@ No MVP, qualquer intencao financeira geral deve ser bloqueada para perfis sem pe
 
 ## Limite de uso
 
-Cada usuario autenticado tem 50 perguntas por mes.
+Cada usuario autenticado tem limite mensal conforme o plano da barbearia:
+
+- Starter: 20 perguntas por usuario/mes;
+- Pro: 50 perguntas por usuario/mes;
+- Premium: 150 perguntas por usuario/mes.
 
 O contador deve:
 

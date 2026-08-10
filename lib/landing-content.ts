@@ -9,6 +9,7 @@
 import type { LucideIcon } from 'lucide-react'
 import {
   BarChart3,
+  Bot,
   CalendarDays,
   Package,
   Receipt,
@@ -205,6 +206,11 @@ export const TRUST_ITEMS: TrustItem[] = [
     title: 'Controle financeiro',
     description: 'Receita, comissões e ticket médio atualizados por período.',
     icon: BarChart3,
+  },
+  {
+    title: 'Assistente inteligente',
+    description: 'Pergunte sobre agenda, comandas, clientes e faturamento direto no painel.',
+    icon: Bot,
   },
 ]
 
@@ -479,6 +485,13 @@ export const BENEFITS: Benefit[] = [
     consequence:
       'Receita, ticket médio e recorrência ficam disponíveis por período, prontos para comparar.',
     screen: 'Relatórios › por período',
+  },
+  {
+    context: 'Dúvida rápida que viraria mensagem para o suporte',
+    title: 'Chat inteligente dentro da plataforma',
+    consequence:
+      'A equipe pergunta sobre uso do sistema e dados da barbearia sem sair do painel.',
+    screen: 'Assistente › perguntas do mês',
   },
 ]
 

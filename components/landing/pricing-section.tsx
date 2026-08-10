@@ -91,6 +91,7 @@ export function PricingSection() {
                     ['Usuários', plan.users],
                     ['Unidades', plan.units],
                     ['Relatórios', plan.reports],
+                    ['Assistente', plan.assistant],
                     ['Suporte', plan.support],
                   ].map(([rotulo, valor]) => (
                     <div key={rotulo} className="flex items-start justify-between gap-3">
