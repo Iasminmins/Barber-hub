@@ -57,8 +57,13 @@ function bearerToken(request: Request) {
   return authorization.startsWith('Bearer ') ? authorization.slice(7) : ''
 }
 
-function jsonError(error: string, status: number) {
-  return NextResponse.json({ error }, { status })
+function jsonError(error: string, status: number, code = 'assistant_error') {
+  return NextResponse.json({ error, code }, { status })
+}
+
+function logAssistantError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+  console.error('[assistant.chat]', message)
 }
 
 function isAdminRole(role: Role) {
@@ -159,7 +164,8 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     if (error instanceof RequestBodyError) return jsonError(error.message, error.status)
-    return jsonError(error instanceof Error ? error.message : 'Nao foi possivel consultar o assistente agora.', 500)
+    logAssistantError(error)
+    return jsonError('Nao foi possivel consultar o assistente agora.', 500)
   }
 }
 

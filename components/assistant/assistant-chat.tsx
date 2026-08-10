@@ -15,6 +15,7 @@ type ChatMessage = {
 type AssistantResponse = {
   answer?: string
   error?: string
+  code?: string
   remaining?: number
   limit?: number
 }
@@ -63,8 +64,11 @@ export function AssistantChat() {
         },
         body: JSON.stringify({ question: cleanQuestion }),
       })
-      const payload = await response.json() as AssistantResponse
-      if (!response.ok) throw new Error(payload.error ?? 'Nao foi possivel consultar o assistente.')
+      const payload = await response.json().catch(() => null) as AssistantResponse | null
+      if (!response.ok) {
+        throw new Error(payload?.error ?? 'Nao foi possivel consultar o assistente.')
+      }
+      if (!payload) throw new Error('Nao foi possivel consultar o assistente.')
 
       setRemaining(typeof payload.remaining === 'number' ? payload.remaining : null)
       setLimit(typeof payload.limit === 'number' ? payload.limit : null)
@@ -78,7 +82,7 @@ export function AssistantChat() {
         {
           id: crypto.randomUUID(),
           role: 'assistant',
-          content: error instanceof Error ? error.message : 'Nao foi possivel consultar o assistente agora.',
+          content: error instanceof Error ? error.message : 'Nao foi possivel consultar o assistente. Tente novamente em instantes.',
         },
       ])
     } finally {
