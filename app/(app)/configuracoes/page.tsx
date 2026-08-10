@@ -35,6 +35,7 @@ import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { businessDays, defaultAgendaSettings, makePaymentSlug, normalizeAgendaSettings, normalizePaymentMethods, type AgendaSettings, type BusinessDayKey, type PaymentMethodConfig } from '@/lib/barbershop-settings'
 import { formatBillingDocument, onlyDigits } from '@/lib/billing-document'
+import { buildPublicBookingUrl } from '@/lib/public-booking-url'
 import { getSaasPlan, saasPlans, type SaasPlanId } from '@/lib/saas-plans'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
@@ -97,6 +98,7 @@ export default function ConfiguracoesPage() {
   const [employeePhotos, setEmployeePhotos] = useState<Record<string, { file: File; preview: string }>>({})
   const [employeeSaving, setEmployeeSaving] = useState('')
   const [employeeMessage, setEmployeeMessage] = useState('')
+  const [publicUrlOrigin, setPublicUrlOrigin] = useState('')
   const [shop, setShop] = useState({
     name: barbershop.name,
     slug: barbershop.slug,
@@ -110,6 +112,7 @@ export default function ConfiguracoesPage() {
 
   const effectiveLogoUrl = logoPreview || shop.logoUrl
   const effectiveColor = useMemo(() => (hexColorPattern.test(shop.color) ? shop.color : '#1E3A32'), [shop.color])
+  const publicBookingUrl = publicUrlOrigin ? buildPublicBookingUrl(publicUrlOrigin, shop.slug) : `/agendar/${shop.slug || 'slug-publico'}`
 
   useEffect(() => {
     setShop({
@@ -141,6 +144,10 @@ export default function ConfiguracoesPage() {
       if (logoPreview) URL.revokeObjectURL(logoPreview)
     }
   }, [logoPreview])
+
+  useEffect(() => {
+    setPublicUrlOrigin(window.location.origin)
+  }, [])
 
   function handleLogoChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
@@ -569,10 +576,14 @@ export default function ConfiguracoesPage() {
                 <p className="text-sm font-semibold text-foreground">Prévia rápida</p>
                 <div className="mt-3 flex items-center gap-3 rounded-lg border border-border bg-muted/25 p-4">
                   <BrandMark name={shop.name} color={effectiveColor} logoUrl={effectiveLogoUrl} className="size-12" />
-                  <div>
+                  <div className="min-w-0">
                     <p className="font-bold text-foreground">{shop.name || 'Nome da barbearia'}</p>
                     <p className="text-sm text-muted-foreground">{shop.city || 'Cidade'} · /{shop.slug || 'slug-publico'}</p>
                   </div>
+                </div>
+                <div className="mt-3 rounded-lg border border-border bg-background p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Link publico de agendamento</p>
+                  <p className="mt-2 break-all font-mono text-sm font-semibold text-foreground">{publicBookingUrl}</p>
                 </div>
               </div>
             </div>
