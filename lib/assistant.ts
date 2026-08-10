@@ -20,6 +20,7 @@ const assistantOutputUsdPerMillion = 0.6
 
 export type AssistantIntent =
   | 'revenue_today'
+  | 'revenue_week'
   | 'revenue_month'
   | 'revenue_year'
   | 'orders_today'
@@ -40,6 +41,7 @@ export type AssistantIntent =
 
 export const ASSISTANT_INTENTS: AssistantIntent[] = [
   'revenue_today',
+  'revenue_week',
   'revenue_month',
   'revenue_year',
   'orders_today',
@@ -76,6 +78,7 @@ export type AssistantAnswerInput = {
 
 const financialIntents = new Set<AssistantIntent>([
   'revenue_today',
+  'revenue_week',
   'revenue_month',
   'revenue_year',
   'orders_today',
@@ -125,6 +128,7 @@ export function normalizeAssistantText(value: string) {
   return value
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
+    .replace(/essa[mn]?semana/g, 'essa semana')
     .trim()
     .toLowerCase()
 }
@@ -165,6 +169,7 @@ export function classifyAssistantIntent(question: string): AssistantIntent {
   }
   if (hasAny(text, ['comandas hoje', 'quantas comandas', 'comanda hoje'])) return 'orders_today'
   if (hasAny(text, ['faturou hoje', 'faturamento hoje', 'receita hoje', 'vendeu hoje', 'quanto deu hoje'])) return 'revenue_today'
+  if (hasAny(text, ['faturou essa semana', 'faturamento da semana', 'receita da semana', 'vendeu essa semana', 'quanto deu essa semana'])) return 'revenue_week'
   if (hasAny(text, ['faturou no mes', 'faturamento do mes', 'receita do mes', 'vendeu no mes', 'quanto deu no mes'])) return 'revenue_month'
   if (hasAny(text, ['faturamos no ano', 'faturou no ano', 'faturamento do ano', 'receita do ano', 'vendeu no ano', 'quanto deu no ano'])) return 'revenue_year'
   if (hasAny(text, ['clientes novos', 'cliente novo'])) return 'new_clients_month'
@@ -251,10 +256,19 @@ export function buildAssistantMetricData(input: {
   const orders = input.orders ?? []
   const financialEntries = input.financialEntries ?? []
 
-  if (input.intent === 'revenue_today' || input.intent === 'revenue_month' || input.intent === 'revenue_year') {
-    const key = input.intent === 'revenue_today' ? today : input.intent === 'revenue_month' ? month : String(now.getFullYear())
-    const paidOrders = orders.filter((order) => order.status === 'paga' && toDateKey(order.createdAt).startsWith(key))
-    const extraRevenue = financialEntries.filter((entry) => isStandaloneRevenue(entry) && toDateKey(entry.date).startsWith(key))
+  if (input.intent === 'revenue_today' || input.intent === 'revenue_week' || input.intent === 'revenue_month' || input.intent === 'revenue_year') {
+    const key = input.intent === 'revenue_today' ? today : input.intent === 'revenue_month' ? month : input.intent === 'revenue_year' ? String(now.getFullYear()) : ''
+    const weekStart = input.intent === 'revenue_week' ? startOfWeekKey(now) : ''
+    const paidOrders = orders.filter((order) => {
+      if (order.status !== 'paga') return false
+      const date = toDateKey(order.createdAt)
+      return input.intent === 'revenue_week' ? date >= weekStart && date <= today : date.startsWith(key)
+    })
+    const extraRevenue = financialEntries.filter((entry) => {
+      if (!isStandaloneRevenue(entry)) return false
+      const date = toDateKey(entry.date)
+      return input.intent === 'revenue_week' ? date >= weekStart && date <= today : date.startsWith(key)
+    })
     return {
       kind: 'money',
       total: paidOrders.reduce((sum, order) => sum + order.total, 0) + extraRevenue.reduce((sum, entry) => sum + entry.amount, 0),
@@ -329,6 +343,14 @@ export function buildAssistantMetricData(input: {
   }
 
   return { kind: 'empty' }
+}
+
+function startOfWeekKey(now: Date) {
+  const date = new Date(now)
+  const day = date.getDay()
+  const diff = day === 0 ? 6 : day - 1
+  date.setDate(date.getDate() - diff)
+  return todayKey(date)
 }
 
 export function buildAssistantAnswer(input: AssistantAnswerInput) {

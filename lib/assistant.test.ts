@@ -47,6 +47,10 @@ describe('assistant classifier', () => {
     expect(classifyAssistantIntent('quanto faturamos no ano')).toBe('revenue_year')
   })
 
+  it('classifica faturamento da semana mesmo com texto grudado', () => {
+    expect(classifyAssistantIntent('quanto faturou essamsemana')).toBe('revenue_week')
+  })
+
   it('classifica ajuda para criar comanda', () => {
     expect(classifyAssistantIntent('como criar comanda?')).toBe('help_create_order')
   })
@@ -155,6 +159,17 @@ describe('assistant metric data', () => {
       orders: [
         paidOrder,
         { ...paidOrder, id: 'order-previous-year', createdAt: '2025-12-31T10:00:00.000Z', total: 999 },
+      ],
+    })).toEqual({ kind: 'money', total: 100, orders: 1 })
+  })
+
+  it('soma faturamento da semana atual', () => {
+    expect(buildAssistantMetricData({
+      intent: 'revenue_week',
+      now: new Date('2026-08-10T10:00:00'),
+      orders: [
+        paidOrder,
+        { ...paidOrder, id: 'order-last-week', createdAt: '2026-08-03T10:00:00.000Z', total: 999 },
       ],
     })).toEqual({ kind: 'money', total: 100, orders: 1 })
   })

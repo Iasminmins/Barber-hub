@@ -144,12 +144,12 @@ export function AssistantChat() {
           </div>
 
           <div className="border-t border-border p-3">
-            <div className="mb-2 flex gap-2 overflow-x-auto pb-1">
+            <div className="mb-2 grid grid-cols-2 gap-2">
               {suggestions.map((suggestion) => (
                 <button
                   key={suggestion}
                   type="button"
-                  className="shrink-0 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+                  className="min-h-9 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium leading-tight text-muted-foreground hover:bg-muted hover:text-foreground"
                   onClick={() => void ask(suggestion)}
                 >
                   {suggestion}

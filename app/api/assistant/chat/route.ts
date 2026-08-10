@@ -40,6 +40,7 @@ type BarbershopPlanRow = {
 
 const dataIntents = new Set<AssistantIntent>([
   'revenue_today',
+  'revenue_week',
   'revenue_month',
   'revenue_year',
   'orders_today',
