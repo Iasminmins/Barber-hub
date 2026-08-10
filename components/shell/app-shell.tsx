@@ -10,6 +10,7 @@ import { useAppData } from '@/components/data/app-data-provider'
 import { canAccessPath } from '@/lib/staff-permissions'
 import { BillingNotice, getBillingState } from '@/components/billing/billing-notice'
 import { buttonVariants } from '@/components/ui/button'
+import { AssistantChat } from '@/components/assistant/assistant-chat'
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -78,6 +79,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           ) : children}
         </main>
+        <AssistantChat />
       </div>
     </div>
   )

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Building2, Users, Timer, ShieldAlert, DollarSign, TrendingUp, Gift, Percent, ArrowRight, MessageSquare, AlertOctagon, Download } from 'lucide-react'
+import { Building2, Users, Timer, ShieldAlert, DollarSign, TrendingUp, Gift, Percent, ArrowRight, MessageSquare, AlertOctagon, Download, Bot } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Select } from '@/components/ui/select'
@@ -18,6 +18,10 @@ import { formatDate, formatPercent, initials } from '@/lib/format'
 
 function formatMoney(value: number) {
   return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
+
+function formatUsd(value: number) {
+  return value.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 4 })
 }
 
 function tenantStatus(tenant: TenantRow): { label: string; tone: StatusTone } {
@@ -129,6 +133,17 @@ export function AdminClient() {
     ]
   }, [overview])
 
+  const assistantCards = useMemo(() => {
+    if (!overview?.assistant) return []
+    const assistant = overview.assistant
+    return [
+      { label: 'Perguntas do assistente', value: assistant.questions, hint: `Período ${assistant.period}`, icon: Bot, accent: 'success' as const },
+      { label: 'Chamadas de IA', value: assistant.aiCalls, hint: 'Fallback inteligente usado', icon: MessageSquare },
+      { label: 'Tokens da IA', value: assistant.inputTokens + assistant.outputTokens, hint: `${assistant.inputTokens} entrada · ${assistant.outputTokens} saída`, icon: TrendingUp },
+      { label: 'Custo IA estimado', value: formatUsd(assistant.estimatedCostUsd), hint: 'Visível só na plataforma', icon: DollarSign, accent: 'gold' as const },
+    ]
+  }, [overview])
+
   if (gate !== 'granted') {
     return <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">Verificando acesso…</div>
   }
@@ -188,6 +203,12 @@ export function AdminClient() {
 
         <section className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
           {summaryCards.map((card) => (
+            <MetricCard key={card.label} {...card} loading={loading && !overview} />
+          ))}
+        </section>
+
+        <section className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+          {assistantCards.map((card) => (
             <MetricCard key={card.label} {...card} loading={loading && !overview} />
           ))}
         </section>

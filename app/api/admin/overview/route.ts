@@ -43,6 +43,12 @@ export async function GET(request: Request) {
       .select('created_at, status')
       .gte('created_at', sixMonthsAgo)
 
+    const assistantPeriod = new Date().toISOString().slice(0, 7)
+    const { data: assistantRows } = await admin
+      .from('assistant_usage')
+      .select('used_count, ai_calls, input_tokens, output_tokens, estimated_cost_usd')
+      .eq('period', assistantPeriod)
+
     const rows = shops ?? []
     const normalizedRows = rows.map((shop) => ({
       ...shop,
@@ -102,6 +108,16 @@ export async function GET(request: Request) {
     const periodStart = daysAgoIso(periodDays)
     const sentStatuses = new Set(['sent', 'delivered', 'read', 'replied'])
     const messagesSent = messages.filter((m) => m.created_at >= periodStart && sentStatuses.has(m.status)).length
+    const assistantUsage = (assistantRows ?? []).reduce(
+      (totals, row) => ({
+        questions: totals.questions + Number(row.used_count ?? 0),
+        aiCalls: totals.aiCalls + Number(row.ai_calls ?? 0),
+        inputTokens: totals.inputTokens + Number(row.input_tokens ?? 0),
+        outputTokens: totals.outputTokens + Number(row.output_tokens ?? 0),
+        estimatedCostUsd: totals.estimatedCostUsd + Number(row.estimated_cost_usd ?? 0),
+      }),
+      { questions: 0, aiCalls: 0, inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0 },
+    )
 
     return NextResponse.json({
       totals: {
@@ -121,6 +137,14 @@ export async function GET(request: Request) {
       },
       revenue: { ...revenue, receivedThisMonth, asaasAvailable, delinquencyRate },
       plans: byPlan,
+      assistant: {
+        period: assistantPeriod,
+        questions: assistantUsage.questions,
+        aiCalls: assistantUsage.aiCalls,
+        inputTokens: assistantUsage.inputTokens,
+        outputTokens: assistantUsage.outputTokens,
+        estimatedCostUsd: Number(assistantUsage.estimatedCostUsd.toFixed(6)),
+      },
       charts,
       attention,
       comparisons: {

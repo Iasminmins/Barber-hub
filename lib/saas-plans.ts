@@ -21,6 +21,7 @@ export interface SaasPlan {
   units: string
   support: string
   reports: string
+  assistant: string
   items: string[]
   featured?: boolean
   features: Record<SaasFeature, boolean>
@@ -42,7 +43,8 @@ export const saasPlans: SaasPlan[] = [
     units: '1 unidade',
     support: 'E-mail',
     reports: 'Essenciais',
-    items: ['Gestão essencial', '1 unidade', 'Até 3 usuários', 'Relatórios essenciais'],
+    assistant: '20 perguntas/usuário',
+    items: ['Gestão essencial', '1 unidade', 'Até 3 usuários', '20 perguntas do assistente por usuário'],
     features: {
       coreSystem: true,
       appointments: true,
@@ -65,7 +67,8 @@ export const saasPlans: SaasPlan[] = [
     units: '1 unidade',
     support: 'Prioritário',
     reports: 'Avançados por período',
-    items: ['Sistema completo', 'Até 8 usuários', 'Importação e exportação', 'Relatórios avançados'],
+    assistant: '50 perguntas/usuário',
+    items: ['Sistema completo', 'Até 8 usuários', 'Assistente inteligente com 50 perguntas por usuário', 'Importação, exportação e relatórios avançados'],
     featured: true,
     features: {
       coreSystem: true,
@@ -89,7 +92,8 @@ export const saasPlans: SaasPlan[] = [
     units: 'Até 3 unidades',
     support: 'Prioritário + implantação',
     reports: 'Avançados por unidade',
-    items: ['Sistema completo', 'Multiunidade', 'Usuários ilimitados', 'Implantação assistida'],
+    assistant: '150 perguntas/usuário',
+    items: ['Sistema completo', 'Multiunidade', 'Usuários ilimitados', 'Assistente inteligente com 150 perguntas por usuário'],
     features: {
       coreSystem: true,
       appointments: true,
@@ -111,6 +115,7 @@ export const planComparisonRows = [
   ['Unidades', '1 unidade', '1 unidade', 'Até 3 unidades'],
   ['Usuários da equipe', 'Até 3 usuários', 'Até 8 usuários', 'Ilimitado'],
   ['Relatórios', 'Essenciais', 'Avançados por período', 'Avançados por unidade'],
+  ['Assistente inteligente', '20 perguntas/usuário', '50 perguntas/usuário', '150 perguntas/usuário'],
   ['Comissões', 'Controle completo', 'Controle completo', 'Controle completo'],
   ['Importação e exportação', 'Não incluído', 'Incluído', 'Incluído com acompanhamento'],
   ['Suporte', 'E-mail', 'Prioritário', 'Prioritário + implantação'],
