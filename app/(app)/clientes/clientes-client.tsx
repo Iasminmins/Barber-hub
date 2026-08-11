@@ -364,11 +364,16 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
                   </button>
                 ))}
                 {filter === "sem_retorno" ? (
-                  <Select aria-label="Período sem retorno" value={returnFilter} onChange={(event) => setReturnFilter(Number(event.target.value) as ReturnFilter)} className="h-8 w-auto text-xs">
-                    <option value="30">30 dias</option>
-                    <option value="60">60 dias</option>
-                    <option value="90">90 dias</option>
-                  </Select>
+                  <>
+                    <Select aria-label="Período sem retorno" value={returnFilter} onChange={(event) => setReturnFilter(Number(event.target.value) as ReturnFilter)} className="h-8 w-auto text-xs">
+                      <option value="30">30 dias</option>
+                      <option value="60">60 dias</option>
+                      <option value="90">90 dias</option>
+                    </Select>
+                    <span className="self-center text-xs font-medium text-muted-foreground">
+                      {filtered.length} {filtered.length === 1 ? "pessoa" : "pessoas"}
+                    </span>
+                  </>
                 ) : null}
               </div>
             </div>
