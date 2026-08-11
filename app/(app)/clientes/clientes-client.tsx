@@ -27,8 +27,9 @@ import {
 } from "@/components/ui/table"
 import { useAppData } from '@/components/data/app-data-provider'
 import { buildFirstClientActivity, getEffectiveClientStartDate } from '@/lib/client-start'
+import { getClientsWithoutReturn, type ReturnFilter } from '@/lib/dashboard-retention'
 
-type Filter = "todos" | "novos" | "vip" | "recorrente" | "aniversariante" | "inadimplente" | "inativo" | "sem_telefone" | "duplicados" | "suspeitos"
+type Filter = "todos" | "novos" | "vip" | "recorrente" | "aniversariante" | "inadimplente" | "inativo" | "sem_telefone" | "duplicados" | "suspeitos" | "sem_retorno"
 type ClientDraft = {
   id:string; name:string; phone:string; email:string; birthDate:string; postalCode:string;
   address:string; addressNumber:string; addressComplement:string; neighborhood:string;
@@ -101,6 +102,7 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
   const [records, setRecords] = useState(clients)
   const [query, setQuery] = useState("")
   const [filter, setFilter] = useState<Filter>("todos")
+  const [returnFilter, setReturnFilter] = useState<ReturnFilter>(60)
   const [newClientsRange, setNewClientsRange] = useState<{ start: string; end: string } | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
@@ -157,6 +159,10 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
     }
     return stats
   }, [orders])
+  const clientsWithoutReturnIds = useMemo(
+    () => new Set(getClientsWithoutReturn(records, orders, returnFilter, new Date().toISOString().slice(0, 10)).map((client) => client.id)),
+    [records, orders, returnFilter],
+  )
   const getClientStats = (client: Client) => {
     const byId = clientStats.get(client.id)
     const byName = clientStats.get(normalizeName(client.name))
@@ -202,11 +208,12 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
         )) ||
         (filter === "aniversariante" ? c.tags.includes("aniversariante") || isBirthdayThisMonth(c.birthDate) : c.tags.includes(filter as ClientTag)) ||
         (filter === "sem_telefone" && !normalizePhone(c.phone)) ||
+        (filter === "sem_retorno" && clientsWithoutReturnIds.has(c.id)) ||
         (filter === "duplicados" && duplicateKeys.has(normalizePhone(c.phone) || normalizeName(c.name))) ||
         (filter === "suspeitos" && productNames.has(normalizeName(c.name)))
       return matchesQuery && matchesFilter
     })
-  }, [records, query, filter, duplicateKeys, productNames, newClientsRange, clientStartDates])
+  }, [records, query, filter, duplicateKeys, productNames, newClientsRange, clientStartDates, clientsWithoutReturnIds])
 
   const selected = records.find((c) => c.id === selectedId) ?? null
   const selectedStats = selected ? getClientStats(selected) : null
@@ -251,6 +258,7 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
     { key: "sem_telefone", label: "Sem telefone" },
     { key: "duplicados", label: "Duplicados" },
     { key: "suspeitos", label: "Suspeitos" },
+    { key: "sem_retorno", label: "Sem retorno" },
   ]
 
   return (
@@ -349,6 +357,13 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
                     {f.label}
                   </button>
                 ))}
+                {filter === "sem_retorno" ? (
+                  <Select aria-label="Período sem retorno" value={returnFilter} onChange={(event) => setReturnFilter(Number(event.target.value) as ReturnFilter)} className="h-8 w-auto text-xs">
+                    <option value="30">30 dias</option>
+                    <option value="60">60 dias</option>
+                    <option value="90">90 dias</option>
+                  </Select>
+                ) : null}
               </div>
             </div>
           </Card>
