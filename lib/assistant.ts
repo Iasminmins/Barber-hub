@@ -37,6 +37,7 @@ export type AssistantIntent =
   | 'top_employee_month'
   | 'help_create_order'
   | 'help_create_client'
+  | 'help_create_product'
   | 'help_reports'
   | 'help_public_booking_link'
   | 'help_employee_photo'
@@ -63,6 +64,7 @@ export const ASSISTANT_INTENTS: AssistantIntent[] = [
   'top_employee_month',
   'help_create_order',
   'help_create_client',
+  'help_create_product',
   'help_reports',
   'help_public_booking_link',
   'help_employee_photo',
@@ -159,6 +161,7 @@ export function classifyAssistantIntent(question: string): AssistantIntent {
 
   if (hasAny(text, ['criar comanda', 'abrir comanda', 'nova comanda', 'fazer comanda'])) return 'help_create_order'
   if (hasAny(text, ['cadastrar cliente', 'novo cliente', 'criar cliente', 'adicionar cliente'])) return 'help_create_client'
+  if (hasAllGroups(text, [['cadastrar', 'criar', 'adicionar', 'novo'], ['produto', 'servico']])) return 'help_create_product'
   if (hasAny(text, ['gerar relatorio', 'relatorio', 'exportar pdf', 'pdf mensal'])) return 'help_reports'
   if (hasAllGroups(text, [
     ['link', 'url', 'endereco'],
@@ -177,7 +180,7 @@ export function classifyAssistantIntent(question: string): AssistantIntent {
   if (hasAllGroups(text, [['agenda', 'agendas', 'agendamento', 'agendamentos', 'horario', 'horarios'], ['mes', 'mensal']])) return 'appointments_month'
   if (hasAllGroups(text, [['agenda', 'agendas', 'agendamento', 'agendamentos', 'horario', 'horarios'], ['ano', 'anual']])) return 'appointments_year'
   if (hasAny(text, ['agenda amanha', 'agendamentos amanha', 'amanha na agenda'])) return 'appointments_tomorrow'
-  if (hasAny(text, ['agenda hoje', 'agendamentos hoje', 'horarios hoje', 'tenho hoje'])) return 'appointments_today'
+  if (hasAllGroups(text, [['agenda', 'agendamento', 'agendamentos', 'horario', 'horarios'], ['hoje']]) || hasAny(text, ['tenho hoje'])) return 'appointments_today'
 
   if (hasAny(text, ['forma de pagamento', 'formas de pagamento', 'pagamento mais usado', 'pix', 'cartao', 'dinheiro'])) {
     return 'payment_methods_today'
@@ -419,6 +422,9 @@ export function buildAssistantAnswer(input: AssistantAnswerInput) {
   }
   if (input.intent === 'help_create_client') {
     return 'Para cadastrar cliente, abra Clientes, clique em Novo cliente, preencha os dados principais e salve.'
+  }
+  if (input.intent === 'help_create_product') {
+    return 'Para cadastrar um produto ou servico, abra Produtos & Servicos, clique em Novo produto ou Novo servico, preencha nome, preco e demais dados e salve.'
   }
   if (input.intent === 'help_reports') {
     return 'Para gerar relatorios, abra Relatorios, escolha o periodo e use as opcoes de exportacao disponiveis na tela.'

@@ -54,6 +54,7 @@ describe('assistant classifier', () => {
   })
 
   it('classifica consultas de agendamentos por periodo', () => {
+    expect(classifyAssistantIntent('Agenda de hoje')).toBe('appointments_today')
     expect(classifyAssistantIntent('quntos agendamentos teve na semana')).toBe('appointments_week')
     expect(classifyAssistantIntent('quantos horarios tenho no mes')).toBe('appointments_month')
     expect(classifyAssistantIntent('quantos agendamentos teve no ano')).toBe('appointments_year')
@@ -66,6 +67,10 @@ describe('assistant classifier', () => {
 
   it('classifica ajuda para criar comanda', () => {
     expect(classifyAssistantIntent('como criar comanda?')).toBe('help_create_order')
+  })
+
+  it('classifica ajuda para cadastrar produto', () => {
+    expect(classifyAssistantIntent('como cadastrar um produto?')).toBe('help_create_product')
   })
 
   it('classifica ajuda sobre link publico da agenda mesmo com frase informal', () => {
