@@ -409,6 +409,11 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
                     <TableCell className="text-right font-medium tabular-nums">{formatCurrency(stats.totalSpent)}</TableCell>
                     <TableCell className="text-muted-foreground">{stats.lastVisit ? formatDate(stats.lastVisit) : "-"}</TableCell>
                     <TableCell className="text-right">
+                      {filter === "sem_retorno" && normalizePhone(c.phone) ? (
+                        <Button variant="ghost" size="icon-sm" aria-label={`Enviar WhatsApp para ${c.name}`} onClick={() => openWhatsappComposer(c)}>
+                          <MessageCircle className="size-4 text-emerald-600" />
+                        </Button>
+                      ) : null}
                       <Button variant="ghost" size="icon-sm" aria-label="Excluir cliente" onClick={() => deleteClient(c.id)}>
                         <Trash2 className="size-4" />
                       </Button>
