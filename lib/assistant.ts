@@ -27,6 +27,9 @@ export type AssistantIntent =
   | 'payment_methods_today'
   | 'appointments_today'
   | 'appointments_tomorrow'
+  | 'appointments_week'
+  | 'appointments_month'
+  | 'appointments_year'
   | 'new_clients_month'
   | 'top_service_month'
   | 'top_employee_month'
@@ -48,6 +51,9 @@ export const ASSISTANT_INTENTS: AssistantIntent[] = [
   'payment_methods_today',
   'appointments_today',
   'appointments_tomorrow',
+  'appointments_week',
+  'appointments_month',
+  'appointments_year',
   'new_clients_month',
   'top_service_month',
   'top_employee_month',
@@ -65,7 +71,7 @@ export type AssistantData =
   | { kind: 'money'; total: number; orders?: number }
   | { kind: 'count'; count: number }
   | { kind: 'payment_methods'; methods: Array<{ method: string; total: number }> }
-  | { kind: 'appointments'; date: string; appointments: Array<{ start: string; clientName: string; serviceName: string; employeeName: string; status: string }> }
+  | { kind: 'appointments'; period: string; appointments: Array<{ date: string; start: string; clientName: string; serviceName: string; employeeName: string; status: string }> }
   | { kind: 'top_item'; name: string; total: number; quantity?: number }
   | { kind: 'empty' }
 
@@ -161,6 +167,9 @@ export function classifyAssistantIntent(question: string): AssistantIntent {
     ['agenda', 'agendamento', 'atendimento'],
   ])) return 'help_schedule_hours'
 
+  if (hasAllGroups(text, [['agenda', 'agendas', 'agendamento', 'agendamentos', 'horario', 'horarios'], ['semana', 'semanal']])) return 'appointments_week'
+  if (hasAllGroups(text, [['agenda', 'agendas', 'agendamento', 'agendamentos', 'horario', 'horarios'], ['mes', 'mensal']])) return 'appointments_month'
+  if (hasAllGroups(text, [['agenda', 'agendas', 'agendamento', 'agendamentos', 'horario', 'horarios'], ['ano', 'anual']])) return 'appointments_year'
   if (hasAny(text, ['agenda amanha', 'agendamentos amanha', 'amanha na agenda'])) return 'appointments_tomorrow'
   if (hasAny(text, ['agenda hoje', 'agendamentos hoje', 'horarios hoje', 'tenho hoje'])) return 'appointments_today'
 
@@ -298,19 +307,43 @@ export function buildAssistantMetricData(input: {
     }
   }
 
-  if (input.intent === 'appointments_today' || input.intent === 'appointments_tomorrow') {
-    const date = input.intent === 'appointments_today' ? today : tomorrowKey(now)
+  if (
+    input.intent === 'appointments_today'
+    || input.intent === 'appointments_tomorrow'
+    || input.intent === 'appointments_week'
+    || input.intent === 'appointments_month'
+    || input.intent === 'appointments_year'
+  ) {
+    const tomorrow = tomorrowKey(now)
+    const weekStart = startOfWeekKey(now)
+    const year = String(now.getFullYear())
+    const periodLabel = input.intent === 'appointments_today'
+      ? 'hoje'
+      : input.intent === 'appointments_tomorrow'
+        ? 'amanha'
+        : input.intent === 'appointments_week'
+          ? 'esta semana'
+          : input.intent === 'appointments_month'
+            ? 'este mes'
+            : 'este ano'
     const appointments = (input.appointments ?? [])
-      .filter((appointment) => appointment.date === date)
-      .sort((a, b) => a.start.localeCompare(b.start))
+      .filter((appointment) => {
+        if (input.intent === 'appointments_today') return appointment.date === today
+        if (input.intent === 'appointments_tomorrow') return appointment.date === tomorrow
+        if (input.intent === 'appointments_week') return appointment.date >= weekStart && appointment.date <= today
+        if (input.intent === 'appointments_month') return appointment.date.startsWith(month)
+        return appointment.date.startsWith(year)
+      })
+      .sort((a, b) => `${a.date} ${a.start}`.localeCompare(`${b.date} ${b.start}`))
       .map((appointment) => ({
+        date: appointment.date,
         start: appointment.start,
         clientName: appointment.clientName,
         serviceName: appointment.serviceName,
         employeeName: appointment.employeeName,
         status: appointment.status,
       }))
-    return { kind: 'appointments', date, appointments }
+    return { kind: 'appointments', period: periodLabel, appointments }
   }
 
   if (input.intent === 'new_clients_month') {
@@ -397,9 +430,9 @@ export function buildAssistantAnswer(input: AssistantAnswerInput) {
     return `Hoje por forma de pagamento: ${summary}.`
   }
   if (data.kind === 'appointments') {
-    if (data.appointments.length === 0) return `Nao encontrei agendamentos para ${formatDateShort(data.date)}.`
-    const first = data.appointments.slice(0, 3).map((item) => `${item.start} ${item.clientName} (${item.serviceName})`).join('; ')
-    return `Encontrei ${data.appointments.length} agendamento${data.appointments.length === 1 ? '' : 's'} para ${formatDateShort(data.date)}: ${first}.`
+    if (data.appointments.length === 0) return `Nao encontrei agendamentos para ${data.period}.`
+    const first = data.appointments.slice(0, 3).map((item) => `${formatDateShort(item.date)} ${item.start} ${item.clientName} (${item.serviceName})`).join('; ')
+    return `Encontrei ${data.appointments.length} agendamento${data.appointments.length === 1 ? '' : 's'} em ${data.period}: ${first}.`
   }
   if (data.kind === 'top_item') {
     const quantity = typeof data.quantity === 'number' ? ` (${data.quantity} venda${data.quantity === 1 ? '' : 's'})` : ''

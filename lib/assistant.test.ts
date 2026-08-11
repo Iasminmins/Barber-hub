@@ -51,6 +51,12 @@ describe('assistant classifier', () => {
     expect(classifyAssistantIntent('quanto faturou essamsemana')).toBe('revenue_week')
   })
 
+  it('classifica consultas de agendamentos por periodo', () => {
+    expect(classifyAssistantIntent('quntos agendamentos teve na semana')).toBe('appointments_week')
+    expect(classifyAssistantIntent('quantos horarios tenho no mes')).toBe('appointments_month')
+    expect(classifyAssistantIntent('quantos agendamentos teve no ano')).toBe('appointments_year')
+  })
+
   it('classifica ajuda para criar comanda', () => {
     expect(classifyAssistantIntent('como criar comanda?')).toBe('help_create_order')
   })
@@ -186,10 +192,28 @@ describe('assistant metric data', () => {
       appointments,
     })).toEqual({
       kind: 'appointments',
-      date: '2026-08-11',
+      period: 'amanha',
       appointments: [
-        { start: '09:00', clientName: 'Cliente 1', serviceName: 'Corte', employeeName: 'Joao', status: 'agendado' },
-        { start: '14:00', clientName: 'Cliente 2', serviceName: 'Corte', employeeName: 'Joao', status: 'agendado' },
+        { date: '2026-08-11', start: '09:00', clientName: 'Cliente 1', serviceName: 'Corte', employeeName: 'Joao', status: 'agendado' },
+        { date: '2026-08-11', start: '14:00', clientName: 'Cliente 2', serviceName: 'Corte', employeeName: 'Joao', status: 'agendado' },
+      ],
+    })
+  })
+
+  it('conta agendamentos da semana atual', () => {
+    expect(buildAssistantMetricData({
+      intent: 'appointments_week',
+      now: new Date('2026-08-10T10:00:00'),
+      appointments: [
+        appointment('1', '2026-08-10', '09:00'),
+        appointment('2', '2026-08-09', '09:00'),
+        appointment('3', '2026-08-03', '09:00'),
+      ],
+    })).toEqual({
+      kind: 'appointments',
+      period: 'esta semana',
+      appointments: [
+        { date: '2026-08-10', start: '09:00', clientName: 'Cliente 1', serviceName: 'Corte', employeeName: 'Joao', status: 'agendado' },
       ],
     })
   })
