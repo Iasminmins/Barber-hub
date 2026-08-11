@@ -419,6 +419,7 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
                   <TableHead className="text-right">Visitas</TableHead>
                   <TableHead className="text-right">Total gasto</TableHead>
                   <TableHead>Última visita</TableHead>
+                  <TableHead>Última mensagem enviada</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
@@ -449,15 +450,15 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
                     <TableCell className="text-right tabular-nums">{stats.visits}</TableCell>
                     <TableCell className="text-right font-medium tabular-nums">{formatCurrency(stats.totalSpent)}</TableCell>
                     <TableCell className="text-muted-foreground">{stats.lastVisit ? formatDate(stats.lastVisit) : "-"}</TableCell>
+                    <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                      {whatsappContactLog[c.id] ? formatLastContact(whatsappContactLog[c.id]).replace("Último contato: ", "") : "Nunca enviada"}
+                    </TableCell>
                     <TableCell className="text-right">
                       {normalizePhone(c.phone) ? (
                         <Button variant="ghost" size="icon-sm" aria-label={`Enviar WhatsApp para ${c.name}`} onClick={() => openWhatsappComposer(c)}>
                           <MessageCircle className="size-4 text-emerald-600" />
                         </Button>
                       ) : null}
-                      <span className="ml-1 hidden text-[10px] text-muted-foreground 2xl:inline" title={formatLastContact(whatsappContactLog[c.id])}>
-                        {whatsappContactLog[c.id] ? "Contatado" : "Nunca contatado"}
-                      </span>
                       <Button variant="ghost" size="icon-sm" aria-label="Excluir cliente" onClick={() => deleteClient(c.id)}>
                         <Trash2 className="size-4" />
                       </Button>
@@ -467,7 +468,7 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
                 })}
                 {filtered.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={filter === "novos" ? 7 : 6} className="py-10 text-center text-muted-foreground">
+                    <TableCell colSpan={filter === "novos" ? 8 : 7} className="py-10 text-center text-muted-foreground">
                       Nenhum cliente encontrado.
                     </TableCell>
                   </TableRow>
