@@ -62,7 +62,9 @@ function jsonError(error: string, status: number, code = 'assistant_error') {
 }
 
 function logAssistantError(error: unknown) {
-  const message = error instanceof Error ? error.message : String(error)
+  const message = error instanceof Error
+    ? error.message
+    : JSON.stringify(error, Object.getOwnPropertyNames(error))
   console.error('[assistant.chat]', message)
 }
 
