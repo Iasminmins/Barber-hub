@@ -195,6 +195,7 @@ export function AssinaturasClient({
   const [renewalStatus, setRenewalStatus] = React.useState('')
   const [renewingSubscriptionId, setRenewingSubscriptionId] = React.useState<string | null>(null)
   const [renewalDraft, setRenewalDraft] = React.useState<{ subscription: Subscription; method: PaymentMethod; employeeId: string } | null>(null)
+  const [whatsappContactLog, setWhatsappContactLog] = React.useState<Record<string, string>>({})
   const [subscriptionFilter, setSubscriptionFilter] = React.useState<SubscriptionFilter>('ativas')
   const [subscriptionSearch, setSubscriptionSearch] = React.useState('')
   const [saleSearch, setSaleSearch] = React.useState('')
@@ -203,6 +204,10 @@ export function AssinaturasClient({
   const [savingSale, setSavingSale] = React.useState(false)
   const [draft, setDraft] = React.useState<PlanDraft>(emptyDraft)
   const [planDialogOpen, setPlanDialogOpen] = React.useState(false)
+  React.useEffect(() => {
+    const saved = window.localStorage.getItem(`barberhub:whatsapp-contacts:${barbershop.id}`)
+    if (saved) setWhatsappContactLog(JSON.parse(saved))
+  }, [barbershop.id])
   const [planDraftTab, setPlanDraftTab] = React.useState<'basicos' | 'regras'>('basicos')
   const enrichedSubscriptions = React.useMemo(
     () => subscriptionRecords
@@ -880,6 +885,7 @@ export function AssinaturasClient({
                 <TableHead className="text-right">Valor</TableHead>
                 <TableHead>Uso</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Última mensagem enviada</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
@@ -928,6 +934,9 @@ export function AssinaturasClient({
                     </TableCell>
                     <TableCell>
                       <StatusBadge status={sub.displayStatus} />
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                      {whatsappContactLog[sub.clientId] ? new Date(whatsappContactLog[sub.clientId]).toLocaleString('pt-BR') : 'Nunca enviada'}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">

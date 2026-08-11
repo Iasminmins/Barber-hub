@@ -125,8 +125,11 @@ export default function ComandasPage() {
     phone: string
     message: string
   } | null>(null)
+  const [whatsappContactLog, setWhatsappContactLog] = useState<Record<string, string>>({})
 
   useEffect(() => {
+    const savedContacts = window.localStorage.getItem(`barberhub:whatsapp-contacts:${barbershop.id}`)
+    if (savedContacts) setWhatsappContactLog(JSON.parse(savedContacts))
     const nextOrders = sortOrdersByDate(databaseOrders)
     setOrders(nextOrders)
     setSelectedMonth((current) => {
@@ -482,6 +485,7 @@ export default function ComandasPage() {
               <TableHead>Pagamento</TableHead>
               <TableHead className="text-right">Total</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Última mensagem enviada</TableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
@@ -540,6 +544,9 @@ export default function ComandasPage() {
                 </TableCell>
                 <TableCell>
                   <StatusBadge status={order.status} />
+                </TableCell>
+                <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                  {order.clientId && whatsappContactLog[order.clientId] ? new Date(whatsappContactLog[order.clientId]).toLocaleString('pt-BR') : 'Nunca enviada'}
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-1">
