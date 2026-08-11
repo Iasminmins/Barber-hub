@@ -18,6 +18,7 @@ import { StatusBadge } from '@/components/status-badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Avatar } from '@/components/ui/avatar'
 import { Progress } from '@/components/ui/progress'
+import { Select } from '@/components/ui/select'
 import {
   DashboardPeriodControls,
   getDefaultRange,
@@ -43,6 +44,7 @@ import { isBarberRole } from '@/lib/employees'
 import { isLowStock } from '@/lib/inventory'
 import { buildFirstClientActivity, getEffectiveClientStartDate } from '@/lib/client-start'
 import type { DashboardReport } from '@/lib/dashboard-report-pdf'
+import { getClientsWithoutReturn, isExpiredUnconfirmedAppointment, type ReturnFilter } from '@/lib/dashboard-retention'
 
 const METHOD_LABEL: Record<string, string> = {
   pix: 'Pix',
@@ -272,6 +274,7 @@ export function DashboardClient({
   const [range, setRange] = React.useState<DateRange>(() => getDefaultRange('mes'))
   const [isExportingPdf, setIsExportingPdf] = React.useState(false)
   const [exportError, setExportError] = React.useState('')
+  const [returnFilter, setReturnFilter] = React.useState<ReturnFilter>(60)
 
   function handlePeriodChange(nextPeriod: Period) {
     setPeriod(nextPeriod)
@@ -303,6 +306,8 @@ export function DashboardClient({
     return isInsideRange(effectiveStart, range)
   }).length
   const atRiskClients = clients.filter((client) => client.tags.includes('inativo')).length
+  const today = new Date().toISOString().slice(0, 10)
+  const clientsWithoutReturn = getClientsWithoutReturn(clients, dashboardOrders, returnFilter, today)
   const activeSubs = subscriptions.filter((subscription) => subscription.status === 'ativo').length
   const expiringSubs = subscriptions.filter((subscription) => {
     const due = daysUntil(subscription.dueDate)
@@ -320,8 +325,10 @@ export function DashboardClient({
   const revenueByMethod = buildRevenueByMethod(dashboardOrders, financialEntries, range)
   const ranking = buildRanking(dashboardOrders, employees, range)
   const maxRevenue = Math.max(1, ...ranking.map((item) => item.revenue))
+  const expiredAppointments = filteredAppointments.filter((appointment) => isExpiredUnconfirmedAppointment(appointment, today))
   const upcoming = filteredAppointments
     .filter((appointment) => ['agendado', 'confirmado', 'chegou'].includes(appointment.status))
+    .filter((appointment) => !isExpiredUnconfirmedAppointment(appointment, today))
     .sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start))
     .slice(0, 6)
 
@@ -455,7 +462,7 @@ export function DashboardClient({
           href={`/clientes?filtro=novos&inicio=${range.start}&fim=${range.end}`}
         />
         <StatCard label="Assinaturas ativas" value={String(activeSubs)} icon={CreditCard} accent="success" hint={`${expiringSubs.length} vencendo`} />
-        <StatCard label="Clientes em risco" value={String(atRiskClients)} icon={AlertTriangle} accent="destructive" hint="inativos" />
+        <StatCard label="Clientes sem retorno" value={String(clientsWithoutReturn.length)} icon={AlertTriangle} accent="destructive" hint={`há ${returnFilter} dias`} />
         <StatCard label="Estoque baixo" value={String(lowStock.length)} icon={PackageX} accent="warning" hint="produtos" />
       </div> : null}
 
@@ -552,6 +559,18 @@ export function DashboardClient({
             </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
+            <div className="flex items-center justify-between gap-3 rounded-md bg-muted/50 p-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Clientes sem retorno</p>
+                <p className="text-2xl font-semibold text-foreground">{clientsWithoutReturn.length}</p>
+                <p className="text-xs text-muted-foreground">há {returnFilter} dias ou mais</p>
+              </div>
+              <Select aria-label="Período sem retorno" value={returnFilter} onChange={(event) => setReturnFilter(Number(event.target.value) as ReturnFilter)} className="h-8 w-auto text-xs">
+                <option value="30">30 dias</option>
+                <option value="60">60 dias</option>
+                <option value="90">90 dias</option>
+              </Select>
+            </div>
             <div>
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Assinaturas vencendo
