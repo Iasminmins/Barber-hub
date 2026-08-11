@@ -178,9 +178,9 @@ export function classifyAssistantIntent(question: string): AssistantIntent {
   }
   if (hasAny(text, ['comandas hoje', 'quantas comandas', 'comanda hoje'])) return 'orders_today'
   if (hasAny(text, ['faturou hoje', 'faturamento hoje', 'receita hoje', 'vendeu hoje', 'quanto deu hoje'])) return 'revenue_today'
-  if (hasAny(text, ['faturou essa semana', 'faturamento da semana', 'receita da semana', 'vendeu essa semana', 'quanto deu essa semana'])) return 'revenue_week'
-  if (hasAny(text, ['faturou no mes', 'faturamento do mes', 'receita do mes', 'vendeu no mes', 'quanto deu no mes'])) return 'revenue_month'
-  if (hasAny(text, ['faturamos no ano', 'faturou no ano', 'faturamento do ano', 'receita do ano', 'vendeu no ano', 'quanto deu no ano'])) return 'revenue_year'
+  if (hasAllGroups(text, [['faturou', 'faturamos', 'faturamento', 'receita', 'vendeu', 'vendas', 'quanto deu'], ['semana']])) return 'revenue_week'
+  if (hasAllGroups(text, [['faturou', 'faturamos', 'faturamento', 'receita', 'vendeu', 'vendas', 'quanto deu'], ['mes', 'mensal']])) return 'revenue_month'
+  if (hasAllGroups(text, [['faturou', 'faturamos', 'faturamento', 'receita', 'vendeu', 'vendas', 'quanto deu'], ['ano', 'anual']])) return 'revenue_year'
   if (hasAny(text, ['clientes novos', 'cliente novo'])) return 'new_clients_month'
   if (hasAny(text, ['servico mais vendido', 'servico mais saiu', 'servico campeao'])) return 'top_service_month'
   if (hasAny(text, ['funcionario que mais vendeu', 'barbeiro que mais vendeu', 'quem mais vendeu', 'ranking'])) return 'top_employee_month'

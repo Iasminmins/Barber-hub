@@ -1,6 +1,6 @@
 import { ASSISTANT_INTENTS, estimateAssistantAiCostUsd, parseAiAssistantIntent, type AssistantIntent } from './assistant'
 
-const defaultAssistantModel = 'gpt-5.6-luna'
+const defaultAssistantModel = 'gpt-5-nano'
 
 export type AiClassificationResult = {
   intent: AssistantIntent
@@ -11,7 +11,10 @@ export type AiClassificationResult = {
 
 export async function classifyAssistantIntentWithAi(question: string): Promise<AiClassificationResult> {
   const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) return emptyAiClassification()
+  if (!apiKey) {
+    console.warn('[assistant.ai] no_api_key')
+    return emptyAiClassification()
+  }
 
   const model = process.env.OPENAI_ASSISTANT_MODEL || defaultAssistantModel
   const response = await fetch('https://api.openai.com/v1/responses', {
@@ -48,7 +51,10 @@ export async function classifyAssistantIntentWithAi(question: string): Promise<A
     }),
   })
 
-  if (!response.ok) return emptyAiClassification()
+  if (!response.ok) {
+    console.warn('[assistant.ai] openai_failed', response.status)
+    return emptyAiClassification()
+  }
   const payload = await response.json() as {
     output_text?: string
     output?: Array<{ content?: Array<{ text?: string }> }>

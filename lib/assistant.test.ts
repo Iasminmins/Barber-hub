@@ -45,6 +45,7 @@ describe('assistant classifier', () => {
 
   it('classifica perguntas de faturamento anual', () => {
     expect(classifyAssistantIntent('quanto faturamos no ano')).toBe('revenue_year')
+    expect(classifyAssistantIntent('quanto faturou esse ano')).toBe('revenue_year')
   })
 
   it('classifica faturamento da semana mesmo com texto grudado', () => {
