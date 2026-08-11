@@ -30,6 +30,8 @@ export type AssistantIntent =
   | 'appointments_week'
   | 'appointments_month'
   | 'appointments_year'
+  | 'clients_month'
+  | 'clients_year'
   | 'new_clients_month'
   | 'top_service_month'
   | 'top_employee_month'
@@ -54,6 +56,8 @@ export const ASSISTANT_INTENTS: AssistantIntent[] = [
   'appointments_week',
   'appointments_month',
   'appointments_year',
+  'clients_month',
+  'clients_year',
   'new_clients_month',
   'top_service_month',
   'top_employee_month',
@@ -89,6 +93,8 @@ const financialIntents = new Set<AssistantIntent>([
   'revenue_year',
   'orders_today',
   'payment_methods_today',
+  'clients_month',
+  'clients_year',
   'new_clients_month',
   'top_service_month',
   'top_employee_month',
@@ -181,6 +187,8 @@ export function classifyAssistantIntent(question: string): AssistantIntent {
   if (hasAllGroups(text, [['faturou', 'faturamos', 'faturamento', 'receita', 'vendeu', 'vendas', 'quanto deu'], ['semana']])) return 'revenue_week'
   if (hasAllGroups(text, [['faturou', 'faturamos', 'faturamento', 'receita', 'vendeu', 'vendas', 'quanto deu'], ['mes', 'mensal']])) return 'revenue_month'
   if (hasAllGroups(text, [['faturou', 'faturamos', 'faturamento', 'receita', 'vendeu', 'vendas', 'quanto deu'], ['ano', 'anual']])) return 'revenue_year'
+  if (hasAllGroups(text, [['cliente', 'clientes'], ['mes', 'mensal']])) return 'clients_month'
+  if (hasAllGroups(text, [['cliente', 'clientes'], ['ano', 'anual']])) return 'clients_year'
   if (hasAny(text, ['clientes novos', 'cliente novo'])) return 'new_clients_month'
   if (hasAny(text, ['servico mais vendido', 'servico mais saiu', 'servico campeao'])) return 'top_service_month'
   if (hasAny(text, ['funcionario que mais vendeu', 'barbeiro que mais vendeu', 'quem mais vendeu', 'ranking'])) return 'top_employee_month'
@@ -348,6 +356,11 @@ export function buildAssistantMetricData(input: {
 
   if (input.intent === 'new_clients_month') {
     return { kind: 'count', count: (input.clients ?? []).filter((client) => toDateKey(client.createdAt).startsWith(month)).length }
+  }
+
+  if (input.intent === 'clients_month' || input.intent === 'clients_year') {
+    const period = input.intent === 'clients_month' ? month : String(now.getFullYear())
+    return { kind: 'count', count: (input.clients ?? []).filter((client) => toDateKey(client.createdAt).startsWith(period)).length }
   }
 
   if (input.intent === 'top_service_month') {

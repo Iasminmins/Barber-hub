@@ -50,6 +50,8 @@ const dataIntents = new Set<AssistantIntent>([
   'appointments_week',
   'appointments_month',
   'appointments_year',
+  'clients_month',
+  'clients_year',
   'new_clients_month',
   'top_service_month',
   'top_employee_month',

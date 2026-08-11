@@ -58,6 +58,11 @@ describe('assistant classifier', () => {
     expect(classifyAssistantIntent('quantos agendamentos teve no ano')).toBe('appointments_year')
   })
 
+  it('classifica consultas de clientes por periodo', () => {
+    expect(classifyAssistantIntent('quantos clientes tive esse mês')).toBe('clients_month')
+    expect(classifyAssistantIntent('quantos clientes tenho esse ano')).toBe('clients_year')
+  })
+
   it('classifica ajuda para criar comanda', () => {
     expect(classifyAssistantIntent('como criar comanda?')).toBe('help_create_order')
   })
@@ -230,6 +235,20 @@ describe('assistant metric data', () => {
       now: new Date('2026-08-10T10:00:00'),
       clients,
     })).toEqual({ kind: 'count', count: 1 })
+  })
+
+  it('conta clientes cadastrados no periodo', () => {
+    const clients: Client[] = [
+      client('1', '2026-08-02T10:00:00.000Z'),
+      client('2', '2026-08-05T10:00:00.000Z'),
+      client('3', '2026-07-30T10:00:00.000Z'),
+    ]
+
+    expect(buildAssistantMetricData({
+      intent: 'clients_month',
+      now: new Date('2026-08-10T10:00:00'),
+      clients,
+    })).toEqual({ kind: 'count', count: 2 })
   })
 })
 
