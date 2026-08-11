@@ -35,6 +35,7 @@ type ClientDraft = {
   address:string; addressNumber:string; addressComplement:string; neighborhood:string;
   city:string; state:string; preferredDay:string; preferredBarber:string; notes:string; tags:ClientTag[]
 }
+type WhatsAppContactLog = Record<string, string>
 
 const TAG_LABEL: Record<ClientTag, string> = {
   vip: "VIP",
@@ -111,6 +112,18 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
   const [whatsappMessage, setWhatsappMessage] = useState("")
   const [editing, setEditing] = useState<ClientDraft | null>(null)
   const [editStatus, setEditStatus] = useState("")
+  const [whatsappContactLog, setWhatsappContactLog] = useState<WhatsAppContactLog>({})
+
+  const contactStorageKey = `barberhub:whatsapp-contacts:${barbershop.id}`
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(contactStorageKey)
+      if (saved) setWhatsappContactLog(JSON.parse(saved) as WhatsAppContactLog)
+    } catch {
+      // Histórico visual não deve impedir o uso do WhatsApp.
+    }
+  }, [contactStorageKey])
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -191,6 +204,23 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
     setWhatsappMessage(
       `Olá, ${client.name}! Tudo bem? Passando para lembrar que aqui na ${barbershop.name || "Duke Barber"} temos horários disponíveis hoje e nos próximos dias. Será um prazer receber você novamente!`,
     )
+  }
+
+  function formatLastContact(value?: string) {
+    if (!value) return "Nunca contatado"
+    const date = new Date(value)
+    return `Último contato: ${date.toLocaleDateString("pt-BR")} às ${date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`
+  }
+
+  function registerWhatsAppContact(client: Client) {
+    const previous = whatsappContactLog[client.id]
+    const today = new Date().toLocaleDateString("pt-BR")
+    if (previous && new Date(previous).toLocaleDateString("pt-BR") === today && !window.confirm("Este cliente já foi contatado hoje. Deseja enviar novamente?")) return false
+    const timestamp = new Date().toISOString()
+    const next = { ...whatsappContactLog, [client.id]: timestamp }
+    setWhatsappContactLog(next)
+    window.localStorage.setItem(contactStorageKey, JSON.stringify(next))
+    return true
   }
 
   const filtered = useMemo(() => {
@@ -420,11 +450,14 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
                     <TableCell className="text-right font-medium tabular-nums">{formatCurrency(stats.totalSpent)}</TableCell>
                     <TableCell className="text-muted-foreground">{stats.lastVisit ? formatDate(stats.lastVisit) : "-"}</TableCell>
                     <TableCell className="text-right">
-                      {filter === "sem_retorno" && normalizePhone(c.phone) ? (
+                      {normalizePhone(c.phone) ? (
                         <Button variant="ghost" size="icon-sm" aria-label={`Enviar WhatsApp para ${c.name}`} onClick={() => openWhatsappComposer(c)}>
                           <MessageCircle className="size-4 text-emerald-600" />
                         </Button>
                       ) : null}
+                      <span className="ml-1 hidden text-[10px] text-muted-foreground 2xl:inline" title={formatLastContact(whatsappContactLog[c.id])}>
+                        {whatsappContactLog[c.id] ? "Contatado" : "Nunca contatado"}
+                      </span>
                       <Button variant="ghost" size="icon-sm" aria-label="Excluir cliente" onClick={() => deleteClient(c.id)}>
                         <Trash2 className="size-4" />
                       </Button>
@@ -576,7 +609,13 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
                   target="_blank"
                   rel="noreferrer"
                   className={buttonVariants({ variant: "gold" })}
-                  onClick={() => setWhatsappClient(null)}
+                  onClick={(event) => {
+                    if (!registerWhatsAppContact(whatsappClient)) {
+                      event.preventDefault()
+                      return
+                    }
+                    setWhatsappClient(null)
+                  }}
                 >
                   <Send className="size-4" />Enviar WhatsApp
                 </a>
