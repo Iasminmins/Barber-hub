@@ -8,6 +8,7 @@ import {
   getAssistantMonthlyLimit,
   getAssistantPeriod,
   getNextAssistantResetDate,
+  shouldUseAssistantAiFallback,
   type AssistantIntent,
 } from '@/lib/assistant'
 import { classifyAssistantIntentWithAi } from '@/lib/assistant-ai'
@@ -120,7 +121,7 @@ export async function POST(request: Request) {
 
     const localIntent = classifyAssistantIntent(question)
     const canSpendAi = shopCostUsd < monthlyBudgetUsd
-    const aiClassification = localIntent === 'out_of_scope' && canSpendAi
+    const aiClassification = shouldUseAssistantAiFallback(localIntent, canSpendAi)
       ? await classifyAssistantIntentWithAi(question)
       : null
     const intent = aiClassification?.intent ?? localIntent

@@ -197,9 +197,16 @@ export function classifyAssistantIntent(question: string): AssistantIntent {
   return 'out_of_scope'
 }
 
+export function shouldUseAssistantAiFallback(intent: AssistantIntent, canSpendAi: boolean) {
+  return canSpendAi && (intent === 'out_of_scope' || intent === 'platform_help')
+}
+
 export function parseAiAssistantIntent(raw: string): AssistantIntent {
   try {
-    const parsed = JSON.parse(raw) as { intent?: unknown }
+    const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')
+    const jsonStart = cleaned.indexOf('{')
+    const jsonEnd = cleaned.lastIndexOf('}')
+    const parsed = JSON.parse(jsonStart >= 0 && jsonEnd > jsonStart ? cleaned.slice(jsonStart, jsonEnd + 1) : cleaned) as { intent?: unknown }
     const intent = typeof parsed.intent === 'string' ? parsed.intent : ''
     return assistantIntentSet.has(intent as AssistantIntent) ? intent as AssistantIntent : 'out_of_scope'
   } catch {

@@ -10,6 +10,7 @@ import {
   getAssistantPeriod,
   getNextAssistantResetDate,
   parseAiAssistantIntent,
+  shouldUseAssistantAiFallback,
 } from './assistant'
 import type { Appointment, Client, FinancialEntry, Order } from './types'
 
@@ -94,6 +95,16 @@ describe('assistant classifier', () => {
   it('bloqueia resposta invalida retornada pela IA', () => {
     expect(parseAiAssistantIntent('{"intent":"delete_all_orders"}')).toBe('out_of_scope')
     expect(parseAiAssistantIntent('texto solto')).toBe('out_of_scope')
+  })
+
+  it('usa a IA quando a classificacao local conhece o modulo mas nao a pergunta', () => {
+    expect(shouldUseAssistantAiFallback('platform_help', true)).toBe(true)
+    expect(shouldUseAssistantAiFallback('platform_help', false)).toBe(false)
+    expect(shouldUseAssistantAiFallback('help_create_order', true)).toBe(false)
+  })
+
+  it('aceita intent JSON mesmo quando o modelo envolve a resposta em markdown', () => {
+    expect(parseAiAssistantIntent('```json\n{"intent":"appointments_today"}\n```')).toBe('appointments_today')
   })
 })
 
