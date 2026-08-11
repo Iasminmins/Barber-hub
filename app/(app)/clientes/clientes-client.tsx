@@ -114,6 +114,12 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
+    if (params.get("filtro") === "sem_retorno") {
+      const period = Number(params.get("periodo"))
+      if (period === 30 || period === 60 || period === 90) setReturnFilter(period)
+      setFilter("sem_retorno")
+      return
+    }
     if (params.get("filtro") !== "novos") return
     const start = params.get("inicio") ?? ""
     const end = params.get("fim") ?? ""

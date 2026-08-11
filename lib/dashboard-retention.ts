@@ -22,7 +22,10 @@ export function getClientsWithoutReturn(clients: Client[], orders: Order[], days
 
   return clients.filter((client) => {
     const lastVisit = lastVisits.get(client.id) ?? (client.lastVisit ? dateOnly(client.lastVisit) : '')
-    return Boolean(lastVisit && diffDays(lastVisit, today) >= days)
+    if (!lastVisit) return false
+    const age = diffDays(lastVisit, today)
+    const upperBound = days === 90 ? Number.POSITIVE_INFINITY : days + 30
+    return age >= days && age < upperBound
   })
 }
 

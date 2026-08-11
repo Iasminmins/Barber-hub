@@ -462,7 +462,7 @@ export function DashboardClient({
           href={`/clientes?filtro=novos&inicio=${range.start}&fim=${range.end}`}
         />
         <StatCard label="Assinaturas ativas" value={String(activeSubs)} icon={CreditCard} accent="success" hint={`${expiringSubs.length} vencendo`} />
-        <StatCard label="Clientes sem retorno" value={String(clientsWithoutReturn.length)} icon={AlertTriangle} accent="destructive" hint={`há ${returnFilter} dias`} />
+        <StatCard label="Clientes sem retorno" value={String(clientsWithoutReturn.length)} icon={AlertTriangle} accent="destructive" hint={returnFilter === 90 ? '90+ dias' : `${returnFilter}–${returnFilter + 29} dias`} href={`/clientes?filtro=sem_retorno&periodo=${returnFilter}`} />
         <StatCard label="Estoque baixo" value={String(lowStock.length)} icon={PackageX} accent="warning" hint="produtos" />
       </div> : null}
 
