@@ -380,6 +380,16 @@ export function AssinaturasClient({
     if (result.error) window.alert(result.error)
   }
 
+  async function deleteSubscription(subscription: Subscription) {
+    if (!window.confirm(`Excluir a assinatura de ${subscription.clientName} do plano ${subscription.planName}?`)) return
+    const result = await deleteRecord('subscriptions', subscription.id)
+    if (result.error) {
+      window.alert(result.error)
+      return
+    }
+    setSubscriptionRecords((current) => current.filter((item) => item.id !== subscription.id))
+  }
+
   function toggleDraftService(serviceId: string, checked: boolean) {
     setDraft((current) => ({
       ...current,
@@ -970,6 +980,18 @@ export function AssinaturasClient({
                           {renewingSubscriptionId === sub.id ? 'Renovando...' : 'Renovar'}
                         </Button>
                         <Button variant="ghost" size="icon-sm" aria-label={`Editar assinatura de ${sub.clientName}`} onClick={(event)=>{event.stopPropagation();openSubscriptionEditor(sub)}}><Pencil className="size-4"/></Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`Excluir assinatura de ${sub.clientName}`}
+                          title="Excluir assinatura"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            void deleteSubscription(sub)
+                          }}
+                        >
+                          <Trash2 className="size-4 text-destructive" />
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
