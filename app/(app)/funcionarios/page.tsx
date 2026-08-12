@@ -24,6 +24,7 @@ import { useAppData } from '@/components/data/app-data-provider'
 import { formatCurrency, formatPercent } from '@/lib/format'
 import { isBarberRole } from '@/lib/employees'
 import { buildEmployeeMonthlyStatement } from '@/lib/employee-monthly-statement'
+import { monthRange } from '@/lib/employee-report-period'
 import type { Employee } from '@/lib/types'
 import { staffPermissionOptions, type StaffPermission } from '@/lib/staff-permissions'
 
@@ -106,9 +107,10 @@ export default function FuncionariosPage() {
   const [accessLoading, setAccessLoading] = useState(false)
   const [editStatus, setEditStatus] = useState('')
   const [section, setSection] = useState<'cadastro' | 'equipe' | 'semanal'>('equipe')
-  const [reportPeriod, setReportPeriod] = useState<'diario' | 'semanal'>('semanal')
+  const [reportPeriod, setReportPeriod] = useState<'diario' | 'semanal' | 'mensal'>('semanal')
   const [weekOffset, setWeekOffset] = useState(0)
   const [dayOffset, setDayOffset] = useState(0)
+  const [monthOffset, setMonthOffset] = useState(0)
   const [accessForm, setAccessForm] = useState<{ employeeId:string; email:string; password:string; confirmPassword:string; permissions:StaffPermission[] }>({ employeeId:'', email:'', password:'', confirmPassword:'', permissions:['dashboard','agenda'] })
   const [newEmployeeStatus, setNewEmployeeStatus] = useState('')
   const [creatingEmployee, setCreatingEmployee] = useState(false)
@@ -181,7 +183,7 @@ export default function FuncionariosPage() {
     const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
     return { start: key, end: key, startDate: date, endDate: date }
   }, [dayOffset])
-  const reportRange = reportPeriod === 'diario' ? dayRange : weekRange
+  const reportRange = reportPeriod === 'diario' ? dayRange : reportPeriod === 'mensal' ? monthRange(monthOffset) : weekRange
   const reportPaidOrders = useMemo(() => appData.orders
     .filter((order) => {
       const orderDate = localDateKey(order.createdAt)
@@ -477,7 +479,9 @@ export default function FuncionariosPage() {
             <p className="mt-1 text-sm">
               {reportPeriod === 'diario'
                 ? 'Confira as vendas e comissões geradas em um dia específico.'
-                : 'As comissões são calculadas de domingo a sábado de cada semana.'}
+                : reportPeriod === 'mensal'
+                  ? 'Confira as vendas e comissões geradas no mês selecionado.'
+                  : 'As comissões são calculadas de domingo a sábado de cada semana.'}
             </p>
           </div>
 
@@ -485,7 +489,7 @@ export default function FuncionariosPage() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0">
                 <h2 className="text-lg font-semibold text-foreground">
-                  Relatório {reportPeriod === 'diario' ? 'diário' : 'semanal'} da equipe
+                  Relatório {reportPeriod === 'diario' ? 'diário' : reportPeriod === 'mensal' ? 'mensal' : 'semanal'} da equipe
                 </h2>
                 <div
                   className="mt-3 inline-flex items-center gap-3 rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-emerald-50 px-4 py-3 shadow-sm"
@@ -497,7 +501,7 @@ export default function FuncionariosPage() {
                   </span>
                   <div>
                     <p className="text-[11px] font-bold uppercase tracking-wider text-primary">
-                      {reportPeriod === 'diario' ? 'Dia selecionado' : 'Semana selecionada'}
+                      {reportPeriod === 'diario' ? 'Dia selecionado' : reportPeriod === 'mensal' ? 'Mês selecionado' : 'Semana selecionada'}
                     </p>
                     <p className="mt-0.5 text-lg font-bold capitalize leading-tight text-foreground sm:text-xl">
                       {reportPeriod === 'diario'
@@ -523,14 +527,21 @@ export default function FuncionariosPage() {
                   >
                     Semanal
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setReportPeriod('mensal')}
+                    className={`rounded px-3 py-1.5 text-sm font-medium transition-colors ${reportPeriod === 'mensal' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'}`}
+                  >
+                    Mensal
+                  </button>
                 </div>
-                <Button variant="outline" size="icon-sm" onClick={() => reportPeriod === 'diario' ? setDayOffset((value) => value - 1) : setWeekOffset((value) => value - 1)} aria-label={reportPeriod === 'diario' ? 'Dia anterior' : 'Semana anterior'}>
+                <Button variant="outline" size="icon-sm" onClick={() => reportPeriod === 'diario' ? setDayOffset((value) => value - 1) : reportPeriod === 'mensal' ? setMonthOffset((value) => value - 1) : setWeekOffset((value) => value - 1)} aria-label={reportPeriod === 'diario' ? 'Dia anterior' : reportPeriod === 'mensal' ? 'Mês anterior' : 'Semana anterior'}>
                   <ChevronLeft className="size-4" />
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => reportPeriod === 'diario' ? setDayOffset(0) : setWeekOffset(0)}>
-                  {reportPeriod === 'diario' ? 'Hoje' : 'Semana atual'}
+                <Button variant="outline" size="sm" onClick={() => reportPeriod === 'diario' ? setDayOffset(0) : reportPeriod === 'mensal' ? setMonthOffset(0) : setWeekOffset(0)}>
+                  {reportPeriod === 'diario' ? 'Hoje' : reportPeriod === 'mensal' ? 'Mês atual' : 'Semana atual'}
                 </Button>
-                <Button variant="outline" size="icon-sm" onClick={() => reportPeriod === 'diario' ? setDayOffset((value) => value + 1) : setWeekOffset((value) => value + 1)} aria-label={reportPeriod === 'diario' ? 'Próximo dia' : 'Próxima semana'}>
+                <Button variant="outline" size="icon-sm" onClick={() => reportPeriod === 'diario' ? setDayOffset((value) => value + 1) : reportPeriod === 'mensal' ? setMonthOffset((value) => value + 1) : setWeekOffset((value) => value + 1)} aria-label={reportPeriod === 'diario' ? 'Próximo dia' : reportPeriod === 'mensal' ? 'Próximo mês' : 'Próxima semana'}>
                   <ChevronRight className="size-4" />
                 </Button>
               </div>
