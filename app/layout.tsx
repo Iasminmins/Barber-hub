@@ -8,9 +8,9 @@ export const metadata: Metadata = {
   description:
     'Organize agenda, comandas, clientes, planos, estoque e financeiro da sua barbearia. Teste o MeuBarberHub grátis por 30 dias.',
   icons: {
-    icon: [{ url: '/icon.svg?v=2', type: 'image/svg+xml' }],
+    icon: [{ url: '/icon-light-32x32.png', type: 'image/png' }],
     apple: '/apple-icon.png',
-    shortcut: '/icon.svg?v=2',
+    shortcut: '/icon-light-32x32.png',
   },
 }
 
