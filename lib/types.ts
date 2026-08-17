@@ -82,6 +82,7 @@ export interface Client {
   favoriteService: string
   preferredBarber: string
   createdAt: string
+  lastMessageSentAt?: string
 }
 
 export type CatalogType = 'produto' | 'servico'

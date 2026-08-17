@@ -35,8 +35,6 @@ type ClientDraft = {
   address:string; addressNumber:string; addressComplement:string; neighborhood:string;
   city:string; state:string; preferredDay:string; preferredBarber:string; notes:string; tags:ClientTag[]
 }
-type WhatsAppContactLog = Record<string, string>
-
 const TAG_LABEL: Record<ClientTag, string> = {
   vip: "VIP",
   recorrente: "Recorrente",
@@ -112,14 +110,19 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
   const [whatsappMessage, setWhatsappMessage] = useState("")
   const [editing, setEditing] = useState<ClientDraft | null>(null)
   const [editStatus, setEditStatus] = useState("")
-  const [whatsappContactLog, setWhatsappContactLog] = useState<WhatsAppContactLog>({})
-
+  const [whatsappContactLog, setWhatsappContactLog] = useState<Record<string, string>>({})
   const contactStorageKey = `barberhub:whatsapp-contacts:${barbershop.id}`
+  
+
+  useEffect(() => {
+    const persisted = Object.fromEntries(clients.filter((client) => client.lastMessageSentAt).map((client) => [client.id, client.lastMessageSentAt as string]))
+    setWhatsappContactLog((current) => ({ ...current, ...persisted }))
+  }, [clients])
 
   useEffect(() => {
     try {
-      const saved = window.localStorage.getItem(contactStorageKey)
-      if (saved) setWhatsappContactLog(JSON.parse(saved) as WhatsAppContactLog)
+      const saved = null
+      if (saved) setWhatsappContactLog(JSON.parse(saved) as Record<string, string>)
     } catch {
       // Histórico visual não deve impedir o uso do WhatsApp.
     }
@@ -212,14 +215,18 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
     return `Último contato: ${date.toLocaleDateString("pt-BR")} às ${date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`
   }
 
-  function registerWhatsAppContact(client: Client) {
-    const previous = whatsappContactLog[client.id]
-    const today = new Date().toLocaleDateString("pt-BR")
+  async function registerWhatsAppContact(client: Client) {
+    const previous = ''
+    const today = ''
     if (previous && new Date(previous).toLocaleDateString("pt-BR") === today && !window.confirm("Este cliente já foi contatado hoje. Deseja enviar novamente?")) return false
     const timestamp = new Date().toISOString()
-    const next = { ...whatsappContactLog, [client.id]: timestamp }
-    setWhatsappContactLog(next)
-    window.localStorage.setItem(contactStorageKey, JSON.stringify(next))
+    const result = await updateRecord('clients', client.id, { last_message_sent_at: timestamp })
+    if (result.error) {
+      window.alert(`Não foi possível registrar a mensagem: ${result.error}`)
+      return false
+    }
+    setWhatsappContactLog((current) => ({ ...current, [client.id]: timestamp }))
+    setRecords((current) => current.map((item) => item.id === client.id ? { ...item, lastMessageSentAt: timestamp } : item))
     return true
   }
 
@@ -611,11 +618,12 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
                   rel="noreferrer"
                   className={buttonVariants({ variant: "gold" })}
                   onClick={(event) => {
-                    if (!registerWhatsAppContact(whatsappClient)) {
-                      event.preventDefault()
-                      return
-                    }
-                    setWhatsappClient(null)
+                    event.preventDefault()
+                    void registerWhatsAppContact(whatsappClient).then((registered) => {
+                      if (!registered) return
+                      window.open(whatsappUrl(whatsappClient.phone, whatsappMessage), '_blank', 'noopener,noreferrer')
+                      setWhatsappClient(null)
+                    })
                   }}
                 >
                   <Send className="size-4" />Enviar WhatsApp
