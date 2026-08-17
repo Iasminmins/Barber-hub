@@ -52,11 +52,15 @@ export function AssistantChat() {
 
     try {
       const supabase = createBrowserSupabaseClient()
-      const { data } = await supabase.auth.getSession()
+      let { data } = await supabase.auth.getSession()
+      if (!data.session?.access_token) {
+        const refreshed = await supabase.auth.refreshSession()
+        data = refreshed.data
+      }
       const token = data.session?.access_token
       if (!token) throw new Error('Sessao invalida. Entre novamente para usar o assistente.')
 
-      const response = await fetch('/api/assistant/chat', {
+      let response = await fetch('/api/assistant/chat', {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
@@ -64,6 +68,20 @@ export function AssistantChat() {
         },
         body: JSON.stringify({ question: cleanQuestion }),
       })
+      if (response.status === 401) {
+        const refreshed = await supabase.auth.refreshSession()
+        const refreshedToken = refreshed.data.session?.access_token
+        if (refreshedToken) {
+          response = await fetch('/api/assistant/chat', {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              authorization: `Bearer ${refreshedToken}`,
+            },
+            body: JSON.stringify({ question: cleanQuestion }),
+          })
+        }
+      }
       const payload = await response.json().catch(() => null) as AssistantResponse | null
       if (!response.ok) {
         throw new Error(payload?.error ?? 'Nao foi possivel consultar o assistente.')
