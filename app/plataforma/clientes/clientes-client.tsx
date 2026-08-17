@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import {
-  Mail, MessageCircle, ArrowRight, Download, Users, Check, X, Loader2, Pencil, UserRound,
+  Mail, MessageCircle, ArrowRight, Download, Users, Check, X, Loader2, Pencil, UserRound, Trash2,
 } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -137,6 +137,7 @@ export function ClientesClient() {
   const [sort, setSort] = useState<SortKey>('recent')
   const [phoneEdit, setPhoneEdit] = useState<{ id: string; value: string } | null>(null)
   const [savingPhone, setSavingPhone] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -204,6 +205,27 @@ export function ClientesClient() {
       setError('Não foi possível salvar o telefone.')
     } finally {
       setSavingPhone(false)
+    }
+  }
+
+  async function deleteTenant(row: TenantRow) {
+    if (!window.confirm(`Excluir definitivamente a conta "${row.name}"? Todos os dados da barbearia serão apagados.`)) return
+    const confirmation = window.prompt(`Digite o slug da conta para confirmar: ${row.slug}`)
+    if (confirmation?.trim() !== row.slug) {
+      setError('Exclusão cancelada: o slug informado não confere.')
+      return
+    }
+    setDeletingId(row.id)
+    setError('')
+    try {
+      const response = await fetch(`/api/admin/tenants/${row.id}?confirm=${encodeURIComponent(row.slug)}&deleteUsers=true`, { method: 'DELETE' })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error ?? 'Não foi possível excluir a conta.')
+      setRows((current) => current.filter((item) => item.id !== row.id))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Não foi possível excluir a conta.')
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -483,6 +505,17 @@ export function ClientesClient() {
                               >
                                 Gerenciar <ArrowRight className="ml-1 size-3.5" />
                               </Link>
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                className="rounded-lg text-destructive hover:bg-destructive/10"
+                                onClick={() => void deleteTenant(row)}
+                                disabled={deletingId === row.id}
+                                aria-label={`Excluir a conta ${row.name}`}
+                                title="Excluir conta definitivamente"
+                              >
+                                {deletingId === row.id ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+                              </Button>
                             </div>
                           </td>
                         </tr>
@@ -577,6 +610,17 @@ export function ClientesClient() {
                           >
                             Gerenciar <ArrowRight className="ml-1 size-3.5" />
                           </Link>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            className="rounded-lg text-destructive hover:bg-destructive/10"
+                            onClick={() => void deleteTenant(row)}
+                            disabled={deletingId === row.id}
+                            aria-label={`Excluir a conta ${row.name}`}
+                            title="Excluir conta definitivamente"
+                          >
+                            {deletingId === row.id ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+                          </Button>
                         </>
                       )}
                     </div>
