@@ -222,7 +222,12 @@ export function NovoAgendamentoClient({
                   aria-expanded={isClientSearchOpen}
                   aria-controls="client-search-results"
                   className="pl-9"
-                  onFocus={() => setIsClientSearchOpen(true)}
+                  onFocus={() => {
+                    setIsClientSearchOpen(true)
+                    if (clientId && !clientQuery) {
+                      setClientQuery(clients.find((client) => client.id === clientId)?.name ?? '')
+                    }
+                  }}
                   onChange={(event) => {
                     setClientQuery(event.target.value)
                     setClientId('')
@@ -247,7 +252,7 @@ export function NovoAgendamentoClient({
                         className="w-full rounded-sm px-3 py-2 text-left text-sm hover:bg-muted focus:bg-muted focus:outline-none"
                         onClick={() => {
                           setClientId(client.id)
-                          setClientQuery('')
+                          setClientQuery(client.name)
                           setIsClientSearchOpen(false)
                         }}
                       >
