@@ -28,6 +28,8 @@ import {
 import { useAppData } from '@/components/data/app-data-provider'
 import { buildFirstClientActivity, getEffectiveClientStartDate } from '@/lib/client-start'
 import { getClientsWithoutReturn, type ReturnFilter } from '@/lib/dashboard-retention'
+import { buildPublicBookingUrl } from '@/lib/public-booking-url'
+import { buildClientWhatsAppMessage } from '@/lib/client-whatsapp-message'
 
 type Filter = "todos" | "novos" | "vip" | "recorrente" | "aniversariante" | "inadimplente" | "inativo" | "sem_telefone" | "duplicados" | "suspeitos" | "sem_retorno"
 type ClientDraft = {
@@ -204,6 +206,13 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
 
   function openWhatsappComposer(client: Client) {
     setWhatsappClient(client)
+    setWhatsappMessage(buildClientWhatsAppMessage({
+      clientName: client.name,
+      barbershopName: barbershop.name || "Duke Barber",
+      bookingUrl: buildPublicBookingUrl(window.location.origin, barbershop.slug),
+      isNoReturn: filter === "sem_retorno",
+    }))
+    return
     setWhatsappMessage(
       `Olá, ${client.name}! Tudo bem? Passando para lembrar que aqui na ${barbershop.name || "Duke Barber"} temos horários disponíveis hoje e nos próximos dias. Será um prazer receber você novamente!`,
     )
