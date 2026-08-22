@@ -22,7 +22,7 @@ import { formatDate } from '@/lib/format'
 import { formatDiscount, generateCouponCode } from '@/lib/platform-coupons'
 import { cn } from '@/lib/utils'
 
-const PLANS = ['starter', 'pro', 'premium'] as const
+const PLANS = ['solo', 'starter', 'pro', 'premium'] as const
 const PLAN_LABEL: Record<string, string> = { starter: 'Starter', pro: 'Pro', premium: 'Premium' }
 
 const COUPON_STATUS_LABEL: Record<string, string> = { active: 'Ativo', expired: 'Expirado', disabled: 'Desativado' }

@@ -1,4 +1,4 @@
-export type SaasPlanId = 'starter' | 'pro' | 'premium'
+export type SaasPlanId = 'solo' | 'starter' | 'pro' | 'premium'
 
 export type SaasFeature =
   | 'coreSystem'
@@ -33,18 +33,42 @@ export const FREE_TRIAL_DESCRIPTION = 'Teste grátis por 30 dias. Nenhuma cobran
 
 export const saasPlans: SaasPlan[] = [
   {
+    id: 'solo',
+    name: 'Solo',
+    price: 'R$ 49,90',
+    monthlyPrice: 49.9,
+    shortDescription: 'Para barbearias com 1 a 2 barbeiros, sem complicação.',
+    description: 'O essencial para uma operação pequena começar organizada.',
+    users: '1 a 2 barbeiros',
+    units: '1 unidade',
+    support: 'E-mail',
+    reports: 'Essenciais',
+    assistant: '20 perguntas/usuário',
+    items: ['Gestão essencial', '1 unidade', '1 a 2 barbeiros', '20 perguntas do assistente por usuário'],
+    features: {
+      coreSystem: true,
+      appointments: true,
+      subscriptions: true,
+      commissions: true,
+      advancedReports: false,
+      importExport: false,
+      multiUnit: false,
+      assistedOnboarding: false,
+    },
+  },
+  {
     id: 'starter',
     name: 'Starter',
     price: 'R$ 89',
     monthlyPrice: 89,
     shortDescription: 'Gestão essencial para começar com organização e controle.',
     description: 'Gestão essencial para uma barbearia começar com organização e controle.',
-    users: 'Até 3 usuários',
+    users: '3 a 5 usuários',
     units: '1 unidade',
     support: 'E-mail',
     reports: 'Essenciais',
     assistant: '20 perguntas/usuário',
-    items: ['Gestão essencial', '1 unidade', 'Até 3 usuários', '20 perguntas do assistente por usuário'],
+    items: ['Gestão essencial', '1 unidade', '3 a 5 usuários', '20 perguntas do assistente por usuário'],
     features: {
       coreSystem: true,
       appointments: true,
@@ -88,12 +112,12 @@ export const saasPlans: SaasPlan[] = [
     monthlyPrice: 249,
     shortDescription: 'Escala para redes, multiunidade e implantação assistida.',
     description: 'Para barbearias maiores, redes ou operações que precisam escalar com suporte.',
-    users: 'Ilimitado',
+    users: 'Até 15 usuários',
     units: 'Até 3 unidades',
     support: 'Prioritário + implantação',
     reports: 'Avançados por unidade',
     assistant: '150 perguntas/usuário',
-    items: ['Sistema completo', 'Multiunidade', 'Usuários ilimitados', 'Assistente inteligente com 150 perguntas por usuário'],
+    items: ['Sistema completo', 'Multiunidade', 'Até 15 usuários', 'Assistente inteligente com 150 perguntas por usuário'],
     features: {
       coreSystem: true,
       appointments: true,
@@ -113,7 +137,7 @@ export const planComparisonRows = [
   ['Agenda, clientes e comandas', 'Incluído', 'Incluído', 'Incluído'],
   ['Planos, pacotes e créditos', 'Incluído', 'Incluído', 'Incluído'],
   ['Unidades', '1 unidade', '1 unidade', 'Até 3 unidades'],
-  ['Usuários da equipe', 'Até 3 usuários', 'Até 8 usuários', 'Ilimitado'],
+  ['Usuários da equipe', '1 a 2 barbeiros', '3 a 5 usuários', 'Até 8 usuários', 'Até 15 usuários'],
   ['Relatórios', 'Essenciais', 'Avançados por período', 'Avançados por unidade'],
   ['Assistente inteligente', '20 perguntas/usuário', '50 perguntas/usuário', '150 perguntas/usuário'],
   ['Comissões', 'Controle completo', 'Controle completo', 'Controle completo'],
@@ -122,7 +146,7 @@ export const planComparisonRows = [
 ]
 
 export function getSaasPlan(planId: SaasPlanId) {
-  return saasPlans.find((plan) => plan.id === planId) ?? saasPlans[0]
+  return saasPlans.find((plan) => plan.id === planId) ?? saasPlans.find((plan) => plan.id === 'starter')!
 }
 
 export function canUsePlanFeature(planId: SaasPlanId, feature: SaasFeature) {

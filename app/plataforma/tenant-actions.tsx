@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { TenantRow } from './types'
 
-const PLANS = ['starter', 'pro', 'premium'] as const
+const PLANS = ['solo', 'starter', 'pro', 'premium'] as const
 const STATUSES = ['trialing', 'active', 'past_due', 'canceled'] as const
 
 const selectClass =

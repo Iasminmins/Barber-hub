@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic'
 type Ctx = { params: Promise<{ id: string }> }
 type PaymentList = { data?: AsaasSubscriptionPayment[] }
 
-const PLANS = ['starter', 'pro', 'premium']
+const PLANS = ['solo', 'starter', 'pro', 'premium']
 const STATUSES = ['trialing', 'active', 'past_due', 'canceled']
 
 export async function GET(request: Request, ctx: Ctx) {

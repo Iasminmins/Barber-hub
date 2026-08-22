@@ -59,7 +59,7 @@ export async function GET(request: Request) {
     const last30 = daysAgoIso(30)
 
     const byStatus = { trialing: 0, active: 0, past_due: 0, canceled: 0 } as Record<string, number>
-    const byPlan = { starter: 0, pro: 0, premium: 0 } as Record<string, number>
+    const byPlan = { solo: 0, starter: 0, pro: 0, premium: 0 } as Record<string, number>
     let trialExpiringSoon = 0
     let trialExpired = 0
 

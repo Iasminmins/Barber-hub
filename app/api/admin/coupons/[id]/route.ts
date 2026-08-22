@@ -5,7 +5,7 @@ import { effectiveCouponStatus } from '@/lib/platform-coupons'
 export const dynamic = 'force-dynamic'
 
 type Ctx = { params: Promise<{ id: string }> }
-const PLANS = ['starter', 'pro', 'premium']
+const PLANS = ['solo', 'starter', 'pro', 'premium']
 
 export async function PATCH(request: Request, ctx: Ctx) {
   try {

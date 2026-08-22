@@ -21,7 +21,7 @@ import { Card } from '@/components/ui/card'
 import type { Overview } from '@/app/plataforma/types'
 
 const CHART_COLORS = ['#1E3A32', '#C9A227', '#64748b', '#dc2626', '#059669']
-const PLAN_COLORS = { Starter: '#64748b', Pro: '#1E3A32', Premium: '#C9A227' }
+const PLAN_COLORS = { Solo: '#059669', Starter: '#64748b', Pro: '#1E3A32', Premium: '#C9A227' }
 
 const axisTick = { fontSize: 11, fill: 'var(--color-muted-foreground)' }
 const tooltipStyle = { borderRadius: 12, border: '1px solid var(--color-border)', fontSize: 13 }

@@ -64,7 +64,7 @@ export function buildAdminCharts(shops: ShopRow[], receivedThisMonth: number, no
     receita: index === months.length - 1 ? receivedThisMonth : mrrEvolution[index]?.mrr ?? 0,
   }))
 
-  const byPlan = { starter: 0, pro: 0, premium: 0 } as Record<string, number>
+  const byPlan = { solo: 0, starter: 0, pro: 0, premium: 0 } as Record<string, number>
   const byStatus = { trialing: 0, active: 0, past_due: 0, canceled: 0 } as Record<string, number>
 
   for (const shop of shops) {

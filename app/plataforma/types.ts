@@ -4,7 +4,7 @@ export type TenantRow = {
   slug: string
   city: string | null
   color?: string
-  plan: 'starter' | 'pro' | 'premium'
+  plan: 'solo' | 'starter' | 'pro' | 'premium'
   billing_status: 'trialing' | 'active' | 'past_due' | 'canceled'
   trial_ends_at: string | null
   next_billing_date: string | null
@@ -154,7 +154,7 @@ export type MessageContact = {
   barbershopName: string
   barbershopSlug: string
   barbershopCity?: string | null
-  plan: 'starter' | 'pro' | 'premium'
+  plan: 'solo' | 'starter' | 'pro' | 'premium'
   billingStatus: 'trialing' | 'active' | 'past_due' | 'canceled'
   trialEndsAt: string | null
   nextBillingDate: string | null

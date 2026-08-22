@@ -4,7 +4,7 @@ import { effectiveCouponStatus, generateCouponCode } from '@/lib/platform-coupon
 
 export const dynamic = 'force-dynamic'
 
-const PLANS = ['starter', 'pro', 'premium']
+const PLANS = ['solo', 'starter', 'pro', 'premium']
 
 export async function GET(request: Request) {
   try {
