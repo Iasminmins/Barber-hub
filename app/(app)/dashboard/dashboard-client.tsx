@@ -325,7 +325,6 @@ export function DashboardClient({
   const revenueByMethod = buildRevenueByMethod(dashboardOrders, financialEntries, range)
   const ranking = buildRanking(dashboardOrders, employees, range)
   const maxRevenue = Math.max(1, ...ranking.map((item) => item.revenue))
-  const expiredAppointments = filteredAppointments.filter((appointment) => isExpiredUnconfirmedAppointment(appointment, today))
   const upcoming = filteredAppointments
     .filter((appointment) => ['agendado', 'confirmado', 'chegou'].includes(appointment.status))
     .filter((appointment) => !isExpiredUnconfirmedAppointment(appointment, today))

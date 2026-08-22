@@ -14,6 +14,7 @@ import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { useAppData } from '@/components/data/app-data-provider'
 import { appointmentConflictsWithScheduleBlock } from '@/lib/schedule-blocks'
+import { selectClientSearchOption } from '@/lib/client-search'
 import type { Appointment, AppointmentStatus, CatalogItem, Client, Employee } from '@/lib/types'
 
 interface NovoAgendamentoClientProps {
@@ -85,6 +86,13 @@ export function NovoAgendamentoClient({
       )
       .slice(0, 10)
   }, [clientQuery, clients])
+
+  function selectClient(client: (typeof clients)[number]) {
+    const selection = selectClientSearchOption(client)
+    setClientId(selection.clientId)
+    setClientQuery(selection.clientQuery)
+    setIsClientSearchOpen(selection.isClientSearchOpen)
+  }
 
   async function saveAppointment(sendWhatsapp = false) {
     setSaveError('')
@@ -250,11 +258,12 @@ export function NovoAgendamentoClient({
                         role="option"
                         aria-selected={client.id === clientId}
                         className="w-full rounded-sm px-3 py-2 text-left text-sm hover:bg-muted focus:bg-muted focus:outline-none"
-                        onClick={() => {
-                          setClientId(client.id)
-                          setClientQuery(client.name)
-                          setIsClientSearchOpen(false)
+                        onPointerDown={(event) => {
+                          // Mobile browsers can blur the input before dispatching click.
+                          event.preventDefault()
+                          selectClient(client)
                         }}
+                        onClick={() => selectClient(client)}
                       >
                         {client.name}
                       </button>

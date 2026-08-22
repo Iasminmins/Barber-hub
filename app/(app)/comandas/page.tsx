@@ -136,7 +136,7 @@ export default function ComandasPage() {
       if (current && nextOrders.some((order) => toMonthKey(order.createdAt) === current)) return current
       return getLatestOrderMonth(nextOrders)
     })
-  }, [databaseOrders])
+  }, [barbershop.id, databaseOrders])
 
   const monthOrders = useMemo(
     () => orders.filter((order) => toMonthKey(order.createdAt) === selectedMonth),
