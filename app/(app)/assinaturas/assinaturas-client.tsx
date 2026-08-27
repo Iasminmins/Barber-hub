@@ -205,9 +205,10 @@ export function AssinaturasClient({
   const [draft, setDraft] = React.useState<PlanDraft>(emptyDraft)
   const [planDialogOpen, setPlanDialogOpen] = React.useState(false)
   React.useEffect(() => {
+    const persisted = Object.fromEntries(clients.filter((client) => client.lastMessageSentAt).map((client) => [client.id, client.lastMessageSentAt as string]))
     const saved = window.localStorage.getItem(`barberhub:whatsapp-contacts:${barbershop.id}`)
-    if (saved) setWhatsappContactLog(JSON.parse(saved))
-  }, [barbershop.id])
+    setWhatsappContactLog((current) => ({ ...current, ...(saved ? JSON.parse(saved) : {}), ...persisted }))
+  }, [barbershop.id, clients])
   const [planDraftTab, setPlanDraftTab] = React.useState<'basicos' | 'regras'>('basicos')
   const enrichedSubscriptions = React.useMemo(
     () => subscriptionRecords
@@ -286,7 +287,7 @@ export function AssinaturasClient({
     })
   }
 
-  function openRenewalWhatsApp(subscription: Subscription) {
+  async function openRenewalWhatsApp(subscription: Subscription) {
     const client = clients.find((item) => item.id === subscription.clientId)
     if (!client?.phone) return
 
@@ -300,7 +301,19 @@ export function AssinaturasClient({
       ),
     )
 
-    if (url) window.open(url, '_blank', 'noopener,noreferrer')
+    if (!url) return
+    const timestamp = new Date().toISOString()
+    const result = await updateRecord('clients', client.id, { last_message_sent_at: timestamp })
+    if (result.error) {
+      window.alert(`Não foi possível registrar a mensagem: ${result.error}`)
+      return
+    }
+    setWhatsappContactLog((current) => {
+      const next = { ...current, [client.id]: timestamp }
+      window.localStorage.setItem(`barberhub:whatsapp-contacts:${barbershop.id}`, JSON.stringify(next))
+      return next
+    })
+    window.open(url, '_blank', 'noopener,noreferrer')
   }
 
   function openPlanDialog(plan?: Plan) {

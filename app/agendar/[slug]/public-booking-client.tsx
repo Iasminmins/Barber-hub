@@ -2,334 +2,39 @@
 
 import * as React from 'react'
 import posthog from 'posthog-js'
-import { CalendarDays, CalendarX2, CheckCircle2, Clock3, LoaderCircle, MapPin, Scissors, UserRound } from 'lucide-react'
+import { ArrowLeft, ArrowRight, CalendarDays, CalendarX2, Check, CheckCircle2, Clock3, Gift, LoaderCircle, MapPin, Package, Plus, Scissors, UserPlus, UserRound } from 'lucide-react'
 import { BrandMark } from '@/components/brand-mark'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { calculateBookingCashback, defaultPublicBookingSettings, normalizeReferral, shouldShowPublicProducts, type CashbackConfig } from '@/lib/public-booking'
 import { createBrowserSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/client'
 import { formatCurrency } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
-type BookingService = {
-  id: string
-  name: string
-  category: string
-  price: number
-  durationMin: number
-}
-
-type BookingPage = {
-  barbershop: { name: string; slug: string; city: string; color: string; logoUrl?: string }
-  services: BookingService[]
-  employees: Array<{ id: string; name: string; avatarUrl?: string }>
-}
-
-type BookingResult = {
-  appointmentId: string
-  barbershopName: string
-  serviceName: string
-  employeeName: string
-  date: string
-  start: string
-}
-
-function todayKey() {
-  const date = new Date()
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-}
-
-function maxDateKey() {
-  const date = new Date()
-  date.setDate(date.getDate() + 60)
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-}
+type BookingService = { id: string; name: string; category: string; price: number; durationMin: number; imageUrl?: string }
+type BookingProduct = { id: string; name: string; category: string; price: number; stock?: number; imageUrl?: string }
+type BookingPage = { barbershop: { name: string; slug: string; city: string; color: string; logoUrl?: string }; services: BookingService[]; employees: Array<{ id: string; name: string; avatarUrl?: string }>; products: BookingProduct[]; publicBooking: { showProducts: boolean; showCashback: boolean; cashback: CashbackConfig } }
+type BookingResult = { appointmentId: string; barbershopName: string; serviceName: string; employeeName: string; date: string; start: string }
+const steps = ['Serviço', 'Profissional', 'Data e hora', 'Seus dados', 'Aproveite também', 'Confirmar']
+function todayKey() { const date = new Date(); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` }
+function maxDateKey() { const date = new Date(); date.setDate(date.getDate() + 60); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` }
 
 export function PublicBookingClient({ slug }: { slug: string }) {
-  const decodedSlug = React.useMemo(() => {
-    try {
-      return decodeURIComponent(slug)
-    } catch {
-      return slug
-    }
-  }, [slug])
-  const [page, setPage] = React.useState<BookingPage | null>(null)
-  const [serviceId, setServiceId] = React.useState('')
-  const [employeeId, setEmployeeId] = React.useState('')
-  const [date, setDate] = React.useState('')
-  const [start, setStart] = React.useState('')
-  const [slots, setSlots] = React.useState<string[]>([])
-  const [name, setName] = React.useState('')
-  const [phone, setPhone] = React.useState('')
-  const [notes, setNotes] = React.useState('')
-  const [status, setStatus] = React.useState('')
-  const [loadingPage, setLoadingPage] = React.useState(true)
-  const [pageError, setPageError] = React.useState('')
-  const [loadingSlots, setLoadingSlots] = React.useState(false)
-  const [submitting, setSubmitting] = React.useState(false)
-  const [result, setResult] = React.useState<BookingResult | null>(null)
-
-  React.useEffect(() => {
-    if (!isSupabaseConfigured()) {
-      setPageError('O agendamento online ainda não foi configurado.')
-      setLoadingPage(false)
-      return
-    }
-    const supabase = createBrowserSupabaseClient()
-    void supabase.rpc('get_public_booking_page', { p_slug: decodedSlug }).then(({ data, error }) => {
-      if (error || !data) {
-        setPageError(error?.message ?? 'Este link de agendamento não foi encontrado.')
-        setLoadingPage(false)
-        return
-      }
-      setPage(data as BookingPage)
-      setLoadingPage(false)
-    })
-  }, [decodedSlug])
-
-  React.useEffect(() => {
-    setStart('')
-    setSlots([])
-    if (!serviceId || !employeeId || !date || !isSupabaseConfigured()) return
-    setLoadingSlots(true)
-    const supabase = createBrowserSupabaseClient()
-    void supabase
-      .rpc('get_public_available_slots', {
-        p_slug: decodedSlug,
-        p_service_id: serviceId,
-        p_date: date,
-        p_employee_id: employeeId,
-      })
-      .then(({ data, error }) => {
-        setSlots(error ? [] : (data as string[] ?? []))
-        setStatus(error?.message ?? '')
-        setLoadingSlots(false)
-      })
-  }, [date, decodedSlug, employeeId, serviceId])
-
-  async function submit() {
-    setStatus('')
-    if (!serviceId || !employeeId || !date || !start || !name.trim() || !phone.trim()) {
-      setStatus('Preencha nome, telefone, serviço, profissional, data e horário.')
-      return
-    }
-    setSubmitting(true)
-    const supabase = createBrowserSupabaseClient()
-    const { data, error } = await supabase.rpc('create_public_appointment', {
-      p_slug: decodedSlug,
-      p_service_id: serviceId,
-      p_date: date,
-      p_start: start,
-      p_client_name: name.trim(),
-      p_phone: phone.trim(),
-      p_notes: notes.trim() || null,
-      p_employee_id: employeeId,
-    })
-    setSubmitting(false)
-    if (error) {
-      setStatus(error.message)
-      return
-    }
-    const booking = data as BookingResult
-    posthog.capture('public_appointment_booked', {
-      service_id: serviceId,
-      employee_id: employeeId,
-    })
-    setResult(booking)
-  }
-
-  if (result) {
-    return (
-      <main className="grid min-h-screen place-items-center bg-muted/30 p-4">
-        <Card className="w-full max-w-lg p-7 text-center">
-          <CheckCircle2 className="mx-auto size-14 text-emerald-600" />
-          <h1 className="mt-4 text-2xl font-bold">Horário solicitado!</h1>
-          <p className="mt-2 text-muted-foreground">
-            Seu agendamento entrou na agenda da {result.barbershopName}.
-          </p>
-          <div className="mt-5 rounded-lg bg-muted p-4 text-sm">
-            <p className="font-semibold">{result.serviceName}</p>
-            <p className="mt-1 text-muted-foreground">Profissional: {result.employeeName}</p>
-            <p className="mt-1 text-muted-foreground">
-              {new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long' }).format(new Date(`${result.date}T00:00:00`))} às {result.start}
-            </p>
-          </div>
-        </Card>
-      </main>
-    )
-  }
-
-  if (loadingPage) {
-    return (
-      <main className="grid min-h-dvh place-items-center bg-[radial-gradient(circle_at_top,rgba(201,162,39,0.12),transparent_35%)] p-4">
-        <div className="text-center">
-          <LoaderCircle className="mx-auto size-8 animate-spin text-primary" />
-          <p className="mt-3 text-sm font-medium text-muted-foreground">Preparando os horários...</p>
-        </div>
-      </main>
-    )
-  }
-
-  if (pageError || !page) {
-    return (
-      <main className="grid min-h-dvh place-items-center bg-[radial-gradient(circle_at_top,rgba(201,162,39,0.12),transparent_35%)] p-4">
-        <Card className="w-full max-w-md p-6 text-center sm:p-8">
-          <span className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
-            <CalendarX2 className="size-7" />
-          </span>
-          <h1 className="mt-4 text-xl font-bold">Link indisponível</h1>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            {pageError || 'Não foi possível abrir esta página de agendamento.'}
-          </p>
-          <p className="mt-4 rounded-lg bg-muted/70 p-3 text-xs text-muted-foreground">
-            Peça à barbearia um novo link de agendamento.
-          </p>
-        </Card>
-      </main>
-    )
-  }
-
-  return (
-    <main className="min-h-dvh bg-[radial-gradient(circle_at_top,rgba(201,162,39,0.12),transparent_32%)] px-3 py-5 sm:px-6 sm:py-10">
-      <div className="mx-auto w-full max-w-3xl">
-        <div className="mb-5 flex items-center justify-center gap-3 sm:mb-7">
-          <BrandMark
-            name={page.barbershop.name}
-            color={page.barbershop.color}
-            logoUrl={page.barbershop.logoUrl}
-            className="size-12 rounded-xl"
-            imageClassName="object-contain bg-white"
-          />
-          <div>
-            <h1 className="text-lg font-bold sm:text-xl">{page.barbershop.name}</h1>
-            {page.barbershop.city ? (
-              <p className="flex items-center gap-1 text-sm text-muted-foreground">
-                <MapPin className="size-3.5" /> {page.barbershop.city}
-              </p>
-            ) : null}
-          </div>
-        </div>
-
-        <Card className="overflow-hidden p-4 shadow-lg shadow-foreground/5 sm:p-7">
-          <div className="mb-5 border-b border-border pb-5 sm:mb-6">
-            <h2 className="text-xl font-bold sm:text-2xl">Escolha seu horário</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Selecione o serviço, o profissional, o dia e o horário.
-            </p>
-          </div>
-
-          <div className="grid gap-6">
-            <section>
-              <Label className="mb-2 block">1. O que você deseja fazer?</Label>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {page.services.map((service) => (
-                  <button
-                    key={service.id}
-                    type="button"
-                    onClick={() => setServiceId(service.id)}
-                    className={cn(
-                      'flex items-center gap-3 rounded-lg border p-3 text-left transition-colors',
-                      serviceId === service.id ? 'border-primary bg-primary/5 ring-2 ring-primary/15' : 'hover:bg-muted/50',
-                    )}
-                  >
-                    <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted">
-                      <Scissors className="size-4" />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block font-semibold">{service.name}</span>
-                      <span className="text-xs text-muted-foreground">{service.durationMin} min · {formatCurrency(service.price)}</span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-              {page.services.length === 0 ? (
-                <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                  Nenhum serviço está disponível para agendamento online no momento.
-                </p>
-              ) : null}
-            </section>
-
-            <section>
-              <Label className="mb-2 block">2. Escolha o profissional</Label>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {(page.employees ?? []).map((employee) => (
-                  <button
-                    key={employee.id}
-                    type="button"
-                    onClick={() => setEmployeeId(employee.id)}
-                    className={cn(
-                      'flex items-center gap-3 rounded-lg border p-3 text-left transition-colors',
-                      employeeId === employee.id ? 'border-primary bg-primary/5 ring-2 ring-primary/15' : 'hover:bg-muted/50',
-                    )}
-                  >
-                    <span className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted ring-1 ring-border">
-                      {employee.avatarUrl ? (
-                        <img src={employee.avatarUrl} alt={`Foto de ${employee.name}`} className="size-full object-cover" />
-                      ) : (
-                        <UserRound className="size-5" />
-                      )}
-                    </span>
-                    <span className="font-semibold">{employee.name}</span>
-                  </button>
-                ))}
-              </div>
-            </section>
-
-            <section className="grid gap-5 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="booking-date">3. Escolha o dia</Label>
-                <div className="relative">
-                  <CalendarDays className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input id="booking-date" type="date" min={todayKey()} max={maxDateKey()} value={date} onChange={(event) => setDate(event.target.value)} className="pl-9" />
-                </div>
-              </div>
-              <div>
-                <Label className="mb-2 block">4. Escolha o horário</Label>
-                <div className="flex min-h-11 flex-wrap items-center gap-2 rounded-lg border border-dashed border-border bg-muted/25 p-2">
-                  {!serviceId || !employeeId || !date ? (
-                    <span className="text-sm text-muted-foreground">
-                      Escolha primeiro o serviço, o profissional e o dia para ver os horários.
-                    </span>
-                  ) : null}
-                  {loadingSlots ? <span className="text-sm text-muted-foreground">Buscando horários...</span> : null}
-                  {!loadingSlots && date && serviceId && employeeId && slots.length === 0 ? <span className="text-sm text-muted-foreground">Nenhum horário disponível neste dia.</span> : null}
-                  {slots.map((slot) => (
-                    <button key={slot} type="button" onClick={() => setStart(slot)} className={cn('rounded-md border px-3 py-2 text-sm font-semibold', start === slot ? 'border-primary bg-primary text-primary-foreground' : 'bg-background hover:bg-muted')}>
-                      {slot}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </section>
-
-            <section>
-              <Label className="mb-2 block">5. Seus dados</Label>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="booking-name">Nome completo</Label>
-                  <Input id="booking-name" value={name} onChange={(event) => setName(event.target.value)} autoComplete="name" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="booking-phone">Telefone / WhatsApp</Label>
-                  <Input id="booking-phone" value={phone} onChange={(event) => setPhone(event.target.value)} inputMode="tel" autoComplete="tel" placeholder="(00) 00000-0000" />
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="booking-notes">Observação (opcional)</Label>
-                  <Textarea id="booking-notes" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Alguma preferência ou informação importante?" />
-                </div>
-              </div>
-            </section>
-
-            {status ? <p className="text-sm font-medium text-destructive">{status}</p> : null}
-            <Button variant="gold" size="lg" className="w-full" disabled={page.services.length === 0 || submitting} onClick={submit}>
-              <Clock3 className="size-4" />
-              {submitting ? 'Confirmando...' : 'Confirmar agendamento'}
-            </Button>
-          </div>
-        </Card>
-      </div>
-    </main>
-  )
+  const decodedSlug = React.useMemo(() => { try { return decodeURIComponent(slug) } catch { return slug } }, [slug])
+  const [page, setPage] = React.useState<BookingPage | null>(null); const [step, setStep] = React.useState(0); const [serviceId, setServiceId] = React.useState(''); const [employeeId, setEmployeeId] = React.useState(''); const [date, setDate] = React.useState(''); const [start, setStart] = React.useState(''); const [slots, setSlots] = React.useState<string[]>([]); const [name, setName] = React.useState(''); const [phone, setPhone] = React.useState(''); const [notes, setNotes] = React.useState(''); const [referralName, setReferralName] = React.useState(''); const [referralPhone, setReferralPhone] = React.useState(''); const [selectedProducts, setSelectedProducts] = React.useState<Record<string, number>>({}); const [status, setStatus] = React.useState(''); const [loadingPage, setLoadingPage] = React.useState(true); const [pageError, setPageError] = React.useState(''); const [loadingSlots, setLoadingSlots] = React.useState(false); const [submitting, setSubmitting] = React.useState(false); const [result, setResult] = React.useState<BookingResult | null>(null)
+  const service = page?.services.find((item) => item.id === serviceId); const selectedProductRows = page?.products.filter((item) => (selectedProducts[item.id] ?? 0) > 0).map((item) => ({ ...item, quantity: selectedProducts[item.id] })) ?? []; const productTotal = selectedProductRows.reduce((sum, item) => sum + item.price * item.quantity, 0); const publicBooking = page?.publicBooking ?? defaultPublicBookingSettings; const cashback = calculateBookingCashback(productTotal, publicBooking.cashback)
+  React.useEffect(() => { if (!isSupabaseConfigured()) { setPageError('O agendamento online ainda não foi configurado.'); setLoadingPage(false); return }; void createBrowserSupabaseClient().rpc('get_public_booking_page', { p_slug: decodedSlug }).then(({ data, error }) => { if (error || !data) setPageError(error?.message ?? 'Este link de agendamento não foi encontrado.'); else setPage(data as BookingPage); setLoadingPage(false) }) }, [decodedSlug])
+  React.useEffect(() => { setStart(''); setSlots([]); if (!serviceId || !employeeId || !date || !isSupabaseConfigured()) return; setLoadingSlots(true); void createBrowserSupabaseClient().rpc('get_public_available_slots', { p_slug: decodedSlug, p_service_id: serviceId, p_date: date, p_employee_id: employeeId }).then(({ data, error }) => { setSlots(error ? [] : (data as string[] ?? [])); setStatus(error?.message ?? ''); setLoadingSlots(false) }) }, [date, decodedSlug, employeeId, serviceId])
+  function canContinue() { if (step === 0) return Boolean(serviceId); if (step === 1) return Boolean(employeeId); if (step === 2) return Boolean(date && start); if (step === 3) return Boolean(name.trim() && phone.trim()); return true }
+  function next() { setStatus(''); if (!canContinue()) { setStatus(step === 3 ? 'Preencha nome e telefone para continuar.' : 'Complete esta etapa para continuar.'); return }; setStep((current) => current === 3 && !shouldShowPublicProducts(publicBooking) ? 5 : Math.min(steps.length - 1, current + 1)) }
+  function back() { setStatus(''); setStep((current) => current === 5 && !shouldShowPublicProducts(publicBooking) ? 3 : Math.max(0, current - 1)) }
+  function changeQuantity(id: string, amount: number) { setSelectedProducts((current) => { const nextQuantity = (current[id] ?? 0) + amount; if (nextQuantity <= 0) { const next = { ...current }; delete next[id]; return next }; return { ...current, [id]: nextQuantity } }) }
+  async function submit() { setStatus(''); const referral = normalizeReferral(referralName, referralPhone); if (!serviceId || !employeeId || !date || !start || !name.trim() || !phone.trim()) { setStatus('Preencha os dados obrigatórios do agendamento.'); return }; if ((referralName.trim() || referralPhone.trim()) && !referral) { setStatus('Preencha nome e telefone do amigo indicado.'); return }; setSubmitting(true); const { data, error } = await createBrowserSupabaseClient().rpc('create_public_appointment', { p_slug: decodedSlug, p_service_id: serviceId, p_date: date, p_start: start, p_client_name: name.trim(), p_phone: phone.trim(), p_notes: notes.trim() || null, p_employee_id: employeeId, p_product_ids: Object.keys(selectedProducts), p_product_quantities: selectedProducts, p_referral_name: referral?.name ?? null, p_referral_phone: referral?.phone ?? null }); setSubmitting(false); if (error) { setStatus(error.message); return }; posthog.capture('public_appointment_booked', { service_id: serviceId, employee_id: employeeId, products_count: selectedProductRows.length, has_referral: Boolean(referral) }); setResult(data as BookingResult) }
+  if (result) return <main className="grid min-h-dvh place-items-center bg-[radial-gradient(circle_at_top,rgba(201,162,39,0.14),transparent_35%)] p-4"><Card className="w-full max-w-lg p-7 text-center shadow-xl"><CheckCircle2 className="mx-auto size-14 text-emerald-600" /><h1 className="mt-4 text-2xl font-bold">Horário solicitado!</h1><p className="mt-2 text-muted-foreground">Seu agendamento entrou na agenda da {result.barbershopName}.</p><div className="mt-5 rounded-xl bg-muted p-4 text-sm"><p className="font-semibold">{result.serviceName}</p><p className="mt-1 text-muted-foreground">Profissional: {result.employeeName}</p><p className="mt-1 text-muted-foreground">{new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long' }).format(new Date(`${result.date}T00:00:00`))} às {result.start}</p></div>{selectedProductRows.length ? <div className="mt-3 rounded-xl border bg-card p-4 text-left"><p className="font-semibold">Produtos reservados</p><div className="mt-2 divide-y">{selectedProductRows.map((item) => <div key={item.id} className="flex justify-between gap-3 py-2 text-sm"><span>{item.quantity}x {item.name}</span><span className="text-muted-foreground">{formatCurrency(item.price * item.quantity)}</span></div>)}</div></div> : null}{publicBooking.showCashback ? <div className="mt-3 rounded-xl border border-amber-300/70 bg-amber-50 p-4 text-left text-amber-950"><p className="font-bold">Cashback desta compra</p>{publicBooking.cashback.enabled && cashback.amount > 0 ? <p className="mt-1 text-sm">Você receberá <strong>{formatCurrency(cashback.amount)}</strong> de cashback após o pagamento da comanda.</p> : publicBooking.cashback.enabled && cashback.remaining > 0 ? <p className="mt-1 text-sm">Faltam <strong>{formatCurrency(cashback.remaining)}</strong> em produtos para liberar seu cashback.</p> : <p className="mt-1 text-sm">O cashback está indisponível no momento.</p>}</div> : null}</Card></main>
+  if (loadingPage) return <main className="grid min-h-dvh place-items-center bg-[radial-gradient(circle_at_top,rgba(201,162,39,0.12),transparent_35%)] p-4"><div className="text-center"><LoaderCircle className="mx-auto size-8 animate-spin text-primary" /><p className="mt-3 text-sm font-medium text-muted-foreground">Preparando seu agendamento...</p></div></main>
+  if (pageError || !page) return <main className="grid min-h-dvh place-items-center bg-muted/30 p-4"><Card className="w-full max-w-md p-6 text-center sm:p-8"><CalendarX2 className="mx-auto size-10 text-muted-foreground" /><h1 className="mt-4 text-xl font-bold">Link indisponível</h1><p className="mt-2 text-sm text-muted-foreground">{pageError || 'Não foi possível abrir esta página de agendamento.'}</p></Card></main>
+  return <main className="min-h-dvh bg-[radial-gradient(circle_at_top,rgba(201,162,39,0.14),transparent_32%)] px-3 py-5 sm:px-6 sm:py-10"><div className="mx-auto w-full max-w-4xl"><div className="mb-6 flex items-center justify-center gap-3"><BrandMark name={page.barbershop.name} color={page.barbershop.color} logoUrl={page.barbershop.logoUrl} className="size-12 rounded-xl" imageClassName="object-contain bg-white" /><div><h1 className="text-lg font-bold sm:text-xl">{page.barbershop.name}</h1>{page.barbershop.city ? <p className="flex items-center gap-1 text-sm text-muted-foreground"><MapPin className="size-3.5" /> {page.barbershop.city}</p> : null}</div></div><div className="mb-5 grid grid-cols-6 gap-1 sm:gap-3">{steps.map((label, index) => <div key={label} className="min-w-0 text-center"><div className={cn('mx-auto flex size-8 items-center justify-center rounded-full border text-xs font-bold sm:size-10', index < step ? 'border-primary bg-primary text-primary-foreground' : index === step ? 'border-primary bg-primary/10 text-primary ring-4 ring-primary/10' : 'border-border bg-card text-muted-foreground')}>{index < step ? <Check className="size-4" /> : index + 1}</div><p className={cn('mt-1 truncate text-[0.62rem] font-semibold sm:text-xs', index === step ? 'text-foreground' : 'text-muted-foreground')}>{label}</p></div>)}</div><Card className="overflow-hidden border-border/80 shadow-xl shadow-foreground/5"><div className="border-b border-border bg-card p-5 sm:p-7"><p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Agendamento online</p><h2 className="mt-2 text-2xl font-bold sm:text-3xl">{steps[step]}</h2><p className="mt-1 text-sm text-muted-foreground">{step === 4 ? 'Escolha produtos para separar para você. Esta etapa é opcional.' : 'Siga as etapas para reservar seu próximo horário.'}</p></div><div className="grid gap-6 p-5 sm:p-7">{step === 0 ? <section><div className="grid gap-3 sm:grid-cols-2">{page.services.map((item) => <button key={item.id} type="button" onClick={() => setServiceId(item.id)} className={cn('flex items-center gap-3 rounded-xl border p-4 text-left transition-all', serviceId === item.id ? 'border-primary bg-primary/5 ring-2 ring-primary/15' : 'hover:-translate-y-0.5 hover:bg-muted/40')}>{item.imageUrl ? <img src={item.imageUrl} alt="" className="size-11 shrink-0 rounded-xl object-cover" /> : <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-muted"><Scissors className="size-5" /></span>}<span className="min-w-0 flex-1"><span className="block font-semibold">{item.name}</span><span className="text-xs text-muted-foreground">{item.durationMin} min · {formatCurrency(item.price)}</span></span>{serviceId === item.id ? <Check className="size-5 text-primary" /> : null}</button>)}</div>{page.services.length === 0 ? <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">Nenhum serviço está disponível para agendamento online.</p> : null}</section> : null}{step === 1 ? <section><div className="grid gap-3 sm:grid-cols-2">{page.employees.map((item) => <button key={item.id} type="button" onClick={() => setEmployeeId(item.id)} className={cn('flex items-center gap-3 rounded-xl border p-4 text-left transition-all', employeeId === item.id ? 'border-primary bg-primary/5 ring-2 ring-primary/15' : 'hover:-translate-y-0.5 hover:bg-muted/40')}><span className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted ring-1 ring-border">{item.avatarUrl ? <img src={item.avatarUrl} alt={`Foto de ${item.name}`} className="size-full object-cover" /> : <UserRound className="size-5" />}</span><span className="font-semibold">{item.name}</span>{employeeId === item.id ? <Check className="ml-auto size-5 text-primary" /> : null}</button>)}</div></section> : null}{step === 2 ? <section className="grid gap-5 md:grid-cols-2"><div className="space-y-2"><Label htmlFor="booking-date">Escolha o dia</Label><div className="relative"><CalendarDays className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input id="booking-date" type="date" min={todayKey()} max={maxDateKey()} value={date} onChange={(event) => setDate(event.target.value)} className="pl-9" /></div></div><div><Label className="mb-2 block">Escolha o horário</Label><div className="flex min-h-12 flex-wrap items-center gap-2 rounded-xl border border-dashed bg-muted/25 p-2">{!date ? <span className="text-sm text-muted-foreground">Escolha o dia para ver os horários.</span> : null}{loadingSlots ? <span className="text-sm text-muted-foreground">Buscando horários...</span> : null}{!loadingSlots && date && slots.length === 0 ? <span className="text-sm text-muted-foreground">Nenhum horário disponível neste dia.</span> : null}{slots.map((slot) => <button key={slot} type="button" onClick={() => setStart(slot)} className={cn('rounded-lg border px-3 py-2 text-sm font-semibold', start === slot ? 'border-primary bg-primary text-primary-foreground' : 'bg-background hover:bg-muted')}>{slot}</button>)}</div></div></section> : null}{step === 3 ? <section className="grid gap-4 md:grid-cols-2"><div className="space-y-2"><Label htmlFor="booking-name">Nome completo</Label><Input id="booking-name" value={name} onChange={(event) => setName(event.target.value)} autoComplete="name" /></div><div className="space-y-2"><Label htmlFor="booking-phone">Telefone / WhatsApp</Label><Input id="booking-phone" value={phone} onChange={(event) => setPhone(event.target.value)} inputMode="tel" autoComplete="tel" placeholder="(00) 00000-0000" /></div><div className="space-y-2 md:col-span-2"><Label htmlFor="booking-notes">Observação (opcional)</Label><Textarea id="booking-notes" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Alguma preferência ou informação importante?" /></div><div className="rounded-xl border border-dashed border-primary/30 bg-primary/5 p-4 md:col-span-2"><p className="flex items-center gap-2 font-semibold"><UserPlus className="size-4 text-primary" /> Quer indicar um amigo?</p><p className="mt-1 text-xs text-muted-foreground">Opcional. Deixe o nome e WhatsApp para a equipe entrar em contato.</p><div className="mt-3 grid gap-3 sm:grid-cols-2"><Input value={referralName} onChange={(event) => setReferralName(event.target.value)} placeholder="Nome do amigo" /><Input value={referralPhone} onChange={(event) => setReferralPhone(event.target.value)} inputMode="tel" placeholder="WhatsApp do amigo" /></div></div></section> : null}{step === 4 && shouldShowPublicProducts(publicBooking) ? <section><div className="grid gap-3 sm:grid-cols-2">{page.products.map((item) => { const quantity = selectedProducts[item.id] ?? 0; return <div key={item.id} className={cn('flex items-center gap-3 rounded-xl border p-4 transition-colors', quantity ? 'border-primary bg-primary/5' : 'hover:bg-muted/40')}>{item.imageUrl ? <img src={item.imageUrl} alt="" className="size-11 shrink-0 rounded-xl object-cover" /> : <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-muted"><Package className="size-5" /></span>}<span className="min-w-0 flex-1"><span className="block truncate font-semibold">{item.name}</span><span className="text-xs text-muted-foreground">{item.category || 'Produto'} · {formatCurrency(item.price)}</span></span>{quantity ? <span className="flex items-center gap-1"><button type="button" onClick={() => changeQuantity(item.id, -1)} className="flex size-8 items-center justify-center rounded-md border">−</button><span className="w-5 text-center text-sm font-bold">{quantity}</span><button type="button" onClick={() => changeQuantity(item.id, 1)} className="flex size-8 items-center justify-center rounded-md border"><Plus className="size-4" /></button></span> : <Button type="button" size="sm" variant="outline" onClick={() => changeQuantity(item.id, 1)}><Plus className="size-4" /> Adicionar</Button>}</div> })}</div>{page.products.length === 0 ? <p className="rounded-xl border border-dashed p-5 text-sm text-muted-foreground">Nenhum produto adicional disponível no momento. Você pode continuar normalmente.</p> : null}{publicBooking.showCashback ? <div className="mt-5 rounded-2xl border border-amber-300/70 bg-amber-50 p-4 text-amber-950 shadow-sm"><div className="flex items-start gap-3"><span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-amber-400"><Gift className="size-5" /></span><div><p className="font-bold">Cashback nesta compra</p>{publicBooking.cashback.enabled ? <><p className="mt-1 text-sm">Você receberá <strong>{formatCurrency(cashback.amount)}</strong> após o pagamento da comanda.</p>{cashback.remaining > 0 ? <p className="mt-2 text-xs font-medium">Faltam {formatCurrency(cashback.remaining)} em produtos para liberar o cashback.</p> : null}</> : <p className="mt-1 text-sm">O cashback está indisponível no momento.</p>}</div></div></div> : null}</section> : null}{step === 5 ? <section className="grid gap-4 lg:grid-cols-[1fr_280px]"><div className="space-y-3"><div className="rounded-xl border p-4"><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Seu horário</p><p className="mt-2 font-bold">{service?.name}</p><p className="text-sm text-muted-foreground">{page.employees.find((item) => item.id === employeeId)?.name} · {date ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' }).format(new Date(`${date}T00:00:00`)) : ''} às {start}</p></div><div className="rounded-xl border p-4"><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Seus dados</p><p className="mt-2 font-semibold">{name}</p><p className="text-sm text-muted-foreground">{phone}</p>{referralName ? <p className="mt-2 text-sm text-muted-foreground">Indicação: {referralName}</p> : null}</div></div><div className="rounded-xl bg-muted p-4"><p className="font-semibold">Resumo</p><div className="mt-3 space-y-2 text-sm"><div className="flex justify-between gap-3"><span>{service?.name}</span><span>{formatCurrency(service?.price ?? 0)}</span></div>{selectedProductRows.map((item) => <div key={item.id} className="flex justify-between gap-3 text-muted-foreground"><span>{item.quantity}x {item.name}</span><span>{formatCurrency(item.price * item.quantity)}</span></div>)}<div className="border-t pt-2 font-bold"><div className="flex justify-between"><span>Total estimado</span><span>{formatCurrency((service?.price ?? 0) + productTotal)}</span></div></div>{publicBooking.showCashback && cashback.amount > 0 ? <p className="pt-1 text-xs font-semibold text-emerald-700">Cashback previsto: {formatCurrency(cashback.amount)}</p> : null}</div></div></section> : null}{status ? <p className="rounded-lg bg-destructive/10 p-3 text-sm font-medium text-destructive">{status}</p> : null}<div className="flex flex-col-reverse gap-2 border-t pt-5 sm:flex-row sm:justify-between">{step > 0 ? <Button variant="outline" onClick={back}><ArrowLeft className="size-4" /> Voltar</Button> : <span />}{step < steps.length - 1 ? <Button variant="gold" size="lg" onClick={next} disabled={page.services.length === 0}>Continuar <ArrowRight className="size-4" /></Button> : <Button variant="gold" size="lg" onClick={submit} disabled={submitting}>{submitting ? <LoaderCircle className="size-4 animate-spin" /> : <Clock3 className="size-4" />}{submitting ? 'Confirmando...' : 'Confirmar agendamento'}</Button>}</div></div></Card></div></main>
 }

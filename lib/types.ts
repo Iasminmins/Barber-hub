@@ -7,6 +7,7 @@
  */
 
 import type { AgendaSettings, PaymentMethodConfig } from '@/lib/barbershop-settings'
+import type { PublicBookingSettings } from '@/lib/public-booking'
 import type { StaffPermission } from '@/lib/staff-permissions'
 
 export type Role = 'owner' | 'manager' | 'barber' | 'reception'
@@ -28,6 +29,7 @@ export interface Barbershop {
   nextBillingDate?: string
   paymentMethods: PaymentMethodConfig[]
   agendaSettings: AgendaSettings
+  publicBookingSettings?: PublicBookingSettings
 }
 
 export interface Member {
@@ -77,6 +79,7 @@ export interface Client {
   notes: string
   tags: ClientTag[]
   totalSpent: number
+  cashbackBalance?: number
   visits: number
   lastVisit: string
   favoriteService: string
@@ -100,6 +103,7 @@ export interface CatalogItem {
   minStock?: number // products
   commission: number // %
   active: boolean
+  imageUrl?: string
 }
 
 export type AppointmentStatus =
@@ -125,6 +129,9 @@ export interface Appointment {
   status: AppointmentStatus
   price: number
   notes?: string
+  selectedProducts?: Array<{ id: string; name: string; quantity: number; unitPrice: number }>
+  referralName?: string
+  referralPhone?: string
   createdAt?: string
 }
 
@@ -164,6 +171,8 @@ export interface Order {
   status: OrderStatus
   method?: PaymentMethod
   total: number
+  cashbackEarned?: number
+  cashbackAwarded?: boolean
   createdAt: string
 }
 

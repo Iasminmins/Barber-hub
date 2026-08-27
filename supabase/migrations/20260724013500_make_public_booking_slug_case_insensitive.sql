@@ -21,11 +21,11 @@ begin
       'where lower(trim(slug)) = lower(trim(p_slug))'
     );
 
-    if updated_definition = original_definition then
-      raise exception 'Public booking function % does not contain the expected slug lookup.', function_oid::regprocedure;
+    -- The previous migration may already have the case-insensitive lookup.
+    -- Keep a clean local bootstrap idempotent instead of failing on that state.
+    if updated_definition <> original_definition then
+      execute updated_definition;
     end if;
-
-    execute updated_definition;
   end loop;
 end
 $migration$;

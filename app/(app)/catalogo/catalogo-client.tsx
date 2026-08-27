@@ -17,6 +17,8 @@ import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { PageHeader } from "@/components/page-header"
 import { Tabs } from "@/components/ui/tabs"
+import { getCatalogImagePath, isCatalogImageFile } from '@/lib/catalog-item'
+import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import {
   Table,
   TableBody,
@@ -43,6 +45,7 @@ type CatalogDraft = {
   minStock: string
   commission: string
   active: boolean
+  imageUrl: string
 }
 
 function createDraft(item: CatalogItem): CatalogDraft {
@@ -58,6 +61,7 @@ function createDraft(item: CatalogItem): CatalogDraft {
     minStock: String(item.minStock ?? ""),
     commission: String(item.commission),
     active: item.active,
+    imageUrl: item.imageUrl ?? '',
   }
 }
 
@@ -77,6 +81,7 @@ export function CatalogoClient({ items }: { items: CatalogItem[] }) {
   const [editing, setEditing] = useState<CatalogDraft | null>(null)
   const [editStatus, setEditStatus] = useState("")
   const [saving, setSaving] = useState(false)
+  const [imageFile, setImageFile] = useState<File | null>(null)
   const openedProductId = useRef("")
 
   useEffect(() => {
@@ -87,6 +92,7 @@ export function CatalogoClient({ items }: { items: CatalogItem[] }) {
     openedProductId.current = requestedProductId
     setTab(requestedProduct.type)
     setEditStatus("")
+    setImageFile(null)
     setEditing(createDraft(requestedProduct))
   }, [records])
 
@@ -131,8 +137,17 @@ export function CatalogoClient({ items }: { items: CatalogItem[] }) {
     if (editing.type === "servico" && (!Number.isFinite(durationMin) || durationMin <= 0)) { setEditStatus("Informe uma duração maior que zero."); return }
     if (editing.type === "produto" && (!Number.isFinite(stock) || stock < 0 || !Number.isFinite(minStock) || minStock < 0)) { setEditStatus("Informe valores de estoque válidos."); return }
 
+    if (imageFile && !isCatalogImageFile(imageFile)) { setEditStatus('Escolha uma imagem JPG, PNG, WEBP ou SVG de até 2 MB.'); return }
     setSaving(true)
     setEditStatus("")
+    let imageUrl = editing.imageUrl || null
+    if (imageFile) {
+      const supabase = createBrowserSupabaseClient()
+      const path = getCatalogImagePath(barbershop.id, editing.id, imageFile)
+      const { error: uploadError } = await supabase.storage.from('barbershop-assets').upload(path, imageFile, { contentType: imageFile.type, upsert: false })
+      if (uploadError) { setSaving(false); setEditStatus(uploadError.message); return }
+      imageUrl = supabase.storage.from('barbershop-assets').getPublicUrl(path).data.publicUrl
+    }
     const values = {
       type: editing.type,
       name: editing.name.trim(),
@@ -144,6 +159,7 @@ export function CatalogoClient({ items }: { items: CatalogItem[] }) {
       stock: editing.type === "produto" ? stock : null,
       min_stock: editing.type === "produto" ? minStock : null,
       active: editing.active,
+      image_url: imageUrl,
     }
     const result = await updateRecord("catalog_items", editing.id, values)
     setSaving(false)
@@ -161,11 +177,13 @@ export function CatalogoClient({ items }: { items: CatalogItem[] }) {
       stock: editing.type === "produto" ? stock : undefined,
       minStock: editing.type === "produto" ? minStock : undefined,
       active: editing.active,
+      imageUrl: imageUrl ?? undefined,
     } : item))
     posthog.capture('catalog_item_updated', {
       catalog_item_type: editing.type,
       is_active: editing.active,
     })
+    setImageFile(null)
     setEditing(null)
   }
 
@@ -241,9 +259,7 @@ export function CatalogoClient({ items }: { items: CatalogItem[] }) {
                 <TableRow key={i.id}>
                   <TableCell>
                     <div className="flex items-center gap-3">
-                      <span className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                        {i.type === "servico" ? <Scissors className="size-4" /> : <Package className="size-4" />}
-                      </span>
+                      {i.imageUrl ? <img src={i.imageUrl} alt="" className="size-9 rounded-lg object-cover" /> : <span className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">{i.type === "servico" ? <Scissors className="size-4" /> : <Package className="size-4" />}</span>}
                       <span className="font-medium text-foreground">{i.name}</span>
                     </div>
                   </TableCell>
@@ -265,7 +281,7 @@ export function CatalogoClient({ items }: { items: CatalogItem[] }) {
                   <TableCell>{i.active ? <Badge variant="success">Ativo</Badge> : <Badge variant="secondary">Inativo</Badge>}</TableCell>
                   <TableCell className="text-right">
                     <div className="inline-flex items-center gap-1">
-                      <Button variant="ghost" size="icon-sm" aria-label={`Editar ${i.name}`} onClick={() => { setEditStatus(""); setEditing(createDraft(i)) }}>
+                      <Button variant="ghost" size="icon-sm" aria-label={`Editar ${i.name}`} onClick={() => { setEditStatus(""); setImageFile(null); setEditing(createDraft(i)) }}>
                         <Pencil className="size-4" />
                       </Button>
                       <Button variant="ghost" size="icon-sm" aria-label={`Excluir ${i.name}`} onClick={() => deleteItem(i.id)}>
@@ -314,6 +330,13 @@ export function CatalogoClient({ items }: { items: CatalogItem[] }) {
                   <option value="ativo">Ativo</option>
                   <option value="inativo">Inativo</option>
                 </Select>
+              </Field>
+              <Field label="Imagem (opcional)">
+                <div className="space-y-2">
+                  {editing.imageUrl ? <img src={editing.imageUrl} alt="Imagem atual" className="size-16 rounded-lg object-cover" /> : null}
+                  <Input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={(event) => { const file = event.target.files?.[0] ?? null; setImageFile(file); if (file) setDraft('imageUrl', URL.createObjectURL(file)) }} disabled={saving} />
+                  <p className="text-xs text-muted-foreground">JPG, PNG, WEBP ou SVG · até 2 MB</p>
+                </div>
               </Field>
             </div>
             {editStatus ? <p role="alert" className="mt-4 text-sm text-destructive">{editStatus}</p> : null}

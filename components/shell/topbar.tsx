@@ -192,7 +192,7 @@ function buildNotifications(
 
 export function Topbar({ onMenu }: { onMenu: () => void }) {
   const router = useRouter()
-  const { appointments, barbershop, barbershops, catalog, clients, member, orders, setActiveBarbershop, subscriptions } = useAppData()
+  const { appointments, barbershop, barbershops, catalog, clients, member, orders, setActiveBarbershop, subscriptions, updateRecord } = useAppData()
   const [readAppointmentIds, setReadAppointmentIds] = React.useState<Set<string>>(new Set())
   const notifications = React.useMemo(
     () => {
@@ -309,11 +309,17 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
     setBirthdayText(birthdayMessage(item.title, barbershop.name || 'Duke Barber'))
   }
 
-  function prepareBirthdayMessage() {
+  async function prepareBirthdayMessage() {
     if (!birthdayEditor?.clientId || !birthdayEditor.phone) return
     const url = whatsappUrl(birthdayEditor.phone, birthdayText.trim())
     if (!url) return
 
+    const timestamp = new Date().toISOString()
+    const result = await updateRecord('clients', birthdayEditor.clientId, { last_message_sent_at: timestamp })
+    if (result.error) {
+      window.alert(`Não foi possível registrar a mensagem: ${result.error}`)
+      return
+    }
     const next = new Set(preparedBirthdayIds).add(birthdayEditor.clientId)
     setPreparedBirthdayIds(next)
     window.localStorage.setItem(preparedStorageKey, JSON.stringify([...next]))
@@ -332,10 +338,16 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
     ))
   }
 
-  function prepareRenewalMessage() {
-    if (!renewalEditor?.phone) return
+  async function prepareRenewalMessage() {
+    if (!renewalEditor?.clientId || !renewalEditor.phone) return
     const url = whatsappUrl(renewalEditor.phone, renewalText.trim())
     if (!url) return
+    const timestamp = new Date().toISOString()
+    const result = await updateRecord('clients', renewalEditor.clientId, { last_message_sent_at: timestamp })
+    if (result.error) {
+      window.alert(`Não foi possível registrar a mensagem: ${result.error}`)
+      return
+    }
     window.open(url, '_blank', 'noopener,noreferrer')
     setRenewalEditor(null)
   }

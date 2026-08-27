@@ -9,6 +9,7 @@ import {
   CalendarDays,
   Clock3,
   CreditCard,
+  Gift,
   Grid3X3,
   Home,
   ImageUp,
@@ -38,6 +39,7 @@ import { formatBillingDocument, onlyDigits } from '@/lib/billing-document'
 import { buildPublicBookingUrl } from '@/lib/public-booking-url'
 import { getSaasPlan, saasPlans, type SaasPlanId } from '@/lib/saas-plans'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
+import { defaultPublicBookingSettings } from '@/lib/public-booking'
 import { cn } from '@/lib/utils'
 
 type SettingsTab = 'aparencia' | 'inicio' | 'funcionarios' | 'agenda' | 'pagamentos' | 'assinatura' | 'modulos'
@@ -73,7 +75,7 @@ function getEmployeePhotoPath(barbershopId: string, employeeId: string, file: Fi
 }
 
 export default function ConfiguracoesPage() {
-  const { barbershop, employees, updateRecord, refresh } = useAppData()
+  const { barbershop, employees, catalog, updateRecord, refresh } = useAppData()
   const currentPlan = getSaasPlan(barbershop.plan)
   const searchParams = useSearchParams()
 
@@ -109,6 +111,11 @@ export default function ConfiguracoesPage() {
   })
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethodConfig[]>(() => normalizePaymentMethods(barbershop.paymentMethods))
   const [agendaSettings, setAgendaSettings] = useState<AgendaSettings>(() => normalizeAgendaSettings(barbershop.agendaSettings))
+  const [publicBookingSettings, setPublicBookingSettings] = useState(() => ({
+    ...defaultPublicBookingSettings,
+    ...barbershop.publicBookingSettings,
+    cashback: { ...defaultPublicBookingSettings.cashback, ...barbershop.publicBookingSettings?.cashback },
+  }))
 
   const effectiveLogoUrl = logoPreview || shop.logoUrl
   const effectiveColor = useMemo(() => (hexColorPattern.test(shop.color) ? shop.color : '#1E3A32'), [shop.color])
@@ -129,6 +136,11 @@ export default function ConfiguracoesPage() {
     setPlanDraft(barbershop.plan)
     setPaymentMethods(normalizePaymentMethods(barbershop.paymentMethods))
     setAgendaSettings(normalizeAgendaSettings(barbershop.agendaSettings))
+    setPublicBookingSettings({
+      ...defaultPublicBookingSettings,
+      ...barbershop.publicBookingSettings,
+      cashback: { ...defaultPublicBookingSettings.cashback, ...barbershop.publicBookingSettings?.cashback },
+    })
   }, [barbershop])
 
   useEffect(() => {
@@ -268,6 +280,16 @@ export default function ConfiguracoesPage() {
         lowStockAlert: Number.isFinite(Number(agendaSettings.lowStockAlert))
           ? Math.max(0, Number(agendaSettings.lowStockAlert))
           : defaultAgendaSettings.lowStockAlert,
+      },
+      public_booking_settings: {
+        productIds: publicBookingSettings.productIds.filter((id: string) => catalog.some((item) => item.id === id && item.type === 'produto' && item.active)),
+        showProducts: Boolean(publicBookingSettings.showProducts),
+        showCashback: Boolean(publicBookingSettings.showCashback),
+        cashback: {
+          enabled: Boolean(publicBookingSettings.cashback.enabled),
+          percentage: Math.min(100, Math.max(0, Number(publicBookingSettings.cashback.percentage) || 0)),
+          minimumPurchase: Math.max(0, Number(publicBookingSettings.cashback.minimumPurchase) || 0),
+        },
       },
     })
     setSaving(false)
@@ -584,6 +606,49 @@ export default function ConfiguracoesPage() {
                 <div className="mt-3 rounded-lg border border-border bg-background p-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Link publico de agendamento</p>
                   <p className="mt-2 break-all font-mono text-sm font-semibold text-foreground">{publicBookingUrl}</p>
+                </div>
+              </div>
+              <div className="rounded-xl border border-border bg-card p-4 lg:col-span-2">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="flex items-center gap-2 font-semibold text-foreground"><Gift className="size-4 text-primary" /> Produtos e cashback no agendamento</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">Escolha o que aparece no link público. Produtos são sempre opcionais para o cliente.</p>
+                  </div>
+                  <label className="flex shrink-0 items-center gap-2 text-sm font-medium">
+                    <input type="checkbox" checked={publicBookingSettings.showProducts} onChange={(event) => setPublicBookingSettings((current) => ({ ...current, showProducts: event.target.checked }))} />
+                    Mostrar produtos
+                  </label>
+                  <label className="flex shrink-0 items-center gap-2 text-sm font-medium">
+                    <input type="checkbox" checked={publicBookingSettings.showCashback} onChange={(event) => setPublicBookingSettings((current) => ({ ...current, showCashback: event.target.checked }))} />
+                    Mostrar cashback
+                  </label>
+                </div>
+                <div className="mt-4 grid gap-4 md:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="cashback-percentage">Cashback (%)</Label>
+                    <Input id="cashback-percentage" type="number" min="0" max="100" step="0.5" value={publicBookingSettings.cashback.percentage} onChange={(event) => setPublicBookingSettings((current) => ({ ...current, cashback: { ...current.cashback, enabled: true, percentage: Number(event.target.value) } }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="cashback-minimum">Compra mínima</Label>
+                    <Input id="cashback-minimum" type="number" min="0" step="0.01" value={publicBookingSettings.cashback.minimumPurchase} onChange={(event) => setPublicBookingSettings((current) => ({ ...current, cashback: { ...current.cashback, minimumPurchase: Number(event.target.value) } }))} />
+                  </div>
+                  <label className="flex items-center gap-2 self-end pb-2 text-sm font-medium">
+                    <input type="checkbox" checked={publicBookingSettings.cashback.enabled} onChange={(event) => setPublicBookingSettings((current) => ({ ...current, cashback: { ...current.cashback, enabled: event.target.checked } }))} />
+                    Ativar regra de cashback
+                  </label>
+                </div>
+                <div className="mt-5">
+                  <p className="mb-2 text-sm font-semibold text-foreground">Produtos disponíveis para o link</p>
+                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    {catalog.filter((item) => item.type === 'produto' && item.active).map((product) => {
+                      const selected = publicBookingSettings.productIds.includes(product.id)
+                      return <label key={product.id} className={cn('flex cursor-pointer items-center gap-3 rounded-lg border p-3 text-sm transition-colors', selected ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/40')}>
+                        <input type="checkbox" checked={selected} onChange={(event) => setPublicBookingSettings((current) => ({ ...current, productIds: event.target.checked ? [...current.productIds, product.id] : current.productIds.filter((id: string) => id !== product.id) }))} />
+                        <span className="min-w-0 flex-1"><span className="block truncate font-medium">{product.name}</span><span className="text-xs text-muted-foreground">{product.category || 'Produto'} · {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(product.price)}</span></span>
+                      </label>
+                    })}
+                  </div>
+                  {catalog.every((item) => item.type !== 'produto' || !item.active) ? <p className="text-sm text-muted-foreground">Cadastre produtos ativos no catálogo para selecioná-los aqui.</p> : null}
                 </div>
               </div>
             </div>

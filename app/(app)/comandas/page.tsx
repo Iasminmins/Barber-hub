@@ -120,6 +120,7 @@ export default function ComandasPage() {
   const [savingOrder, setSavingOrder] = useState(false)
   const openedOrderId = useRef('')
   const [whatsAppDraft, setWhatsAppDraft] = useState<{
+    clientId: string
     orderNumber: number
     clientName: string
     phone: string
@@ -129,14 +130,15 @@ export default function ComandasPage() {
 
   useEffect(() => {
     const savedContacts = window.localStorage.getItem(`barberhub:whatsapp-contacts:${barbershop.id}`)
-    if (savedContacts) setWhatsappContactLog(JSON.parse(savedContacts))
+    const persisted = Object.fromEntries(clients.filter((client) => client.lastMessageSentAt).map((client) => [client.id, client.lastMessageSentAt as string]))
+    setWhatsappContactLog({ ...(savedContacts ? JSON.parse(savedContacts) : {}), ...persisted })
     const nextOrders = sortOrdersByDate(databaseOrders)
     setOrders(nextOrders)
     setSelectedMonth((current) => {
       if (current && nextOrders.some((order) => toMonthKey(order.createdAt) === current)) return current
       return getLatestOrderMonth(nextOrders)
     })
-  }, [barbershop.id, databaseOrders])
+  }, [barbershop.id, clients, databaseOrders])
 
   const monthOrders = useMemo(
     () => orders.filter((order) => toMonthKey(order.createdAt) === selectedMonth),
@@ -223,6 +225,7 @@ export default function ComandasPage() {
       barbershopName: barbershop.name,
     })
     setWhatsAppDraft({
+      clientId: client.id,
       orderNumber: order.number,
       clientName: order.clientName,
       phone: client.phone,
@@ -230,13 +233,24 @@ export default function ComandasPage() {
     })
   }
 
-  function confirmWhatsAppSend() {
+  async function confirmWhatsAppSend() {
     if (!whatsAppDraft?.message.trim()) return
     const url = whatsappUrl(whatsAppDraft.phone, whatsAppDraft.message.trim())
     if (!url) {
       window.alert(`O telefone cadastrado para ${whatsAppDraft.clientName} é inválido.`)
       return
     }
+    const timestamp = new Date().toISOString()
+    const result = await updateRecord('clients', whatsAppDraft.clientId, { last_message_sent_at: timestamp })
+    if (result.error) {
+      window.alert(`Não foi possível registrar a mensagem: ${result.error}`)
+      return
+    }
+    setWhatsappContactLog((current) => {
+      const next = { ...current, [whatsAppDraft.clientId]: timestamp }
+      window.localStorage.setItem(`barberhub:whatsapp-contacts:${barbershop.id}`, JSON.stringify(next))
+      return next
+    })
     window.open(url, '_blank', 'noopener,noreferrer')
     setWhatsAppDraft(null)
   }

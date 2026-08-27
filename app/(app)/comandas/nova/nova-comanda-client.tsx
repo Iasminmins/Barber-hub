@@ -23,6 +23,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { formatCurrency } from '@/lib/format'
+import { calculateBookingCashback } from '@/lib/public-booking'
 import { useAppData } from '@/components/data/app-data-provider'
 import type { Appointment, CatalogItem, CatalogType, Client, Employee, Order, PaymentMethod } from '@/lib/types'
 import { shouldCompleteLinkedAppointment } from '@/lib/order-appointment-sync'
@@ -79,7 +80,7 @@ export function NovaComandaClient({
   orders,
 }: NovaComandaClientProps) {
   const router = useRouter()
-  const { insertRecord, deleteRecord, updateRecord } = useAppData()
+  const { barbershop, insertRecord, deleteRecord, updateRecord } = useAppData()
   const [quantities, setQuantities] = useState(() => initialQuantities(items))
   const [prices, setPrices] = useState(() => initialPrices(items))
   const [query, setQuery] = useState('')
@@ -110,6 +111,10 @@ export function NovaComandaClient({
       ...current,
       [appointment.serviceId]: appointment.price.toFixed(2).replace('.', ','),
     }))
+    if (appointment.selectedProducts?.length) {
+      setQuantities((current) => appointment.selectedProducts!.reduce((next, product) => ({ ...next, [product.id]: product.quantity }), current))
+      setPrices((current) => appointment.selectedProducts!.reduce((next, product) => ({ ...next, [product.id]: product.unitPrice.toFixed(2).replace('.', ',') }), current))
+    }
   }, [appointments])
 
   const filteredItems = useMemo(() => {
@@ -160,6 +165,10 @@ export function NovaComandaClient({
   const discount = Math.max(0, subtotal - total)
   const surcharge = Math.max(0, total - subtotal)
   const selectedCount = selectedItems.reduce((sum, item) => sum + (quantities[item.id] ?? 0), 0)
+  const productSubtotal = selectedItems
+    .filter((item) => item.type === 'produto')
+    .reduce((sum, item) => sum + parseMoney(prices[item.id] ?? '') * (quantities[item.id] ?? 0), 0)
+  const cashbackEarned = calculateBookingCashback(productSubtotal, barbershop.publicBookingSettings?.cashback ?? { enabled: false, percentage: 0, minimumPurchase: 0 }).amount
 
   function setItemQuantity(itemId: string, quantity: number) {
     setQuantities((current) => ({
@@ -214,7 +223,7 @@ export function NovaComandaClient({
     const client = clients.find((item) => item.id === clientId)
     const orderStatus = total === 0 || !payment ? 'aberta' : payment === 'pendente' ? 'pendente' : 'paga'
     const paymentMethod = orderStatus === 'paga' ? payment : null
-    const orderResult = await insertRecord('orders', { barbershop_id: barbershopId, appointment_id: sourceAppointment?.id ?? null, number: nextOrderNumber, client_id: client?.id ?? null, client_name: client?.name ?? 'Cliente avulso', employee_id: employee.id, employee_name: employee.name, discount, surcharge, status: orderStatus, method: paymentMethod, total })
+    const orderResult = await insertRecord('orders', { barbershop_id: barbershopId, appointment_id: sourceAppointment?.id ?? null, number: nextOrderNumber, client_id: client?.id ?? null, client_name: client?.name ?? 'Cliente avulso', employee_id: employee.id, employee_name: employee.name, discount, surcharge, status: orderStatus, method: paymentMethod, total, cashback_earned: cashbackEarned })
     if (orderResult.error || !orderResult.data) { setSaveError(orderResult.error ?? 'Não foi possível criar a comanda.'); return }
     for (const item of selectedItems) {
       const itemResult = await insertRecord('order_items', { order_id: orderResult.data.id, barbershop_id: barbershopId, ref_id: item.id, type: item.type, name: item.name, quantity: quantities[item.id] ?? 1, unit_price: parseMoney(prices[item.id] ?? '') })

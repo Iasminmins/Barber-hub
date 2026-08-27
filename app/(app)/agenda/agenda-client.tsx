@@ -943,6 +943,27 @@ export function AgendaClient({
                   placeholder="Preferências ou informações importantes do cliente"
                 />
               </label>
+
+              {(editingAppointment.selectedProducts?.length ?? 0) > 0 ? (
+                <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm sm:col-span-2">
+                  <p className="font-semibold text-foreground">Produtos solicitados pelo cliente</p>
+                  <div className="mt-2 space-y-1 text-muted-foreground">
+                    {editingAppointment.selectedProducts?.map((item) => (
+                      <div key={item.id} className="flex justify-between gap-3">
+                        <span>{item.quantity}x {item.name}</span>
+                        <span>{formatCurrency(item.unitPrice * item.quantity)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {editingAppointment.referralName ? (
+                <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm sm:col-span-2">
+                  <p className="font-semibold text-foreground">Amigo indicado</p>
+                  <p className="mt-1 text-muted-foreground">{editingAppointment.referralName} · {editingAppointment.referralPhone}</p>
+                </div>
+              ) : null}
             </div>
 
             {appointmentError ? (

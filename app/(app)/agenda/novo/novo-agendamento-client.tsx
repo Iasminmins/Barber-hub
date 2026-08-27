@@ -55,7 +55,7 @@ export function NovoAgendamentoClient({
 }: NovoAgendamentoClientProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { barbershop, appointments: liveAppointments, scheduleBlocks, insertRecord } = useAppData()
+  const { barbershop, appointments: liveAppointments, scheduleBlocks, insertRecord, updateRecord } = useAppData()
   const [clientId, setClientId] = useState(() => searchParams.get('cliente') ?? '')
   const [clientQuery, setClientQuery] = useState('')
   const [isClientSearchOpen, setIsClientSearchOpen] = useState(false)
@@ -182,6 +182,13 @@ export function NovoAgendamentoClient({
         'Se precisar remarcar, fale com a gente por aqui.',
       ].join('\n')
       const url = whatsappUrl(client.phone, message)
+      const messageTimestamp = new Date().toISOString()
+      const contactResult = await updateRecord('clients', client.id, { last_message_sent_at: messageTimestamp })
+      if (contactResult.error) {
+        whatsappWindow?.close()
+        setSaveError(`Agendamento salvo, mas não foi possível registrar a mensagem: ${contactResult.error}`)
+        return
+      }
       if (whatsappWindow) whatsappWindow.location.href = url
       else {
         window.location.href = url

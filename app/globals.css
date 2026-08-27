@@ -439,6 +439,12 @@ html {
 
 /* Em telas pequenas o movimento ambiental é removido para economizar bateria */
 @media (max-width: 767px) {
+  /* O wizard público fica equilibrado em telas móveis curtas sem limitar etapas longas. */
+  main.min-h-dvh[class*="radial-gradient"] {
+    display: flex;
+    align-items: center;
+  }
+
   .lp-ambient,
   .lp-ambient-soft,
   .lp-sheen {

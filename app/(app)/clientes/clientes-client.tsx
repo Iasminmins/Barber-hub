@@ -235,6 +235,7 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
       return false
     }
     setWhatsappContactLog((current) => ({ ...current, [client.id]: timestamp }))
+    window.localStorage.setItem(contactStorageKey, JSON.stringify({ ...whatsappContactLog, [client.id]: timestamp }))
     setRecords((current) => current.map((item) => item.id === client.id ? { ...item, lastMessageSentAt: timestamp } : item))
     return true
   }
