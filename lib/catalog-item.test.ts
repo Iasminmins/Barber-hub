@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getCatalogImagePath, isCatalogImageFile } from './catalog-item'
+import { getCatalogImagePath, getCatalogImageStoragePath, isCatalogImageFile } from './catalog-item'
 
 describe('catalog item images', () => {
   it('accepts supported image files within the upload limit', () => {
@@ -15,5 +15,10 @@ describe('catalog item images', () => {
   it('builds an isolated storage path for each catalog item', () => {
     const path = getCatalogImagePath('shop-1', 'item-1', new File(['image'], 'Minha Foto.PNG', { type: 'image/png' }))
     expect(path).toMatch(/^shop-1\/catalog\/item-1-[a-z0-9]+\.png$/)
+  })
+
+  it('extracts the storage path from a public image URL', () => {
+    expect(getCatalogImageStoragePath('https://example.supabase.co/storage/v1/object/public/barbershop-assets/shop-1/catalog/item-1.png'))
+      .toBe('shop-1/catalog/item-1.png')
   })
 })

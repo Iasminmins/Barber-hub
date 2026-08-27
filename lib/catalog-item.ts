@@ -9,3 +9,10 @@ export function getCatalogImagePath(barbershopId: string, itemId: string, file: 
   const extension = file.name.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'png'
   return `${barbershopId}/catalog/${itemId}-${Date.now().toString(36)}.${extension}`
 }
+
+export function getCatalogImageStoragePath(imageUrl: string) {
+  const marker = '/storage/v1/object/public/barbershop-assets/'
+  const index = imageUrl.indexOf(marker)
+  if (index < 0) return null
+  return decodeURIComponent(imageUrl.slice(index + marker.length)).replace(/^\/+|\/+$/g, '') || null
+}

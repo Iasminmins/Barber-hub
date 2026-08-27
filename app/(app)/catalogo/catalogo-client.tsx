@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { PageHeader } from "@/components/page-header"
 import { Tabs } from "@/components/ui/tabs"
-import { getCatalogImagePath, isCatalogImageFile } from '@/lib/catalog-item'
+import { getCatalogImagePath, getCatalogImageStoragePath, isCatalogImageFile } from '@/lib/catalog-item'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import {
   Table,
@@ -82,6 +82,7 @@ export function CatalogoClient({ items }: { items: CatalogItem[] }) {
   const [editStatus, setEditStatus] = useState("")
   const [saving, setSaving] = useState(false)
   const [imageFile, setImageFile] = useState<File | null>(null)
+  const [removeImage, setRemoveImage] = useState(false)
   const openedProductId = useRef("")
 
   useEffect(() => {
@@ -93,6 +94,7 @@ export function CatalogoClient({ items }: { items: CatalogItem[] }) {
     setTab(requestedProduct.type)
     setEditStatus("")
     setImageFile(null)
+    setRemoveImage(false)
     setEditing(createDraft(requestedProduct))
   }, [records])
 
@@ -140,12 +142,15 @@ export function CatalogoClient({ items }: { items: CatalogItem[] }) {
     if (imageFile && !isCatalogImageFile(imageFile)) { setEditStatus('Escolha uma imagem JPG, PNG, WEBP ou SVG de até 2 MB.'); return }
     setSaving(true)
     setEditStatus("")
-    let imageUrl = editing.imageUrl || null
+    const previousImageUrl = editing.imageUrl || null
+    let imageUrl = removeImage ? null : previousImageUrl
+    let uploadedPath: string | null = null
     if (imageFile) {
       const supabase = createBrowserSupabaseClient()
       const path = getCatalogImagePath(barbershop.id, editing.id, imageFile)
       const { error: uploadError } = await supabase.storage.from('barbershop-assets').upload(path, imageFile, { contentType: imageFile.type, upsert: false })
       if (uploadError) { setSaving(false); setEditStatus(uploadError.message); return }
+      uploadedPath = path
       imageUrl = supabase.storage.from('barbershop-assets').getPublicUrl(path).data.publicUrl
     }
     const values = {
@@ -163,7 +168,15 @@ export function CatalogoClient({ items }: { items: CatalogItem[] }) {
     }
     const result = await updateRecord("catalog_items", editing.id, values)
     setSaving(false)
-    if (result.error) { setEditStatus(result.error); return }
+    if (result.error) {
+      if (uploadedPath) await createBrowserSupabaseClient().storage.from('barbershop-assets').remove([uploadedPath])
+      setEditStatus(result.error)
+      return
+    }
+    if (previousImageUrl && previousImageUrl !== imageUrl) {
+      const previousPath = getCatalogImageStoragePath(previousImageUrl)
+      if (previousPath) await createBrowserSupabaseClient().storage.from('barbershop-assets').remove([previousPath])
+    }
 
     setRecords((current) => current.map((item) => item.id === editing.id ? {
       ...item,
@@ -184,6 +197,7 @@ export function CatalogoClient({ items }: { items: CatalogItem[] }) {
       is_active: editing.active,
     })
     setImageFile(null)
+    setRemoveImage(false)
     setEditing(null)
   }
 
@@ -333,8 +347,8 @@ export function CatalogoClient({ items }: { items: CatalogItem[] }) {
               </Field>
               <Field label="Imagem (opcional)">
                 <div className="space-y-2">
-                  {editing.imageUrl ? <img src={editing.imageUrl} alt="Imagem atual" className="size-16 rounded-lg object-cover" /> : null}
-                  <Input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={(event) => { const file = event.target.files?.[0] ?? null; setImageFile(file); if (file) setDraft('imageUrl', URL.createObjectURL(file)) }} disabled={saving} />
+                  {editing.imageUrl && !removeImage ? <div className="flex items-center gap-3"><img src={editing.imageUrl} alt="Imagem atual" className="size-16 rounded-lg object-cover" /><Button type="button" variant="outline" size="sm" onClick={() => { setImageFile(null); setRemoveImage(true); setDraft('imageUrl', '') }} disabled={saving}><Trash2 className="size-4" /> Excluir imagem</Button></div> : null}
+                  <Input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={(event) => { const file = event.target.files?.[0] ?? null; setImageFile(file); setRemoveImage(false); if (file) setDraft('imageUrl', URL.createObjectURL(file)) }} disabled={saving} />
                   <p className="text-xs text-muted-foreground">JPG, PNG, WEBP ou SVG · até 2 MB</p>
                 </div>
               </Field>
