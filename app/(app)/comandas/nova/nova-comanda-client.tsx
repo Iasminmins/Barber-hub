@@ -171,7 +171,8 @@ export function NovaComandaClient({
   const serviceSubtotal = selectedItems
     .filter((item) => item.type === 'servico')
     .reduce((sum, item) => sum + parseMoney(prices[item.id] ?? '') * (quantities[item.id] ?? 0), 0)
-  const cashbackEarned = calculateBookingCashback(calculateCashbackPurchaseTotal(serviceSubtotal, productSubtotal), barbershop.publicBookingSettings?.cashback ?? { enabled: false, percentage: 0, minimumPurchase: 0 }).amount
+  const cashbackPreview = calculateBookingCashback(calculateCashbackPurchaseTotal(serviceSubtotal, productSubtotal), barbershop.publicBookingSettings?.cashback ?? { enabled: false, percentage: 0, minimumPurchase: 0 })
+  const cashbackEarned = cashbackPreview.amount
 
   function setItemQuantity(itemId: string, quantity: number) {
     setQuantities((current) => ({
@@ -569,9 +570,22 @@ export function NovaComandaClient({
                     >
                       Usar subtotal
                     </button>
-                  ) : null}
-                </div>
+                ) : null}
               </div>
+              {barbershop.publicBookingSettings?.cashback?.enabled ? (
+                <div className="rounded-lg border border-amber-300/70 bg-amber-50 px-3 py-2 text-amber-950">
+                  <div className="flex justify-between gap-3">
+                    <span className="font-semibold">Cashback previsto</span>
+                    <span className="font-bold tabular-nums">{formatCurrency(cashbackPreview.amount)}</span>
+                  </div>
+                  {cashbackPreview.remaining > 0 ? (
+                    <p className="mt-1 text-xs text-amber-800">Faltam {formatCurrency(cashbackPreview.remaining)} para liberar.</p>
+                  ) : (
+                    <p className="mt-1 text-xs text-amber-800">Será creditado após o pagamento.</p>
+                  )}
+                </div>
+              ) : null}
+            </div>
             </div>
           </Card>
 
