@@ -23,7 +23,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { formatCurrency } from '@/lib/format'
-import { calculateBookingCashback } from '@/lib/public-booking'
+import { calculateBookingCashback, calculateCashbackPurchaseTotal } from '@/lib/public-booking'
 import { useAppData } from '@/components/data/app-data-provider'
 import type { Appointment, CatalogItem, CatalogType, Client, Employee, Order, PaymentMethod } from '@/lib/types'
 import { shouldCompleteLinkedAppointment } from '@/lib/order-appointment-sync'
@@ -168,7 +168,10 @@ export function NovaComandaClient({
   const productSubtotal = selectedItems
     .filter((item) => item.type === 'produto')
     .reduce((sum, item) => sum + parseMoney(prices[item.id] ?? '') * (quantities[item.id] ?? 0), 0)
-  const cashbackEarned = calculateBookingCashback(productSubtotal, barbershop.publicBookingSettings?.cashback ?? { enabled: false, percentage: 0, minimumPurchase: 0 }).amount
+  const serviceSubtotal = selectedItems
+    .filter((item) => item.type === 'servico')
+    .reduce((sum, item) => sum + parseMoney(prices[item.id] ?? '') * (quantities[item.id] ?? 0), 0)
+  const cashbackEarned = calculateBookingCashback(calculateCashbackPurchaseTotal(serviceSubtotal, productSubtotal), barbershop.publicBookingSettings?.cashback ?? { enabled: false, percentage: 0, minimumPurchase: 0 }).amount
 
   function setItemQuantity(itemId: string, quantity: number) {
     setQuantities((current) => ({

@@ -30,6 +30,7 @@ import { buildFirstClientActivity, getEffectiveClientStartDate } from '@/lib/cli
 import { getClientsWithoutReturn, type ReturnFilter } from '@/lib/dashboard-retention'
 import { buildPublicBookingUrl } from '@/lib/public-booking-url'
 import { buildClientWhatsAppMessage } from '@/lib/client-whatsapp-message'
+import { formatClientCashback } from '@/lib/client-cashback'
 
 type Filter = "todos" | "novos" | "vip" | "recorrente" | "aniversariante" | "inadimplente" | "inativo" | "sem_telefone" | "duplicados" | "suspeitos" | "sem_retorno"
 type ClientDraft = {
@@ -541,9 +542,10 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
                 ) : null}
               </div>
 
-              <div className="my-4 grid grid-cols-2 gap-3">
+              <div className="my-4 grid grid-cols-3 gap-3">
                 <div className="rounded-lg bg-muted p-3"><div className="text-xs text-muted-foreground">Visitas</div><div className="text-lg font-semibold text-foreground tabular-nums">{selectedStats?.visits ?? selected.visits}</div></div>
                 <div className="rounded-lg bg-muted p-3"><div className="text-xs text-muted-foreground">Total gasto</div><div className="text-lg font-semibold text-foreground tabular-nums">{formatCurrency(selectedStats?.totalSpent ?? selected.totalSpent)}</div></div>
+                <div className="rounded-lg bg-amber-50 p-3 text-amber-950"><div className="text-xs text-amber-800">Cashback</div><div className="text-lg font-semibold tabular-nums">{formatClientCashback(selected.cashbackBalance)}</div></div>
               </div>
 
               <div className="mb-2 text-sm font-medium text-foreground">Observações</div>
@@ -578,9 +580,10 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div className="rounded-lg bg-muted p-3"><p className="text-xs text-muted-foreground">Visitas</p><p className="text-lg font-semibold">{selectedStats?.visits ?? selected.visits}</p></div>
                 <div className="rounded-lg bg-muted p-3"><p className="text-xs text-muted-foreground">Total gasto</p><p className="text-lg font-semibold">{formatCurrency(selectedStats?.totalSpent ?? selected.totalSpent)}</p></div>
+                <div className="rounded-lg bg-amber-50 p-3 text-amber-950"><p className="text-xs text-amber-800">Cashback</p><p className="text-lg font-semibold tabular-nums">{formatClientCashback(selected.cashbackBalance)}</p></div>
               </div>
 
               <div className="space-y-2 rounded-lg border border-border p-3 text-sm">
