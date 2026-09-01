@@ -23,7 +23,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { formatCurrency } from '@/lib/format'
-import { calculateBookingCashback, calculateCashbackPurchaseTotal } from '@/lib/public-booking'
+import { calculateOrderCashback } from '@/lib/public-booking'
 import { useAppData } from '@/components/data/app-data-provider'
 import type { Appointment, CatalogItem, CatalogType, Client, Employee, Order, PaymentMethod } from '@/lib/types'
 import { shouldCompleteLinkedAppointment } from '@/lib/order-appointment-sync'
@@ -165,13 +165,7 @@ export function NovaComandaClient({
   const discount = Math.max(0, subtotal - total)
   const surcharge = Math.max(0, total - subtotal)
   const selectedCount = selectedItems.reduce((sum, item) => sum + (quantities[item.id] ?? 0), 0)
-  const productSubtotal = selectedItems
-    .filter((item) => item.type === 'produto')
-    .reduce((sum, item) => sum + parseMoney(prices[item.id] ?? '') * (quantities[item.id] ?? 0), 0)
-  const serviceSubtotal = selectedItems
-    .filter((item) => item.type === 'servico')
-    .reduce((sum, item) => sum + parseMoney(prices[item.id] ?? '') * (quantities[item.id] ?? 0), 0)
-  const cashbackPreview = calculateBookingCashback(calculateCashbackPurchaseTotal(serviceSubtotal, productSubtotal), barbershop.publicBookingSettings?.cashback ?? { enabled: false, percentage: 0, minimumPurchase: 0 })
+  const cashbackPreview = calculateOrderCashback(total, barbershop.publicBookingSettings?.cashback ?? { enabled: false, percentage: 0, minimumPurchase: 0 })
   const cashbackEarned = cashbackPreview.amount
 
   function setItemQuantity(itemId: string, quantity: number) {
