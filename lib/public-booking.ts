@@ -58,6 +58,10 @@ export function calculateOrderCashback(total: number, config: CashbackConfig) {
   return calculateBookingCashback(Math.max(0, total), config)
 }
 
+export function calculateSubscriptionCashback(total: number, config: CashbackConfig) {
+  return calculateOrderCashback(total, config)
+}
+
 export function normalizeReferral(name: string, phone: string) {
   const cleanName = name.trim()
   const cleanPhone = phone.replace(/\D/g, '')

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { calculateBookingCashback, calculateCashbackPurchaseTotal, calculateOrderCashback, getPublicBookingProducts, normalizeReferral, shouldShowPublicProducts } from './public-booking'
+import { calculateBookingCashback, calculateCashbackPurchaseTotal, calculateOrderCashback, calculateSubscriptionCashback, getPublicBookingProducts, normalizeReferral, shouldShowPublicProducts } from './public-booking'
 
 describe('public booking merchandising', () => {
   it('returns only active, selected products with available stock', () => {
@@ -36,6 +36,13 @@ describe('public booking merchandising', () => {
   it('calculates cashback from the final order total', () => {
     expect(calculateOrderCashback(95, { enabled: true, percentage: 5, minimumPurchase: 10 })).toEqual({
       amount: 4.75,
+      remaining: 0,
+    })
+  })
+
+  it('calculates cashback from a paid subscription value', () => {
+    expect(calculateSubscriptionCashback(129.9, { enabled: true, percentage: 5, minimumPurchase: 100 })).toEqual({
+      amount: 6.5,
       remaining: 0,
     })
   })

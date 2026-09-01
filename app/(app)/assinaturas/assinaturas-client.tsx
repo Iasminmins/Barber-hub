@@ -28,6 +28,7 @@ import type { CatalogItem, FinancialEntry, PaymentMethod, Plan, PlanCycle, PlanR
 import { useAppData } from '@/components/data/app-data-provider'
 import { isBarberRole } from '@/lib/employees'
 import { renewalMessage, whatsappUrl } from '@/lib/whatsapp'
+import { calculateSubscriptionCashback } from '@/lib/public-booking'
 
 type View = 'assinaturas' | 'planos' | 'financeiro'
 type SubscriptionFilter = 'ativas' | 'vencendo' | 'vencidas' | 'todas'
@@ -499,6 +500,7 @@ export function AssinaturasClient({
     if (result.error) { setSubscriptionStatus(result.error); return }
     if (editingSubscription.registerPayment) {
       const nextOrderNumber = orders.length > 0 ? Math.max(...orders.map((order) => order.number)) + 1 : 1
+      const cashbackEarned = calculateSubscriptionCashback(price, barbershop.publicBookingSettings?.cashback ?? { enabled: false, percentage: 0, minimumPurchase: 0 }).amount
       const orderResult = await insertRecord('orders', {
         barbershop_id: barbershop.id,
         number: nextOrderNumber,
@@ -511,6 +513,7 @@ export function AssinaturasClient({
         status: 'paga',
         method: editingSubscription.paymentMethod,
         total: price,
+        cashback_earned: cashbackEarned,
       })
 
       if (orderResult.error || !orderResult.data) {
@@ -642,6 +645,7 @@ export function AssinaturasClient({
     }
 
     const nextOrderNumber = orders.length > 0 ? Math.max(...orders.map((order) => order.number)) + 1 : 1
+    const cashbackEarned = calculateSubscriptionCashback(subscription.price, barbershop.publicBookingSettings?.cashback ?? { enabled: false, percentage: 0, minimumPurchase: 0 }).amount
     const orderResult = await insertRecord('orders', {
       barbershop_id: barbershop.id,
       number: nextOrderNumber,
@@ -654,6 +658,7 @@ export function AssinaturasClient({
       status: 'paga',
       method,
       total: subscription.price,
+      cashback_earned: cashbackEarned,
     })
 
     if (orderResult.error || !orderResult.data) {
