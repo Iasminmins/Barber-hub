@@ -49,6 +49,7 @@ export function orderMessage({
   payment,
   status,
   barbershopName,
+  cashbackEarned = 0,
 }: {
   clientName: string
   orderNumber: number
@@ -59,6 +60,7 @@ export function orderMessage({
   payment: string
   status: string
   barbershopName: string
+  cashbackEarned?: number
 }) {
   const currency = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
   const itemLines = items.map((item) => (
@@ -80,6 +82,7 @@ export function orderMessage({
     `*Total: ${currency.format(total)}*`,
     `Pagamento: ${payment}`,
     `Status: ${status}`,
+    ...(cashbackEarned > 0 ? [`Cashback gerado: ${currency.format(cashbackEarned)}`] : []),
     '',
     'Obrigado pela preferência!',
     '',

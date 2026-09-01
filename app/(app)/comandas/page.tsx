@@ -223,6 +223,7 @@ export default function ComandasPage() {
       payment: order.method ? METHOD_LABEL[order.method] : 'A definir',
       status: STATUS_LABEL[order.status],
       barbershopName: barbershop.name,
+      cashbackEarned: order.cashbackEarned,
     })
     setWhatsAppDraft({
       clientId: client.id,
