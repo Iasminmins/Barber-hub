@@ -135,7 +135,7 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
     const params = new URLSearchParams(window.location.search)
     if (params.get("filtro") === "sem_retorno") {
       const period = Number(params.get("periodo"))
-      if (period === 30 || period === 60 || period === 90) setReturnFilter(period)
+      if (period === 30 || period === 60 || period === 90 || period === 180 || period === 360) setReturnFilter(period)
       setFilter("sem_retorno")
       return
     }
@@ -417,6 +417,8 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
                       <option value="30">30 dias</option>
                       <option value="60">60 dias</option>
                       <option value="90">90 dias</option>
+                      <option value="180">180 dias</option>
+                      <option value="360">360 dias</option>
                     </Select>
                     <span className="self-center text-xs font-medium text-muted-foreground">
                       {filtered.length} {filtered.length === 1 ? "pessoa" : "pessoas"}

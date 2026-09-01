@@ -1,6 +1,6 @@
 import type { Appointment, Client, Order } from '@/lib/types'
 
-export type ReturnFilter = 30 | 60 | 90
+export type ReturnFilter = 30 | 60 | 90 | 180 | 360
 
 function dateOnly(value: string) {
   return value.slice(0, 10)

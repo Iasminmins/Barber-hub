@@ -568,6 +568,8 @@ export function DashboardClient({
                 <option value="30">30 dias</option>
                 <option value="60">60 dias</option>
                 <option value="90">90 dias</option>
+                <option value="180">180 dias</option>
+                <option value="360">360 dias</option>
               </Select>
             </div>
             <div>

@@ -20,6 +20,17 @@ describe('dashboard retention filters', () => {
     expect(getClientsWithoutReturn([client('one')], [order('one', '2026-01-01', 'pendente')], 60, '2026-08-11')).toHaveLength(0)
   })
 
+  it('supports the 180-day and 360-day retention filters', () => {
+    const clients = [client('180-days'), client('360-days')]
+    const orders = [
+      order('180-days', '2026-02-12T10:00:00'),
+      order('360-days', '2025-08-16T10:00:00'),
+    ]
+
+    expect(getClientsWithoutReturn(clients, orders, 180, '2026-08-11').map((item) => item.id)).toEqual(['180-days'])
+    expect(getClientsWithoutReturn(clients, orders, 360, '2026-08-11').map((item) => item.id)).toEqual(['360-days'])
+  })
+
   it('expires only unconfirmed appointments whose scheduled date has passed', () => {
     const base = { status: 'agendado', date: '2026-08-08' } as Appointment
     expect(isExpiredUnconfirmedAppointment(base, '2026-08-11')).toBe(true)
