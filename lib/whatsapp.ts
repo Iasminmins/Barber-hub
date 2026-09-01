@@ -82,7 +82,7 @@ export function orderMessage({
     `*Total: ${currency.format(total)}*`,
     `Pagamento: ${payment}`,
     `Status: ${status}`,
-    ...(cashbackEarned > 0 ? [`Cashback gerado: ${currency.format(cashbackEarned)}`] : []),
+    ...(cashbackEarned > 0 ? [`🎁 *CASHBACK GERADO: ${currency.format(cashbackEarned)}*`] : []),
     '',
     'Obrigado pela preferência!',
     '',

@@ -32,6 +32,6 @@ describe('orderMessage', () => {
       cashbackEarned: 3.5,
     })
 
-    expect(message).toMatch(/Cashback gerado: R\$\s*3,50/)
+    expect(message).toMatch(/🎁 \*CASHBACK GERADO: R\$\s*3,50\*/)
   })
 })
