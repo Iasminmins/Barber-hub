@@ -13,6 +13,7 @@ import {
   UserCog,
   Users,
   Wallet,
+  Receipt,
 } from 'lucide-react'
 
 export interface NavItem {
@@ -49,6 +50,7 @@ export const navGroups: NavGroup[] = [
     title: 'Gestão',
     items: [
       { label: 'Financeiro', href: '/financeiro', icon: Wallet },
+      { label: 'Gastos', href: '/gastos', icon: Receipt },
       { label: 'Relatórios', href: '/relatorios', icon: BarChart3, managementOnly: true },
       { label: 'Importar / Exportar', href: '/importacao', icon: ArrowLeftRight },
       { label: 'Minha rede', href: '/rede', icon: Building2, managementOnly: true },

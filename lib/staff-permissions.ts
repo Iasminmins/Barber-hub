@@ -6,6 +6,7 @@ export const staffPermissionOptions = [
   { key: 'catalogo', label: 'Produtos e serviços', path: '/catalogo' },
   { key: 'assinaturas', label: 'Assinaturas', path: '/assinaturas' },
   { key: 'financeiro', label: 'Financeiro', path: '/financeiro' },
+  { key: 'gastos', label: 'Gastos', path: '/gastos' },
 ] as const
 
 export type StaffPermission = typeof staffPermissionOptions[number]['key']

@@ -43,7 +43,7 @@ export function SidebarContent({
   const allowedPaths = member.role === 'barber'
     ? allowedPathsForPermissions(member.permissions)
     : member.role === 'reception'
-      ? ['/dashboard', '/agenda', '/comandas', '/clientes']
+      ? ['/dashboard', '/agenda', '/comandas', '/clientes', '/gastos']
       : null
 
   return (
