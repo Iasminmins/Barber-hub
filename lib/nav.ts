@@ -4,6 +4,7 @@ import {
   BarChart3,
   Building2,
   CalendarDays,
+  ClipboardCheck,
   CreditCard,
   HelpCircle,
   LayoutDashboard,
@@ -51,6 +52,7 @@ export const navGroups: NavGroup[] = [
     items: [
       { label: 'Financeiro', href: '/financeiro', icon: Wallet },
       { label: 'Gastos', href: '/gastos', icon: Receipt },
+      { label: 'Gestão semanal', href: '/gestao-semanal', icon: ClipboardCheck, managementOnly: true },
       { label: 'Relatórios', href: '/relatorios', icon: BarChart3, managementOnly: true },
       { label: 'Importar / Exportar', href: '/importacao', icon: ArrowLeftRight },
       { label: 'Minha rede', href: '/rede', icon: Building2, managementOnly: true },

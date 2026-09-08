@@ -56,4 +56,11 @@ The focused appointment-card interaction could not be captured locally for the s
 - Capture the details dialog at desktop and mobile widths.
 - Verify edit, cancel, validation, and save states.
 
+## Gestão semanal — 2026-09-08
+
+- Source visual truth: `C:\Users\letic\Downloads\WhatsApp Image 2026-09-08 at 14.37.47.jpeg`
+- Implementation: `/gestao-semanal`
+- Browser verification: blocked because the local authenticated data session timed out before rendering the app shell.
+- Static verification: route, navigation entry, weekly range calculations, barber aggregation, editable tables, checklist toggles, and save feedback are implemented.
+
 final result: blocked
