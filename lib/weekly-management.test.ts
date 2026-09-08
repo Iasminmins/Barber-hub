@@ -15,7 +15,7 @@ describe('weekly management helpers', () => {
       ] as never,
       [
         { id: 'e1', name: 'Barbeiro 1', active: true, role: 'barbeiro' },
-        { id: 'e2', name: 'Barbeiro 2', active: true, role: 'barbeiro' },
+        { id: 'e2', name: 'Barbeiro 2', active: true, role: 'barber' },
       ] as never,
       { start: '2026-09-07', end: '2026-09-13' },
     )

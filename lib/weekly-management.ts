@@ -1,4 +1,5 @@
 import type { Employee, Order } from '@/lib/types'
+import { isBarberRole } from '@/lib/employees'
 
 export interface WeekRange {
   start: string
@@ -21,7 +22,7 @@ function insideRange(value: string, range: WeekRange) {
 }
 
 export function buildWeeklyBarberResults(orders: Order[], employees: Employee[], range: WeekRange) {
-  const activeBarbers = employees.filter((employee) => employee.active && /barbeir/i.test(employee.role))
+  const activeBarbers = employees.filter((employee) => employee.active && isBarberRole(employee.role))
   return activeBarbers.map((employee) => {
     const paidOrders = orders.filter(
       (order) => order.status === 'paga' && order.employeeId === employee.id && insideRange(order.createdAt, range),
