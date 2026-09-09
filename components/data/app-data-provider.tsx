@@ -7,7 +7,7 @@ import { defaultAgendaSettings, defaultPaymentMethods, normalizeAgendaSettings, 
 import { safeNumber, safeStringArray, safeText } from '@/lib/safe-data'
 import { effectiveBillingStatus } from '@/lib/billing-status'
 import { defaultPublicBookingSettings } from '@/lib/public-booking'
-import type { Appointment, Barbershop, CatalogItem, Client, Commission, Employee, FinancialEntry, ImportRecord, Member, Order, Plan, PlanRules, ScheduleBlock, Subscription } from '@/lib/types'
+import type { Appointment, Barbershop, CatalogItem, Client, Commission, CustomerReview, Employee, FinancialEntry, ImportRecord, Member, Order, Plan, PlanRules, ScheduleBlock, Subscription } from '@/lib/types'
 
 type AppData = {
   barbershop: Barbershop
@@ -25,6 +25,7 @@ type AppData = {
   commissions: Commission[]
   financialEntries: FinancialEntry[]
   imports: ImportRecord[]
+  customerReviews: CustomerReview[]
 }
 
 const fallbackShop: Barbershop = { id: '', name: '', slug: '', color: '#1E3A32', city: '', logoUrl: '', billingDocument: '', plan: 'starter', billingStatus: 'trialing', trialEndsAt: '', paymentMethods: defaultPaymentMethods, agendaSettings: defaultAgendaSettings, publicBookingSettings: defaultPublicBookingSettings }
@@ -150,18 +151,19 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         supabase.from('commissions').select('*').eq('barbershop_id', shopId).order('date', { ascending: false }),
         fetchAllRows((from, to) => supabase.from('financial_entries').select('*').eq('barbershop_id', shopId).order('date', { ascending: false }).range(from, to)),
         supabase.from('import_records').select('*').eq('barbershop_id', shopId).order('created_at', { ascending: false }),
+        supabase.from('customer_reviews').select('*').eq('barbershop_id', shopId).order('created_at', { ascending: false }),
       ]),
       'Os dados da plataforma demoraram demais para carregar. Atualize a página e tente novamente.',
     )
     const normalizedResults = results.map((result, index) => {
-      if (index === 5 && result.error && ['PGRST205', '42P01'].includes(result.error.code ?? '')) {
+      if ((index === 5 || index === 13) && result.error && ['PGRST205', '42P01'].includes(result.error.code ?? '')) {
         return { data: [], error: null }
       }
       return result
     })
     const failed = normalizedResults.find((result) => result.error)
     if (failed?.error) { setError(failed.error.message); return }
-    const [staffMembers, employees, clients, catalog, appointments, scheduleBlocks, orders, orderItems, plans, subscriptions, commissions, financial, imports] = normalizedResults.map((result) => result.data ?? [])
+    const [staffMembers, employees, clients, catalog, appointments, scheduleBlocks, orders, orderItems, plans, subscriptions, commissions, financial, imports, customerReviews] = normalizedResults.map((result) => result.data ?? [])
     const currentMembership = memberships.find((membership) => membership.barbershop_id === shopId) ?? memberships[0]
     const linkedEmployeeId = currentMembership.employee_id ?? ''
     const visibleEmployees = currentMembership.role === 'barber'
@@ -216,6 +218,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       commissions: commissions.map((r:any)=>({ id:r.id, barbershopId:r.barbershop_id, employeeId:r.employee_id??'', employeeName:r.employee_name, origin:r.origin, reference:r.reference, base:num(r.base), rate:num(r.rate), amount:num(r.amount), status:r.status, date:r.date })),
       financialEntries: financial.map((r:any)=>({ id:r.id, barbershopId:r.barbershop_id, orderId:r.order_id??undefined, type:r.type, category:r.category, description:r.description, amount:num(r.amount), method:r.method??undefined, date:r.date })),
       imports: imports.map((r:any)=>({ id:r.id, barbershopId:r.barbershop_id, entity:r.entity, fileName:r.file_name, totalRows:num(r.total_rows), importedRows:num(r.imported_rows), errorRows:num(r.error_rows), status:r.status, createdAt:r.created_at, createdBy:r.created_by })),
+      customerReviews: customerReviews.map((r:any)=>({ id:r.id, barbershopId:r.barbershop_id, appointmentId:r.appointment_id, clientName:r.client_name, employeeName:r.employee_name, serviceName:r.service_name, rating:num(r.rating), serviceRating:num(r.service_rating), environmentRating:num(r.environment_rating), wouldRecommend:Boolean(r.would_recommend), comment:safeText(r.comment), createdAt:safeText(r.created_at) })),
     })
   }, [requestedShopId])
 

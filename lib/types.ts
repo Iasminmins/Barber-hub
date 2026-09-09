@@ -265,3 +265,18 @@ export interface ImportRecord {
   createdAt: string
   createdBy: string
 }
+
+export interface CustomerReview {
+  id: string
+  barbershopId: string
+  appointmentId: string
+  clientName: string
+  employeeName: string
+  serviceName: string
+  rating: number
+  serviceRating: number
+  environmentRating: number
+  wouldRecommend: boolean
+  comment: string
+  createdAt: string
+}
