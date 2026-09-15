@@ -556,13 +556,15 @@ export function NovaComandaClient({
                     <span className="font-bold tabular-nums">{formatCurrency(selectedClient.cashbackBalance ?? 0)}</span>
                   </div>
                   {(selectedClient.cashbackBalance ?? 0) > 0 ? (
-                    <button
-                      type="button"
-                      className="mt-2 text-xs font-semibold underline underline-offset-2"
-                      onClick={() => setUseCashback((current) => !current)}
-                    >
-                      {useCashback ? `Remover uso (${formatCurrency(cashbackRedemption.amount)})` : 'Usar cashback nesta comanda'}
-                    </button>
+                    <label className="mt-2 flex cursor-pointer items-center gap-2 text-xs font-semibold">
+                      <input
+                        type="checkbox"
+                        checked={useCashback}
+                        onChange={(event) => setUseCashback(event.target.checked)}
+                        className="size-4 accent-amber-600"
+                      />
+                      <span>Usar cashback nesta comanda</span>
+                    </label>
                   ) : null}
                 </div>
               ) : null}
