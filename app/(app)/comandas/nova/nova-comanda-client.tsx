@@ -14,6 +14,7 @@ import {
   Scissors,
   Search,
   Trash2,
+  WalletCards,
 } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { Badge } from '@/components/ui/badge'
@@ -24,6 +25,7 @@ import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { formatCurrency } from '@/lib/format'
 import { calculateOrderCashback } from '@/lib/public-booking'
+import { calculateCashbackRedemption } from '@/lib/cashback-redemption'
 import { useAppData } from '@/components/data/app-data-provider'
 import type { Appointment, CatalogItem, CatalogType, Client, Employee, Order, PaymentMethod } from '@/lib/types'
 import { shouldCompleteLinkedAppointment } from '@/lib/order-appointment-sync'
@@ -91,6 +93,7 @@ export function NovaComandaClient({
   const [employeeId, setEmployeeId] = useState('')
   const [payment, setPayment] = useState<PaymentChoice | ''>('')
   const [manualTotal, setManualTotal] = useState<string | null>(null)
+  const [useCashback, setUseCashback] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [sourceAppointment, setSourceAppointment] = useState<Appointment | null>(null)
 
@@ -161,7 +164,12 @@ export function NovaComandaClient({
     (sum, item) => sum + parseMoney(prices[item.id] ?? '') * (quantities[item.id] ?? 0),
     0,
   )
-  const total = manualTotal === null ? subtotal : parseMoney(manualTotal)
+  const baseTotal = manualTotal === null ? subtotal : parseMoney(manualTotal)
+  const selectedClient = clients.find((client) => client.id === clientId)
+  const cashbackRedemption = useCashback && selectedClient
+    ? calculateCashbackRedemption(selectedClient.cashbackBalance ?? 0, baseTotal)
+    : { amount: 0, remaining: selectedClient?.cashbackBalance ?? 0 }
+  const total = Math.max(0, baseTotal - cashbackRedemption.amount)
   const discount = Math.max(0, subtotal - total)
   const surcharge = Math.max(0, total - subtotal)
   const selectedCount = selectedItems.reduce((sum, item) => sum + (quantities[item.id] ?? 0), 0)
@@ -221,7 +229,7 @@ export function NovaComandaClient({
     const client = clients.find((item) => item.id === clientId)
     const orderStatus = total === 0 || !payment ? 'aberta' : payment === 'pendente' ? 'pendente' : 'paga'
     const paymentMethod = orderStatus === 'paga' ? payment : null
-    const orderResult = await insertRecord('orders', { barbershop_id: barbershopId, appointment_id: sourceAppointment?.id ?? null, number: nextOrderNumber, client_id: client?.id ?? null, client_name: client?.name ?? 'Cliente avulso', employee_id: employee.id, employee_name: employee.name, discount, surcharge, status: orderStatus, method: paymentMethod, total, cashback_earned: cashbackEarned })
+    const orderResult = await insertRecord('orders', { barbershop_id: barbershopId, appointment_id: sourceAppointment?.id ?? null, number: nextOrderNumber, client_id: client?.id ?? null, client_name: client?.name ?? 'Cliente avulso', employee_id: employee.id, employee_name: employee.name, discount, surcharge, status: orderStatus, method: paymentMethod, total, cashback_earned: cashbackEarned, cashback_redeemed: cashbackRedemption.amount })
     if (orderResult.error || !orderResult.data) { setSaveError(orderResult.error ?? 'Não foi possível criar a comanda.'); return }
     for (const item of selectedItems) {
       const itemResult = await insertRecord('order_items', { order_id: orderResult.data.id, barbershop_id: barbershopId, ref_id: item.id, type: item.type, name: item.name, quantity: quantities[item.id] ?? 1, unit_price: parseMoney(prices[item.id] ?? '') })
@@ -319,6 +327,7 @@ export function NovaComandaClient({
                         onClick={() => {
                           setClientId('')
                           setClientQuery('')
+                          setUseCashback(false)
                           setIsClientSearchOpen(false)
                         }}
                       >
@@ -334,6 +343,7 @@ export function NovaComandaClient({
                           onClick={() => {
                             setClientId(client.id)
                             setClientQuery('')
+                            setUseCashback(false)
                             setIsClientSearchOpen(false)
                           }}
                         >
@@ -536,6 +546,38 @@ export function NovaComandaClient({
                 <span className="text-muted-foreground">Desconto</span>
                 <span className="font-medium text-foreground">{formatCurrency(discount)}</span>
               </div>
+              {selectedClient ? (
+                <div className="rounded-lg border border-amber-300/70 bg-amber-50 px-3 py-2 text-amber-950">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <WalletCards className="size-4" />
+                      <span className="font-semibold">Cashback disponível</span>
+                    </div>
+                    <span className="font-bold tabular-nums">{formatCurrency(selectedClient.cashbackBalance ?? 0)}</span>
+                  </div>
+                  {(selectedClient.cashbackBalance ?? 0) > 0 ? (
+                    <button
+                      type="button"
+                      className="mt-2 text-xs font-semibold underline underline-offset-2"
+                      onClick={() => setUseCashback((current) => !current)}
+                    >
+                      {useCashback ? `Remover uso (${formatCurrency(cashbackRedemption.amount)})` : 'Usar cashback nesta comanda'}
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+              {cashbackRedemption.amount > 0 ? (
+                <div className="flex justify-between text-emerald-700">
+                  <span>Cashback utilizado</span>
+                  <span className="font-semibold">-{formatCurrency(cashbackRedemption.amount)}</span>
+                </div>
+              ) : null}
+              {cashbackRedemption.amount > 0 ? (
+                <div className="flex justify-between border-t border-border pt-3 text-base">
+                  <span className="font-semibold text-foreground">Total final</span>
+                  <span className="font-bold text-foreground">{formatCurrency(total)}</span>
+                </div>
+              ) : null}
               {surcharge > 0 ? (
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Acréscimo</span>
@@ -543,7 +585,7 @@ export function NovaComandaClient({
                 </div>
               ) : null}
               <div className="flex items-center justify-between gap-3 border-t border-border pt-3 text-base">
-                <span className="font-semibold text-foreground">Total</span>
+                <span className="font-semibold text-foreground">{cashbackRedemption.amount > 0 ? 'Total antes do cashback' : 'Total'}</span>
                 <div className="w-32">
                   <div className="relative">
                     <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">R$</span>

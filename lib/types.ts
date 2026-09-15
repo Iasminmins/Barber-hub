@@ -172,6 +172,7 @@ export interface Order {
   method?: PaymentMethod
   total: number
   cashbackEarned?: number
+  cashbackRedeemed?: number
   cashbackAwarded?: boolean
   createdAt: string
 }

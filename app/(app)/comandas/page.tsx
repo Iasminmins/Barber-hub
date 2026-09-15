@@ -304,6 +304,7 @@ export default function ComandasPage() {
     const total = validItems.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0)
       - editingOrder.discount + editingOrder.surcharge
     if (total < 0) { setEditError('O total da comanda não pode ser negativo.'); return }
+    if (total < (editingOrder.cashbackRedeemed ?? 0)) { setEditError('O total não pode ficar menor que o cashback já reservado nesta comanda.'); return }
 
     setSavingOrder(true)
     setEditError('')
@@ -702,6 +703,11 @@ export default function ComandasPage() {
                   <Input id="edit-order-surcharge" type="number" min="0" step="0.01" value={editingOrder.surcharge} onChange={(event) => setEditingOrder({ ...editingOrder, surcharge: Number(event.target.value) })} />
                 </div>
               </div>
+              {(editingOrder.cashbackRedeemed ?? 0) > 0 ? (
+                <div className="rounded-lg border border-amber-300/70 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+                  Cashback reservado nesta comanda: <strong>{formatCurrency(editingOrder.cashbackRedeemed ?? 0)}</strong>. O saldo será baixado quando ela for paga.
+                </div>
+              ) : null}
             </div>
 
             <div className="mt-5 space-y-3">
