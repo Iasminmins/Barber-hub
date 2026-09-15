@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect, useMemo, useState } from "react"
-import { AlertTriangle, Cake, CalendarDays, Mail, MessageCircle, Pencil, Phone, Plus, Save, Scissors, Search, Send, Star, Trash2, X } from "lucide-react"
+import { AlertTriangle, Cake, CalendarDays, Mail, MessageCircle, Pencil, Phone, Plus, Save, Scissors, Search, Send, Star, Trash2, WalletCards, X } from "lucide-react"
 import type { Client, ClientTag } from "@/lib/types"
 import { formatCurrency, formatDate } from "@/lib/format"
 import { Input } from "@/components/ui/input"
@@ -31,6 +31,7 @@ import { getClientsWithoutReturn, type ReturnFilter } from '@/lib/dashboard-rete
 import { buildPublicBookingUrl } from '@/lib/public-booking-url'
 import { buildClientWhatsAppMessage } from '@/lib/client-whatsapp-message'
 import { formatClientCashback } from '@/lib/client-cashback'
+import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 
 type Filter = "todos" | "novos" | "vip" | "recorrente" | "aniversariante" | "inadimplente" | "inativo" | "sem_telefone" | "duplicados" | "suspeitos" | "sem_retorno"
 type ClientDraft = {
@@ -100,7 +101,7 @@ function toClientDraft(client: Client): ClientDraft {
 
 export function ClientesClient({ clients }: { clients: Client[] }) {
   const router = useRouter()
-  const { appointments, barbershop, catalog, employees, imports, orders, deleteRecord, updateRecord } = useAppData()
+  const { appointments, barbershop, catalog, employees, imports, orders, deleteRecord, updateRecord, refresh } = useAppData()
   const [records, setRecords] = useState(clients)
   const [query, setQuery] = useState("")
   const [filter, setFilter] = useState<Filter>("todos")
@@ -113,6 +114,10 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
   const [whatsappMessage, setWhatsappMessage] = useState("")
   const [editing, setEditing] = useState<ClientDraft | null>(null)
   const [editStatus, setEditStatus] = useState("")
+  const [cashbackOpen, setCashbackOpen] = useState(false)
+  const [cashbackAmount, setCashbackAmount] = useState("")
+  const [cashbackStatus, setCashbackStatus] = useState("")
+  const [cashbackSaving, setCashbackSaving] = useState(false)
   const [whatsappContactLog, setWhatsappContactLog] = useState<Record<string, string>>({})
   const contactStorageKey = `barberhub:whatsapp-contacts:${barbershop.id}`
   
@@ -299,6 +304,37 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
     if (result.error) { setEditStatus(result.error); return }
     setRecords((current) => current.map((client) => client.id === editing.id ? { ...client, name:editing.name.trim(), phone:editing.phone.trim(), email:editing.email.trim(), birthDate:editing.birthDate, postalCode:editing.postalCode, address:editing.address.trim(), addressNumber:editing.addressNumber.trim(), addressComplement:editing.addressComplement.trim(), neighborhood:editing.neighborhood.trim(), city:editing.city.trim(), state:editing.state.trim().toUpperCase(), preferredDay:editing.preferredDay, preferredBarber:editing.preferredBarber, notes:editing.notes.trim(), tags:editing.tags } : client))
     setEditing(null)
+  }
+
+  function openCashbackDebit() {
+    if (!selected) return
+    setCashbackAmount("")
+    setCashbackStatus("")
+    setCashbackOpen(true)
+  }
+
+  async function redeemCashback() {
+    if (!selected) return
+    const amount = Math.max(0, Number(cashbackAmount.replace(/[^\d,.-]/g, "").replace(",", ".")) || 0)
+    const balance = Math.max(0, selected.cashbackBalance ?? 0)
+    if (amount <= 0) { setCashbackStatus("Informe um valor maior que zero."); return }
+    if (amount > balance) { setCashbackStatus(`O valor não pode ultrapassar o saldo de ${formatCurrency(balance)}.`); return }
+
+    setCashbackSaving(true)
+    setCashbackStatus("")
+    const supabase = createBrowserSupabaseClient()
+    const result = await supabase.rpc("redeem_client_cashback", { p_client_id: selected.id, p_amount: amount })
+    if (result.error) {
+      setCashbackSaving(false)
+      setCashbackStatus(result.error.message)
+      return
+    }
+
+    const remaining = Number(result.data ?? balance - amount)
+    setRecords((current) => current.map((client) => client.id === selected.id ? { ...client, cashbackBalance: remaining } : client))
+    await refresh()
+    setCashbackSaving(false)
+    setCashbackOpen(false)
   }
 
   const filters: { key: Filter; label: string }[] = [
@@ -550,6 +586,14 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
                 <div className="rounded-lg bg-amber-50 p-3 text-amber-950"><div className="text-xs text-amber-800">Cashback</div><div className="text-lg font-semibold tabular-nums">{formatClientCashback(selected.cashbackBalance)}</div></div>
               </div>
 
+              <div className="mb-4 rounded-lg border border-amber-300/70 bg-amber-50 p-3 text-amber-950">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-sm font-semibold"><WalletCards className="size-4" /> Saldo de cashback</div>
+                  <span className="font-bold tabular-nums">{formatClientCashback(selected.cashbackBalance)}</span>
+                </div>
+                {(selected.cashbackBalance ?? 0) > 0 ? <Button type="button" variant="outline" size="sm" className="mt-3 w-full border-amber-300 bg-transparent" onClick={openCashbackDebit}>Dar baixa no cashback</Button> : null}
+              </div>
+
               <div className="mb-2 text-sm font-medium text-foreground">Observações</div>
               <p className="mb-4 text-sm text-muted-foreground">{selected.notes || "Sem observações registradas."}</p>
 
@@ -643,6 +687,26 @@ export function ClientesClient({ clients }: { clients: Client[] }) {
                 >
                   <Send className="size-4" />Enviar WhatsApp
                 </a>
+              </div>
+            </div>
+          </>
+        ) : null}
+      </Dialog>
+
+      <Dialog open={cashbackOpen} onClose={() => { if (!cashbackSaving) setCashbackOpen(false) }} className="sm:max-w-sm">
+        {selected ? (
+          <>
+            <DialogHeader title="Dar baixa no cashback" description={`Saldo de ${selected.name}: ${formatClientCashback(selected.cashbackBalance)}`} />
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="cashback-debit-amount">Valor da baixa</Label>
+                <Input id="cashback-debit-amount" type="number" min="0.01" max={selected.cashbackBalance ?? 0} step="0.01" value={cashbackAmount} onChange={(event) => setCashbackAmount(event.target.value)} placeholder="0,00" autoFocus />
+                <p className="text-xs text-muted-foreground">O valor não pode ser maior que o saldo disponível.</p>
+              </div>
+              {cashbackStatus ? <p className="text-sm font-medium text-destructive">{cashbackStatus}</p> : null}
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" disabled={cashbackSaving} onClick={() => setCashbackOpen(false)}>Cancelar</Button>
+                <Button variant="gold" disabled={cashbackSaving} onClick={redeemCashback}>{cashbackSaving ? "Baixando..." : "Confirmar baixa"}</Button>
               </div>
             </div>
           </>
