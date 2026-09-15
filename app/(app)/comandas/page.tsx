@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { CalendarDays, CreditCard, Crown, MessageCircle, Minus, Pencil, Plus, Printer, Receipt, Save, Trash2, Upload } from 'lucide-react'
+import { CalendarDays, CreditCard, Crown, MessageCircle, Minus, Pencil, Plus, Printer, Receipt, RotateCcw, Save, Trash2, Upload } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { PageHeader } from '@/components/page-header'
 import { StatusBadge } from '@/components/status-badge'
@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/table'
 import { useAppData } from '@/components/data/app-data-provider'
 import { formatCurrency, formatDate } from '@/lib/format'
+import { getCashbackStatus, needsCashbackReconciliation } from '@/lib/cashback-status'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import type { Order, OrderItem, OrderStatus, PaymentMethod } from '@/lib/types'
 import { orderMessage, whatsappUrl } from '@/lib/whatsapp'
@@ -118,6 +119,7 @@ export default function ComandasPage() {
   const [editingDate, setEditingDate] = useState('')
   const [editError, setEditError] = useState('')
   const [savingOrder, setSavingOrder] = useState(false)
+  const [reconcilingCashback, setReconcilingCashback] = useState(false)
   const openedOrderId = useRef('')
   const [whatsAppDraft, setWhatsAppDraft] = useState<{
     clientId: string
@@ -190,6 +192,22 @@ export default function ComandasPage() {
     setEditError('')
     setEditingDate(toDateTimeLocal(order.createdAt))
     setEditingOrder({ ...order, items: order.items.map((item) => ({ ...item })) })
+  }
+
+  async function reconcileCashback(order: Order) {
+    if (order.status !== 'paga' || order.total <= 0 || order.cashbackAwarded) return
+    setReconcilingCashback(true)
+    const supabase = createBrowserSupabaseClient()
+    const result = await supabase.rpc('reconcile_order_cashback', { p_order_id: order.id })
+    setReconcilingCashback(false)
+    if (result.error) {
+      window.alert(`Não foi possível verificar o cashback: ${result.error.message}`)
+      return
+    }
+    window.alert(Number(result.data ?? 0) > 0
+      ? `Cashback de ${formatCurrency(Number(result.data))} creditado para o cliente.`
+      : 'Nenhum cashback pendente foi encontrado.')
+    window.location.reload()
   }
 
   useEffect(() => {
@@ -500,6 +518,7 @@ export default function ComandasPage() {
               <TableHead>Responsável</TableHead>
               <TableHead>Pagamento</TableHead>
               <TableHead className="text-right">Total</TableHead>
+              <TableHead>Cashback</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Última mensagem enviada</TableHead>
               <TableHead className="text-right">Ações</TableHead>
@@ -559,6 +578,18 @@ export default function ComandasPage() {
                   {formatCurrency(order.total)}
                 </TableCell>
                 <TableCell>
+                  {getCashbackStatus(order) === 'creditado' ? (
+                    <span className="text-sm text-emerald-700">Creditado {formatCurrency(order.cashbackEarned ?? 0)}</span>
+                  ) : needsCashbackReconciliation(order) ? (
+                    <Button variant="outline" size="sm" onClick={() => reconcileCashback(order)} disabled={reconcilingCashback}>
+                      <RotateCcw className="size-3.5" />
+                      Verificar
+                    </Button>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">Não se aplica</span>
+                  )}
+                </TableCell>
+                <TableCell>
                   <StatusBadge status={order.status} />
                 </TableCell>
                 <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
@@ -588,7 +619,7 @@ export default function ComandasPage() {
             ))}
             {monthOrders.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
+                <TableCell colSpan={10} className="py-10 text-center text-muted-foreground">
                   Nenhuma comanda cadastrada.
                 </TableCell>
               </TableRow>
