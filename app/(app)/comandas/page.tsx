@@ -24,6 +24,7 @@ import {
 import { useAppData } from '@/components/data/app-data-provider'
 import { formatCurrency, formatDate } from '@/lib/format'
 import { getCashbackStatus, needsCashbackReconciliation } from '@/lib/cashback-status'
+import { filterOrdersBySearch } from '@/lib/order-search'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import type { Order, OrderItem, OrderStatus, PaymentMethod } from '@/lib/types'
 import { orderMessage, whatsappUrl } from '@/lib/whatsapp'
@@ -120,6 +121,7 @@ export default function ComandasPage() {
   const [editError, setEditError] = useState('')
   const [savingOrder, setSavingOrder] = useState(false)
   const [reconcilingCashback, setReconcilingCashback] = useState(false)
+  const [orderSearch, setOrderSearch] = useState('')
   const openedOrderId = useRef('')
   const [whatsAppDraft, setWhatsAppDraft] = useState<{
     clientId: string
@@ -145,6 +147,10 @@ export default function ComandasPage() {
   const monthOrders = useMemo(
     () => orders.filter((order) => toMonthKey(order.createdAt) === selectedMonth),
     [orders, selectedMonth],
+  )
+  const filteredMonthOrders = useMemo(
+    () => filterOrdersBySearch(monthOrders, orderSearch, { methods: METHOD_LABEL, statuses: STATUS_LABEL }),
+    [monthOrders, orderSearch],
   )
   const planClients = useMemo(() => {
     const names = new Set<string>()
@@ -507,6 +513,20 @@ export default function ComandasPage() {
         </Card>
       </div>
 
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-foreground">Pesquisar comandas</p>
+          <p className="text-sm text-muted-foreground">Busque por número, cliente, item, responsável ou situação.</p>
+        </div>
+        <Input
+          value={orderSearch}
+          onChange={(event) => setOrderSearch(event.target.value)}
+          placeholder="Buscar comandas..."
+          className="h-10 w-full bg-card sm:max-w-md"
+          aria-label="Pesquisar comandas"
+        />
+      </div>
+
       <Card className="overflow-hidden">
         <Table>
           <TableHeader>
@@ -525,7 +545,7 @@ export default function ComandasPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {monthOrders.map((order) => (
+            {filteredMonthOrders.map((order) => (
               <TableRow key={order.id}>
                 <TableCell>
                   <div className="flex items-center gap-3">
@@ -617,10 +637,12 @@ export default function ComandasPage() {
                 </TableCell>
               </TableRow>
             ))}
-            {monthOrders.length === 0 ? (
+            {filteredMonthOrders.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={10} className="py-10 text-center text-muted-foreground">
-                  Nenhuma comanda cadastrada.
+                <TableCell colSpan={11} className="py-10 text-center text-muted-foreground">
+                  {monthOrders.length === 0
+                    ? 'Nenhuma comanda cadastrada.'
+                    : 'Nenhuma comanda encontrada para essa busca.'}
                 </TableCell>
               </TableRow>
             ) : null}
