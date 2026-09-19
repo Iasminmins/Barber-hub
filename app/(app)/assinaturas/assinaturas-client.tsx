@@ -327,6 +327,46 @@ export function AssinaturasClient({
     window.open(url, '_blank', 'noopener,noreferrer')
   }
 
+  async function shareRenewalWhatsApp() {
+    if (!renewalWhatsAppDraft || typeof navigator === 'undefined' || !navigator.share) {
+      window.alert('O compartilhamento com imagem está disponível em celulares compatíveis. Use “Abrir no WhatsApp” para continuar pelo navegador.')
+      return
+    }
+
+    try {
+      let files: File[] = []
+      if (renewalWhatsAppDraft.qrCodeUrl) {
+        const response = await fetch(renewalWhatsAppDraft.qrCodeUrl)
+        if (!response.ok) throw new Error('Não foi possível carregar o QR Code.')
+        const blob = await response.blob()
+        const extension = blob.type.split('/')[1] || 'png'
+        const file = new File([blob], `qr-code-pix.${extension}`, { type: blob.type || 'image/png' })
+        if (!navigator.canShare?.({ files: [file] })) {
+          window.alert('Este celular não permite compartilhar imagens por aqui. Baixe o QR Code e anexe-o manualmente no WhatsApp.')
+          return
+        }
+        files = [file]
+      }
+
+      await navigator.share({ text: renewalWhatsAppDraft.message.trim(), files })
+      const timestamp = new Date().toISOString()
+      const result = await updateRecord('clients', renewalWhatsAppDraft.clientId, { last_message_sent_at: timestamp })
+      if (result.error) {
+        window.alert(`A mensagem foi compartilhada, mas não foi possível registrar o envio: ${result.error}`)
+        return
+      }
+      setWhatsappContactLog((current) => {
+        const next = { ...current, [renewalWhatsAppDraft.clientId]: timestamp }
+        window.localStorage.setItem(`barberhub:whatsapp-contacts:${barbershop.id}`, JSON.stringify(next))
+        return next
+      })
+      setRenewalWhatsAppDraft(null)
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return
+      window.alert(error instanceof Error ? error.message : 'Não foi possível compartilhar a mensagem.')
+    }
+  }
+
   function openPlanDialog(plan?: Plan) {
     setDraft(plan ? toDraft(plan) : emptyDraft)
     setPlanDraftTab('basicos')
@@ -1617,6 +1657,11 @@ export function AssinaturasClient({
             ) : null}
             <div className="mt-5 flex justify-end gap-2">
               <Button variant="outline" onClick={() => setRenewalWhatsAppDraft(null)}>Cancelar</Button>
+              {renewalWhatsAppDraft.qrCodeUrl ? (
+                <Button variant="outline" disabled={!renewalWhatsAppDraft.message.trim()} onClick={shareRenewalWhatsApp}>
+                  Compartilhar com QR Code
+                </Button>
+              ) : null}
               <Button variant="gold" disabled={!renewalWhatsAppDraft.message.trim()} onClick={sendRenewalWhatsApp}>
                 <MessageCircle className="size-4" />
                 Abrir no WhatsApp
