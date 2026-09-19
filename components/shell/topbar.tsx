@@ -335,6 +335,7 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
       item.planName ?? 'da barbearia',
       item.dueInDays ?? 0,
       barbershop.name || 'Duke Barber',
+      barbershop.pixKey,
     ))
   }
 
@@ -350,6 +351,37 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
     }
     window.open(url, '_blank', 'noopener,noreferrer')
     setRenewalEditor(null)
+  }
+
+  async function shareRenewalMessage() {
+    if (!renewalEditor?.clientId || !renewalEditor.phone || !barbershop.pixQrCodeUrl || !navigator.share) {
+      window.alert('O compartilhamento com QR Code está disponível em celulares compatíveis. Use “Abrir no WhatsApp” para continuar pelo navegador.')
+      return
+    }
+
+    try {
+      const response = await fetch(barbershop.pixQrCodeUrl)
+      if (!response.ok) throw new Error('Não foi possível carregar o QR Code.')
+      const blob = await response.blob()
+      const extension = blob.type.split('/')[1] || 'png'
+      const file = new File([blob], `qr-code-pix.${extension}`, { type: blob.type || 'image/png' })
+      if (!navigator.canShare?.({ files: [file] })) {
+        window.alert('Este celular não permite compartilhar imagens por aqui. Baixe o QR Code e anexe-o manualmente no WhatsApp.')
+        return
+      }
+
+      await navigator.share({ text: renewalText.trim(), files: [file] })
+      const timestamp = new Date().toISOString()
+      const result = await updateRecord('clients', renewalEditor.clientId, { last_message_sent_at: timestamp })
+      if (result.error) {
+        window.alert(`A mensagem foi compartilhada, mas não foi possível registrar o envio: ${result.error}`)
+        return
+      }
+      setRenewalEditor(null)
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return
+      window.alert(error instanceof Error ? error.message : 'Não foi possível compartilhar a mensagem.')
+    }
   }
 
   React.useEffect(() => {
@@ -672,8 +704,29 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
           className="min-h-44 resize-y leading-relaxed"
           aria-label="Mensagem de renovação"
         />
+        {barbershop.pixQrCodeUrl ? (
+          <div className="mt-4 rounded-md border border-border bg-muted/30 p-3">
+            <p className="mb-2 text-sm font-medium text-foreground">QR Code Pix</p>
+            <div className="flex items-center gap-3">
+              <img src={barbershop.pixQrCodeUrl} alt="QR Code Pix da barbearia" className="size-28 rounded-md border border-border bg-white object-contain p-1" />
+              <div className="space-y-2 text-xs text-muted-foreground">
+                <p>Você pode compartilhar pelo celular ou baixar para anexar no WhatsApp.</p>
+                <a href={barbershop.pixQrCodeUrl} download="qr-code-pix.png" target="_blank" rel="noreferrer" className="inline-flex font-semibold text-primary underline underline-offset-2">Baixar QR Code</a>
+              </div>
+            </div>
+          </div>
+        ) : null}
         <div className="mt-5 flex justify-end gap-2">
           <Button variant="outline" onClick={() => setRenewalEditor(null)}>Cancelar</Button>
+          {barbershop.pixQrCodeUrl ? (
+            <Button
+              variant="outline"
+              disabled={!renewalText.trim() || !normalizeWhatsAppPhone(renewalEditor?.phone ?? '')}
+              onClick={shareRenewalMessage}
+            >
+              Compartilhar com QR Code
+            </Button>
+          ) : null}
           <Button
             className="bg-emerald-600 text-white hover:bg-emerald-700"
             disabled={!renewalText.trim() || !normalizeWhatsAppPhone(renewalEditor?.phone ?? '')}
