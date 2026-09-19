@@ -25,6 +25,8 @@ import { useAppData } from '@/components/data/app-data-provider'
 import { formatCurrency, formatDate } from '@/lib/format'
 import { getCashbackStatus, needsCashbackReconciliation } from '@/lib/cashback-status'
 import { filterOrdersBySearch } from '@/lib/order-search'
+import { calculateEditedOrderValues } from '@/lib/order-pricing'
+import { defaultPublicBookingSettings } from '@/lib/public-booking'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 import type { Order, OrderItem, OrderStatus, PaymentMethod } from '@/lib/types'
 import { orderMessage, whatsappUrl } from '@/lib/whatsapp'
@@ -325,8 +327,14 @@ export default function ComandasPage() {
     if (validItems.length === 0) { setEditError('A comanda precisa ter pelo menos um item válido.'); return }
     if (editingOrder.status === 'paga' && !editingOrder.method) { setEditError('Selecione o pagamento da comanda paga.'); return }
 
-    const total = validItems.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0)
-      - editingOrder.discount + editingOrder.surcharge
+    const editedValues = calculateEditedOrderValues({
+      items: validItems,
+      discount: editingOrder.discount,
+      surcharge: editingOrder.surcharge,
+      cashbackSettings: barbershop.publicBookingSettings?.cashback ?? defaultPublicBookingSettings.cashback,
+      clientId: client?.id,
+    })
+    const { total, cashbackEarned } = editedValues
     if (total < 0) { setEditError('O total da comanda não pode ser negativo.'); return }
     if (total < (editingOrder.cashbackRedeemed ?? 0)) { setEditError('O total não pode ficar menor que o cashback já reservado nesta comanda.'); return }
 
@@ -377,6 +385,7 @@ export default function ComandasPage() {
       status: editingOrder.status,
       method: editingOrder.status === 'paga' ? editingOrder.method : null,
       total,
+      cashback_earned: cashbackEarned,
       created_at: createdAt,
     })
     if (orderResult.error) { setSavingOrder(false); setEditError(orderResult.error); return }

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { orderMessage } from './whatsapp'
+import { orderMessage, renewalMessage } from './whatsapp'
 
 describe('orderMessage', () => {
   test('termina a mensagem com avaliação, indicação e agradecimento', () => {
@@ -33,5 +33,19 @@ describe('orderMessage', () => {
     })
 
     expect(message).toMatch(/🎁 \*CASHBACK GERADO: R\$\s*3,50\*/)
+  })
+})
+
+describe('renewalMessage', () => {
+  test('inclui a chave Pix da barbearia quando informada', () => {
+    const message = renewalMessage('Luciana de Jesus', 'Corte de Cabelo', 0, 'Duke Barber', 'duke@pix.com')
+
+    expect(message).toContain('Chave Pix: duke@pix.com')
+  })
+
+  test('não inclui uma linha de Pix quando a chave não foi cadastrada', () => {
+    const message = renewalMessage('Luciana de Jesus', 'Corte de Cabelo', 0, 'Duke Barber', '   ')
+
+    expect(message).not.toContain('Chave Pix:')
   })
 })

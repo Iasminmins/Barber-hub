@@ -23,6 +23,7 @@ export interface Barbershop {
   city: string
   logoUrl?: string
   billingDocument: string
+  pixKey?: string
   plan: 'solo' | 'starter' | 'pro' | 'premium'
   billingStatus: 'trialing' | 'active' | 'past_due' | 'canceled'
   trialEndsAt: string

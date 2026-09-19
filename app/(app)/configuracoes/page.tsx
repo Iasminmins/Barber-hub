@@ -108,6 +108,7 @@ export default function ConfiguracoesPage() {
     color: barbershop.color,
     logoUrl: barbershop.logoUrl ?? '',
     billingDocument: formatBillingDocument(barbershop.billingDocument),
+    pixKey: barbershop.pixKey ?? '',
   })
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethodConfig[]>(() => normalizePaymentMethods(barbershop.paymentMethods))
   const [agendaSettings, setAgendaSettings] = useState<AgendaSettings>(() => normalizeAgendaSettings(barbershop.agendaSettings))
@@ -129,6 +130,7 @@ export default function ConfiguracoesPage() {
       color: barbershop.color,
       logoUrl: barbershop.logoUrl ?? '',
       billingDocument: formatBillingDocument(barbershop.billingDocument),
+      pixKey: barbershop.pixKey ?? '',
     })
     setLogoFile(null)
     setLogoPreview('')
@@ -274,6 +276,7 @@ export default function ConfiguracoesPage() {
       color: shop.color,
       logo_url: logoUrl || null,
       billing_document: onlyDigits(shop.billingDocument) || null,
+      pix_key: shop.pixKey.trim() || null,
       payment_methods: cleanPaymentMethods,
       agenda_settings: {
         ...agendaSettings,
@@ -893,6 +896,28 @@ export default function ConfiguracoesPage() {
         ) : null}
 
         {activeTab === 'pagamentos' ? (
+          <div className="space-y-4">
+          <Card className="p-5">
+            <div className="mb-4">
+              <h3 className="mb-1 flex items-center gap-2 font-semibold text-foreground">
+                <CreditCard className="size-4 text-muted-foreground" />
+                Chave Pix da barbearia
+              </h3>
+              <p className="text-sm text-muted-foreground">Ela será adicionada automaticamente às mensagens de renovação enviadas pelo WhatsApp.</p>
+            </div>
+            <Label htmlFor="pix-key">Chave Pix</Label>
+            <Input
+              id="pix-key"
+              className="mt-2 max-w-xl"
+              value={shop.pixKey}
+              onChange={(event) => {
+                setShop((current) => ({ ...current, pixKey: event.target.value }))
+                setSaved(false)
+              }}
+              placeholder="CPF, CNPJ, e-mail, telefone ou chave aleatória"
+              autoComplete="off"
+            />
+          </Card>
           <Card className="p-5">
             <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
@@ -940,6 +965,7 @@ export default function ConfiguracoesPage() {
             </div>
             <p className="mt-4 text-xs text-muted-foreground">Você pode cadastrar até 8 métodos. Esta aba é da operação da barbearia; a mensalidade do BarberHub fica em “Assinatura BarberHub”.</p>
           </Card>
+          </div>
         ) : null}
 
         {activeTab === 'assinatura' ? (

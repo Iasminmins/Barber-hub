@@ -19,6 +19,7 @@ export function renewalMessage(
   planName: string,
   dueInDays: number,
   barbershopName = 'Duke Barber',
+  pixKey?: string,
 ) {
   const dueText = dueInDays === 0
     ? 'vence hoje'
@@ -26,10 +27,13 @@ export function renewalMessage(
       ? `vence em ${dueInDays} ${dueInDays === 1 ? 'dia' : 'dias'}`
       : `venceu há ${Math.abs(dueInDays)} ${Math.abs(dueInDays) === 1 ? 'dia' : 'dias'}`
 
+  const normalizedPixKey = pixKey?.trim() ?? ''
+  const pixLine = normalizedPixKey ? `\n\nChave Pix: ${normalizedPixKey}` : ''
+
   return `Olá, ${firstName(name)}! Tudo bem? 💈
 Passando para avisar que seu plano ${planName} ${dueText}.
 Que tal renovar para continuar aproveitando todos os benefícios? Estamos à disposição para ajudar! 😊
-Um abraço da equipe ${barbershopName}!`
+Um abraço da equipe ${barbershopName}!${pixLine}`
 }
 
 export function whatsappUrl(phone: string, message?: string) {

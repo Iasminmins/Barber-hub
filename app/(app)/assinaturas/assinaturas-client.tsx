@@ -196,6 +196,7 @@ export function AssinaturasClient({
   const [renewalStatus, setRenewalStatus] = React.useState('')
   const [renewingSubscriptionId, setRenewingSubscriptionId] = React.useState<string | null>(null)
   const [renewalDraft, setRenewalDraft] = React.useState<{ subscription: Subscription; method: PaymentMethod; employeeId: string } | null>(null)
+  const [renewalWhatsAppDraft, setRenewalWhatsAppDraft] = React.useState<{ clientId: string; phone: string; message: string } | null>(null)
   const [whatsappContactLog, setWhatsappContactLog] = React.useState<Record<string, string>>({})
   const [subscriptionFilter, setSubscriptionFilter] = React.useState<SubscriptionFilter>('ativas')
   const [subscriptionSearch, setSubscriptionSearch] = React.useState('')
@@ -288,32 +289,40 @@ export function AssinaturasClient({
     })
   }
 
-  async function openRenewalWhatsApp(subscription: Subscription) {
+  function openRenewalWhatsApp(subscription: Subscription) {
     const client = clients.find((item) => item.id === subscription.clientId)
     if (!client?.phone) return
 
-    const url = whatsappUrl(
-      client.phone,
-      renewalMessage(
+    setRenewalWhatsAppDraft({
+      clientId: client.id,
+      phone: client.phone,
+      message: renewalMessage(
         subscription.clientName,
         subscription.planName,
         daysUntil(subscription.dueDate),
         barbershop.name,
+        barbershop.pixKey,
       ),
-    )
+    })
+  }
+
+  async function sendRenewalWhatsApp() {
+    if (!renewalWhatsAppDraft) return
+    const url = whatsappUrl(renewalWhatsAppDraft.phone, renewalWhatsAppDraft.message.trim())
 
     if (!url) return
     const timestamp = new Date().toISOString()
-    const result = await updateRecord('clients', client.id, { last_message_sent_at: timestamp })
+    const result = await updateRecord('clients', renewalWhatsAppDraft.clientId, { last_message_sent_at: timestamp })
     if (result.error) {
       window.alert(`Não foi possível registrar a mensagem: ${result.error}`)
       return
     }
     setWhatsappContactLog((current) => {
-      const next = { ...current, [client.id]: timestamp }
+      const next = { ...current, [renewalWhatsAppDraft.clientId]: timestamp }
       window.localStorage.setItem(`barberhub:whatsapp-contacts:${barbershop.id}`, JSON.stringify(next))
       return next
     })
+    setRenewalWhatsAppDraft(null)
     window.open(url, '_blank', 'noopener,noreferrer')
   }
 
@@ -1572,6 +1581,32 @@ export function AssinaturasClient({
               >
                 <Repeat className="size-4" />
                 Renovar e lançar receita
+              </Button>
+            </div>
+          </>
+        ) : null}
+      </Dialog>
+      <Dialog open={Boolean(renewalWhatsAppDraft)} onClose={() => setRenewalWhatsAppDraft(null)} className="sm:max-w-lg">
+        {renewalWhatsAppDraft ? (
+          <>
+            <DialogHeader
+              title="Revisar mensagem do WhatsApp"
+              description="Confira ou edite a mensagem antes de abrir a conversa."
+            />
+            <div className="space-y-2">
+              <Label htmlFor="renewal-whatsapp-message">Mensagem</Label>
+              <Textarea
+                id="renewal-whatsapp-message"
+                rows={10}
+                value={renewalWhatsAppDraft.message}
+                onChange={(event) => setRenewalWhatsAppDraft({ ...renewalWhatsAppDraft, message: event.target.value })}
+              />
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setRenewalWhatsAppDraft(null)}>Cancelar</Button>
+              <Button variant="gold" disabled={!renewalWhatsAppDraft.message.trim()} onClick={sendRenewalWhatsApp}>
+                <MessageCircle className="size-4" />
+                Abrir no WhatsApp
               </Button>
             </div>
           </>
