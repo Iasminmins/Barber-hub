@@ -196,7 +196,7 @@ export function AssinaturasClient({
   const [renewalStatus, setRenewalStatus] = React.useState('')
   const [renewingSubscriptionId, setRenewingSubscriptionId] = React.useState<string | null>(null)
   const [renewalDraft, setRenewalDraft] = React.useState<{ subscription: Subscription; method: PaymentMethod; employeeId: string } | null>(null)
-  const [renewalWhatsAppDraft, setRenewalWhatsAppDraft] = React.useState<{ clientId: string; phone: string; message: string } | null>(null)
+  const [renewalWhatsAppDraft, setRenewalWhatsAppDraft] = React.useState<{ clientId: string; phone: string; message: string; qrCodeUrl?: string } | null>(null)
   const [whatsappContactLog, setWhatsappContactLog] = React.useState<Record<string, string>>({})
   const [subscriptionFilter, setSubscriptionFilter] = React.useState<SubscriptionFilter>('ativas')
   const [subscriptionSearch, setSubscriptionSearch] = React.useState('')
@@ -296,6 +296,7 @@ export function AssinaturasClient({
     setRenewalWhatsAppDraft({
       clientId: client.id,
       phone: client.phone,
+      qrCodeUrl: barbershop.pixQrCodeUrl,
       message: renewalMessage(
         subscription.clientName,
         subscription.planName,
@@ -1602,6 +1603,18 @@ export function AssinaturasClient({
                 onChange={(event) => setRenewalWhatsAppDraft({ ...renewalWhatsAppDraft, message: event.target.value })}
               />
             </div>
+            {renewalWhatsAppDraft.qrCodeUrl ? (
+              <div className="mt-4 rounded-md border border-border bg-muted/30 p-3">
+                <p className="mb-2 text-sm font-medium text-foreground">QR Code Pix</p>
+                <div className="flex items-center gap-3">
+                  <img src={renewalWhatsAppDraft.qrCodeUrl} alt="QR Code Pix" className="size-28 rounded-md border border-border bg-white object-contain p-1" />
+                  <div className="space-y-2 text-xs text-muted-foreground">
+                    <p>Baixe a imagem e anexe manualmente na conversa do WhatsApp, se desejar.</p>
+                    <a href={renewalWhatsAppDraft.qrCodeUrl} download="qr-code-pix.png" target="_blank" rel="noreferrer" className="inline-flex font-semibold text-primary underline underline-offset-2">Baixar QR Code</a>
+                  </div>
+                </div>
+              </div>
+            ) : null}
             <div className="mt-5 flex justify-end gap-2">
               <Button variant="outline" onClick={() => setRenewalWhatsAppDraft(null)}>Cancelar</Button>
               <Button variant="gold" disabled={!renewalWhatsAppDraft.message.trim()} onClick={sendRenewalWhatsApp}>

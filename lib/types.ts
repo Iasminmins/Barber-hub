@@ -24,6 +24,7 @@ export interface Barbershop {
   logoUrl?: string
   billingDocument: string
   pixKey?: string
+  pixQrCodeUrl?: string
   plan: 'solo' | 'starter' | 'pro' | 'premium'
   billingStatus: 'trialing' | 'active' | 'past_due' | 'canceled'
   trialEndsAt: string

@@ -74,6 +74,11 @@ function getEmployeePhotoPath(barbershopId: string, employeeId: string, file: Fi
   return `${barbershopId}/employees/${employeeId}-${Date.now()}.${ext}`
 }
 
+function getPixQrCodeFilePath(barbershopId: string, file: File) {
+  const ext = file.name.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'png'
+  return `${barbershopId}/pix-qr-${Date.now()}.${ext}`
+}
+
 export default function ConfiguracoesPage() {
   const { barbershop, employees, catalog, updateRecord, refresh } = useAppData()
   const currentPlan = getSaasPlan(barbershop.plan)
@@ -92,6 +97,9 @@ export default function ConfiguracoesPage() {
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [logoPreview, setLogoPreview] = useState('')
   const [logoError, setLogoError] = useState('')
+  const [pixQrCodeFile, setPixQrCodeFile] = useState<File | null>(null)
+  const [pixQrCodePreview, setPixQrCodePreview] = useState('')
+  const [pixQrCodeError, setPixQrCodeError] = useState('')
   const [planDialogOpen, setPlanDialogOpen] = useState(false)
   const [planDraft, setPlanDraft] = useState<SaasPlanId>(barbershop.plan)
   const [planSaving, setPlanSaving] = useState(false)
@@ -109,6 +117,7 @@ export default function ConfiguracoesPage() {
     logoUrl: barbershop.logoUrl ?? '',
     billingDocument: formatBillingDocument(barbershop.billingDocument),
     pixKey: barbershop.pixKey ?? '',
+    pixQrCodeUrl: barbershop.pixQrCodeUrl ?? '',
   })
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethodConfig[]>(() => normalizePaymentMethods(barbershop.paymentMethods))
   const [agendaSettings, setAgendaSettings] = useState<AgendaSettings>(() => normalizeAgendaSettings(barbershop.agendaSettings))
@@ -131,10 +140,14 @@ export default function ConfiguracoesPage() {
       logoUrl: barbershop.logoUrl ?? '',
       billingDocument: formatBillingDocument(barbershop.billingDocument),
       pixKey: barbershop.pixKey ?? '',
+      pixQrCodeUrl: barbershop.pixQrCodeUrl ?? '',
     })
     setLogoFile(null)
     setLogoPreview('')
     setLogoError('')
+    setPixQrCodeFile(null)
+    setPixQrCodePreview('')
+    setPixQrCodeError('')
     setPlanDraft(barbershop.plan)
     setPaymentMethods(normalizePaymentMethods(barbershop.paymentMethods))
     setAgendaSettings(normalizeAgendaSettings(barbershop.agendaSettings))
@@ -189,6 +202,36 @@ export default function ConfiguracoesPage() {
     setLogoPreview('')
     setLogoError('')
     setShop((current) => ({ ...current, logoUrl: '' }))
+    setSaved(false)
+  }
+
+  function handlePixQrCodeChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+      setPixQrCodeError('Use uma imagem PNG, JPG ou WEBP.')
+      return
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setPixQrCodeError('O QR Code precisa ter até 2 MB.')
+      return
+    }
+
+    if (pixQrCodePreview) URL.revokeObjectURL(pixQrCodePreview)
+    setPixQrCodeError('')
+    setPixQrCodeFile(file)
+    setPixQrCodePreview(URL.createObjectURL(file))
+    setSaved(false)
+  }
+
+  function removePixQrCode() {
+    if (pixQrCodePreview) URL.revokeObjectURL(pixQrCodePreview)
+    setPixQrCodeFile(null)
+    setPixQrCodePreview('')
+    setPixQrCodeError('')
+    setShop((current) => ({ ...current, pixQrCodeUrl: '' }))
     setSaved(false)
   }
 
@@ -251,6 +294,7 @@ export default function ConfiguracoesPage() {
     setSaved(false)
     setSaving(true)
     let logoUrl = shop.logoUrl
+    let pixQrCodeUrl = shop.pixQrCodeUrl
 
     if (logoFile) {
       const supabase = createBrowserSupabaseClient()
@@ -269,6 +313,22 @@ export default function ConfiguracoesPage() {
       logoUrl = data.publicUrl
     }
 
+    if (pixQrCodeFile) {
+      const supabase = createBrowserSupabaseClient()
+      const filePath = getPixQrCodeFilePath(barbershop.id, pixQrCodeFile)
+      const { error: uploadError } = await supabase.storage
+        .from('barbershop-assets')
+        .upload(filePath, pixQrCodeFile, { contentType: pixQrCodeFile.type, upsert: false })
+
+      if (uploadError) {
+        setSaving(false)
+        window.alert(uploadError.message)
+        return
+      }
+
+      pixQrCodeUrl = supabase.storage.from('barbershop-assets').getPublicUrl(filePath).data.publicUrl
+    }
+
     const result = await updateRecord('barbershops', barbershop.id, {
       name: shop.name,
       slug: shop.slug,
@@ -277,6 +337,7 @@ export default function ConfiguracoesPage() {
       logo_url: logoUrl || null,
       billing_document: onlyDigits(shop.billingDocument) || null,
       pix_key: shop.pixKey.trim() || null,
+      pix_qr_code_url: pixQrCodeUrl || null,
       payment_methods: cleanPaymentMethods,
       agenda_settings: {
         ...agendaSettings,
@@ -299,6 +360,9 @@ export default function ConfiguracoesPage() {
     if (result.error) { window.alert(result.error); return }
     setLogoFile(null)
     setLogoPreview('')
+    setPixQrCodeFile(null)
+    setPixQrCodePreview('')
+    setShop((current) => ({ ...current, pixQrCodeUrl }))
     setSaved(true)
   }
 
@@ -917,6 +981,31 @@ export default function ConfiguracoesPage() {
               placeholder="CPF, CNPJ, e-mail, telefone ou chave aleatória"
               autoComplete="off"
             />
+            <div className="mt-5 border-t border-border pt-5">
+              <Label>Imagem do QR Code</Label>
+              <div className="mt-2 flex flex-wrap items-start gap-4">
+                {(pixQrCodePreview || shop.pixQrCodeUrl) ? (
+                  <img src={pixQrCodePreview || shop.pixQrCodeUrl} alt="QR Code Pix da barbearia" className="size-40 rounded-lg border border-border bg-white object-contain p-2" />
+                ) : (
+                  <div className="grid size-40 place-items-center rounded-lg border border-dashed border-border bg-muted/30 p-4 text-center text-xs text-muted-foreground">Nenhum QR Code cadastrado</div>
+                )}
+                <div className="space-y-2">
+                  <label className="inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-muted">
+                    <ImageUp className="size-4" />
+                    Enviar QR Code
+                    <input type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" onChange={handlePixQrCodeChange} />
+                  </label>
+                  {(pixQrCodePreview || shop.pixQrCodeUrl) ? (
+                    <Button type="button" variant="ghost" size="sm" onClick={removePixQrCode} className="text-destructive hover:text-destructive">
+                      <Trash2 className="size-4" />
+                      Remover
+                    </Button>
+                  ) : null}
+                  <p className="max-w-xs text-xs text-muted-foreground">PNG, JPG ou WEBP até 2 MB. Ela ficará disponível para visualizar e baixar antes de enviar pelo WhatsApp.</p>
+                  {pixQrCodeError ? <p className="text-xs text-destructive">{pixQrCodeError}</p> : null}
+                </div>
+              </div>
+            </div>
           </Card>
           <Card className="p-5">
             <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
