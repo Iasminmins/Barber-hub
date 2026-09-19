@@ -24,7 +24,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { formatCurrency } from '@/lib/format'
-import { calculateOrderCashback } from '@/lib/public-booking'
+import { calculateConfiguredOrderCashback, calculateOrderCashback } from '@/lib/public-booking'
 import { calculateCashbackRedemption } from '@/lib/cashback-redemption'
 import { useAppData } from '@/components/data/app-data-provider'
 import type { Appointment, CatalogItem, CatalogType, Client, Employee, Order, PaymentMethod } from '@/lib/types'
@@ -174,7 +174,7 @@ export function NovaComandaClient({
   const surcharge = Math.max(0, total - subtotal)
   const selectedCount = selectedItems.reduce((sum, item) => sum + (quantities[item.id] ?? 0), 0)
   const cashbackPreview = calculateOrderCashback(total, barbershop.publicBookingSettings?.cashback ?? { enabled: false, percentage: 0, minimumPurchase: 0 })
-  const cashbackEarned = cashbackPreview.amount
+  const cashbackEarned = calculateConfiguredOrderCashback(total, barbershop.publicBookingSettings?.cashback ?? { enabled: false, percentage: 0, minimumPurchase: 0 }, selectedClient?.id)
 
   function setItemQuantity(itemId: string, quantity: number) {
     setQuantities((current) => ({

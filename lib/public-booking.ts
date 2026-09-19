@@ -58,6 +58,15 @@ export function calculateOrderCashback(total: number, config: CashbackConfig) {
   return calculateBookingCashback(Math.max(0, total), config)
 }
 
+export function calculateConfiguredOrderCashback(
+  total: number,
+  config: CashbackConfig,
+  clientId: string | null | undefined,
+) {
+  if (!clientId) return 0
+  return calculateOrderCashback(total, config).amount
+}
+
 export function calculateSubscriptionCashback(total: number, config: CashbackConfig) {
   return calculateOrderCashback(total, config)
 }
