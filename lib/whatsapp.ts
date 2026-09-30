@@ -30,10 +30,15 @@ export function renewalMessage(
   const normalizedPixKey = pixKey?.trim() ?? ''
   const pixLine = normalizedPixKey ? `\n\nChave Pix: ${normalizedPixKey}` : ''
 
+  const planStatus = dueInDays < 0
+    ? `Seu plano ${planName} venceu.`
+    : `Seu plano ${planName} ${dueText}.`
+
   return `Olá, ${firstName(name)}! Tudo bem? 💈
-Passando para avisar que seu plano ${planName} ${dueText}.
-Que tal renovar para continuar aproveitando todos os benefícios? Estamos à disposição para ajudar! 😊
-Um abraço da equipe ${barbershopName}!${pixLine}`
+${planStatus} Para continuar aproveitando todos os benefícios, faça a renovação.
+Se precisar de ajuda, estamos à disposição! 😊${pixLine}
+
+Equipe ${barbershopName}!`
 }
 
 export function whatsappUrl(phone: string, message?: string) {
