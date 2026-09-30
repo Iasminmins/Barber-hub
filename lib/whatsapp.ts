@@ -36,9 +36,8 @@ export function renewalMessage(
 
   return `Olá, ${firstName(name)}! Tudo bem? 💈
 ${planStatus} Para continuar aproveitando todos os benefícios, faça a renovação.
-Se precisar de ajuda, estamos à disposição! 😊${pixLine}
-
-Equipe ${barbershopName}!`
+Se precisar de ajuda, estamos à disposição! 😊
+Equipe ${barbershopName}!${pixLine}`
 }
 
 export function whatsappUrl(phone: string, message?: string) {
