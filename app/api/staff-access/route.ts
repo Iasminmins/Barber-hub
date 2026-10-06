@@ -45,12 +45,23 @@ export async function POST(request: Request) {
     if (!employeeId) return NextResponse.json({ error: 'Funcionário inválido.' }, { status: 400 })
 
     const admin = createAdminSupabaseClient()
-    const { data: employee } = await admin
+    const { data: employee, error: employeeLookupError } = await admin
       .from('employees')
       .select('id, name, email, role, active')
       .eq('id', employeeId)
       .eq('barbershop_id', ownerMembership.barbershop_id)
       .single()
+
+    if (employeeLookupError && employeeLookupError.code !== 'PGRST116') {
+      console.error('[staff-access] employee lookup failed', {
+        code: employeeLookupError.code,
+        message: employeeLookupError.message,
+      })
+      return NextResponse.json(
+        { error: 'Não foi possível consultar o funcionário. A conexão do servidor com o Supabase precisa ser verificada.' },
+        { status: 500 },
+      )
+    }
 
     if (!employee) return NextResponse.json({ error: 'Funcionário não encontrado.' }, { status: 404 })
 
