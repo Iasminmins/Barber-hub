@@ -30,7 +30,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Somente o proprietário pode gerenciar acessos.' }, { status: 403 })
     }
 
-    const body = await readLimitedJson<{ employeeId?: string; email?: string; password?: string; permissions?: string[]; enabled?: boolean }>(request)
+    const body = await readLimitedJson<{ employeeId?: string; email?: string; password?: string; permissions?: string[]; enabled?: boolean; sharedCounterAccess?: boolean }>(request)
     const employeeId = String(body.employeeId ?? '')
     const email = String(body.email ?? '').trim().toLowerCase()
     const password = String(body.password ?? '')
@@ -38,7 +38,10 @@ export async function POST(request: Request) {
     const requestedPermissions = Array.isArray(body.permissions)
       ? body.permissions.filter((item): item is StaffPermission => validPermissionKeys.has(item as StaffPermission))
       : null
-    const permissions = Array.from(new Set<StaffPermission>(['dashboard', ...(requestedPermissions ?? ['agenda'])]))
+    const counterPermissions = body.sharedCounterAccess
+      ? (requestedPermissions ?? ['agenda']).filter((permission) => permission !== 'financeiro' && permission !== 'gastos')
+      : (requestedPermissions ?? ['agenda'])
+    const permissions = Array.from(new Set<StaffPermission>(['dashboard', ...counterPermissions]))
     if (!employeeId) return NextResponse.json({ error: 'Funcionário inválido.' }, { status: 400 })
 
     const admin = createAdminSupabaseClient()

@@ -112,6 +112,7 @@ export default function FuncionariosPage() {
   const [dayOffset, setDayOffset] = useState(0)
   const [monthOffset, setMonthOffset] = useState(0)
   const [accessForm, setAccessForm] = useState<{ employeeId:string; email:string; password:string; confirmPassword:string; permissions:StaffPermission[] }>({ employeeId:'', email:'', password:'', confirmPassword:'', permissions:['dashboard','agenda'] })
+  const [counterAccessProfile, setCounterAccessProfile] = useState(false)
   const [newEmployeeStatus, setNewEmployeeStatus] = useState('')
   const [creatingEmployee, setCreatingEmployee] = useState(false)
   const [generatingEmployeeIds, setGeneratingEmployeeIds] = useState<Set<string>>(() => new Set())
@@ -296,6 +297,7 @@ export default function FuncionariosPage() {
         email: accessForm.email.trim(),
         password: accessForm.password,
         permissions:accessForm.permissions,
+        sharedCounterAccess:counterAccessProfile,
         enabled: true,
       }),
     })
@@ -309,7 +311,17 @@ export default function FuncionariosPage() {
     await appData.refresh()
     setCreatingEmployee(false)
     setAccessForm({ employeeId:'', email:'', password:'', confirmPassword:'', permissions:['dashboard','agenda'] })
+    setCounterAccessProfile(false)
     setNewEmployeeStatus('Acesso criado com sucesso.')
+  }
+
+  function applyCounterAccessProfile() {
+    const permissions = staffPermissionOptions
+      .filter((permission) => permission.key !== 'financeiro' && permission.key !== 'gastos')
+      .map((permission) => permission.key)
+    setAccessForm((current) => ({ ...current, permissions }))
+    setCounterAccessProfile(true)
+    setNewEmployeeStatus('Perfil de balcão aplicado. Financeiro e Gastos ficam sem acesso.')
   }
 
   async function deleteEmployee(id: string) {
@@ -417,6 +429,7 @@ export default function FuncionariosPage() {
                 onChange={(event) => {
                   const employee = employees.find((item) => item.id === event.target.value)
                   const member = appData.staffMembers.find((item) => item.employeeId === event.target.value)
+                  setCounterAccessProfile(false)
                   setAccessForm((current) => ({
                     ...current,
                     employeeId:event.target.value,
@@ -438,6 +451,15 @@ export default function FuncionariosPage() {
           </div>
           <div className="mt-5">
             <Label>O que este funcionário pode visualizar?</Label>
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 p-3">
+              <div>
+                <p className="text-sm font-medium text-foreground">Acesso compartilhado no balcão</p>
+                <p className="text-xs text-muted-foreground">Libera as áreas operacionais e mantém Financeiro e Gastos bloqueados.</p>
+              </div>
+              <Button type="button" variant="outline" size="sm" onClick={applyCounterAccessProfile}>
+                Aplicar perfil de balcão
+              </Button>
+            </div>
             <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {staffPermissionOptions.map((permission) => {
                 const checked = accessForm.permissions.includes(permission.key)
@@ -448,7 +470,7 @@ export default function FuncionariosPage() {
                     <input
                       type="checkbox"
                       checked={checked}
-                      disabled={required}
+                      disabled={required || (counterAccessProfile && (permission.key === 'financeiro' || permission.key === 'gastos'))}
                       onChange={(event) => setAccessForm((current) => ({
                         ...current,
                         permissions:event.target.checked
