@@ -1571,7 +1571,21 @@ export function AssinaturasClient({
             </span>
           </label> : null}
           {!isReception && editingSubscription.registerPayment ? <div className="sm:col-span-2"><Field label="Forma de pagamento"><Select value={editingSubscription.paymentMethod} onChange={e=>setEditingSubscription({...editingSubscription,paymentMethod:e.target.value as PaymentMethod})}>{Object.entries(PAYMENT_METHOD_LABEL).map(([value,label])=><option key={value} value={value}>{label}</option>)}</Select></Field></div> : null}
-        </div>{subscriptionStatus?<p className="mt-4 text-sm text-destructive">{subscriptionStatus}</p>:null}<div className="mt-5 flex justify-end gap-2"><Button variant="outline" onClick={()=>setEditingSubscription(null)}>Cancelar</Button><Button variant="gold" onClick={saveSubscription}><Save className="size-4"/>Salvar alterações</Button></div></>:null}
+        </div>{subscriptionStatus?<p className="mt-4 text-sm text-destructive">{subscriptionStatus}</p>:null}<div className="mt-5 flex flex-wrap justify-between gap-2"><Button
+          variant="outline"
+          type="button"
+          disabled={renewingSubscriptionId === editingSubscription.id}
+          onClick={() => {
+            const subscription = subscriptionRecords.find((item) => item.id === editingSubscription.id)
+            if (!subscription) return
+            setEditingSubscription(null)
+            setRenewalDraft({
+              subscription,
+              method: 'pix',
+              employeeId: subscription.employeeId || '',
+            })
+          }}
+        ><Repeat className="size-4"/>Renovar assinatura</Button><div className="flex justify-end gap-2"><Button variant="outline" onClick={()=>setEditingSubscription(null)}>Cancelar</Button><Button variant="gold" onClick={saveSubscription}><Save className="size-4"/>Salvar alterações</Button></div></div></>:null}
       </Dialog>
       <Dialog open={Boolean(renewalDraft)} onClose={()=>setRenewalDraft(null)} className="sm:max-w-md">
         {renewalDraft ? (
