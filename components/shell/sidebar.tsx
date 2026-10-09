@@ -40,11 +40,9 @@ export function SidebarContent({
         : trialDaysLeft === 1
           ? 'Teste grátis · falta 1 dia'
           : `Teste grátis · faltam ${trialDaysLeft} dias`
-  const allowedPaths = member.role === 'barber'
+  const allowedPaths = ['barber', 'reception'].includes(member.role)
     ? allowedPathsForPermissions(member.permissions)
-    : member.role === 'reception'
-      ? ['/dashboard', '/agenda', '/comandas', '/clientes', '/gastos']
-      : null
+    : null
 
   return (
     <div className="flex h-full flex-col bg-sidebar">
@@ -93,7 +91,7 @@ export function SidebarContent({
             <ul className="flex flex-col gap-0.5">
               {group.items.filter((item) => {
                 if (item.managementOnly && !['owner', 'manager'].includes(member.role)) return false
-                return !allowedPaths || allowedPaths.includes(item.href)
+                return !allowedPaths || allowedPaths.includes(item.href as (typeof allowedPaths)[number])
               }).map((item) => {
                 const active = pathname === item.href
                 const Icon = item.icon

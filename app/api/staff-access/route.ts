@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createAdminSupabaseClient, createAuthenticatedServerClient } from '@/lib/supabase/server'
-import { staffPermissionOptions, type StaffPermission } from '@/lib/staff-permissions'
+import { receptionPermissions, staffPermissionOptions, type StaffPermission } from '@/lib/staff-permissions'
 import { readLimitedJson, RequestBodyError } from '@/lib/http-security'
 
 function bearerToken(request: Request) {
@@ -30,18 +30,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Somente o proprietário pode gerenciar acessos.' }, { status: 403 })
     }
 
-    const body = await readLimitedJson<{ employeeId?: string; email?: string; password?: string; permissions?: string[]; enabled?: boolean; sharedCounterAccess?: boolean }>(request)
+    const body = await readLimitedJson<{ employeeId?: string; email?: string; password?: string; permissions?: string[]; role?: 'barber' | 'reception'; enabled?: boolean; sharedCounterAccess?: boolean }>(request)
     const employeeId = String(body.employeeId ?? '')
     const email = String(body.email ?? '').trim().toLowerCase()
     const password = String(body.password ?? '')
+    const hasAccessProfile = body.role !== undefined || body.sharedCounterAccess !== undefined
     const validPermissionKeys = new Set(staffPermissionOptions.map((item) => item.key))
     const requestedPermissions = Array.isArray(body.permissions)
       ? body.permissions.filter((item): item is StaffPermission => validPermissionKeys.has(item as StaffPermission))
       : null
-    const counterPermissions = body.sharedCounterAccess
-      ? (requestedPermissions ?? ['agenda']).filter((permission) => permission !== 'financeiro' && permission !== 'gastos')
-      : (requestedPermissions ?? ['agenda'])
-    const permissions = Array.from(new Set<StaffPermission>(['dashboard', ...counterPermissions]))
+    const role = body.role === 'reception' || body.sharedCounterAccess ? 'reception' : 'barber'
+    const chosenPermissions = role === 'reception'
+      ? receptionPermissions
+      : requestedPermissions ?? ['agenda']
+    const permissions = Array.from(new Set<StaffPermission>(['dashboard', ...chosenPermissions]))
     if (!employeeId) return NextResponse.json({ error: 'Funcionário inválido.' }, { status: 400 })
 
     const admin = createAdminSupabaseClient()
@@ -97,7 +99,7 @@ export async function POST(request: Request) {
       }
       const { error } = await admin
         .from('members')
-        .update({ active: true, email, name: employee.name, role: 'barber', ...(requestedPermissions ? { permissions } : {}) })
+        .update({ active: true, email, name: employee.name, ...(hasAccessProfile ? { role, permissions } : {}) })
         .eq('id', existingMember.id)
       if (error) throw error
       return NextResponse.json({ active: true, invited: false })
@@ -126,7 +128,7 @@ export async function POST(request: Request) {
       user_id: inviteData.user.id,
       name: employee.name,
       email,
-      role: 'barber',
+      role,
       active: true,
       permissions,
     })

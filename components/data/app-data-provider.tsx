@@ -7,6 +7,7 @@ import { defaultAgendaSettings, defaultPaymentMethods, normalizeAgendaSettings, 
 import { safeNumber, safeStringArray, safeText } from '@/lib/safe-data'
 import { effectiveBillingStatus } from '@/lib/billing-status'
 import { defaultPublicBookingSettings } from '@/lib/public-booking'
+import { receptionPermissions } from '@/lib/staff-permissions'
 import type { Appointment, Barbershop, CatalogItem, Client, Commission, CustomerReview, Employee, FinancialEntry, ImportRecord, Member, Order, Plan, PlanRules, ScheduleBlock, Subscription } from '@/lib/types'
 
 type AppData = {
@@ -123,6 +124,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     )
     const shop = shops?.find((candidate) => candidate.id === shopId)
     if (shopError || !shop) { setError(shopError?.message ?? 'Barbearia não encontrada.'); return }
+    const currentMembership = memberships.find((membership) => membership.barbershop_id === shopId) ?? memberships[0]
 
     async function fetchAllRows(buildQuery: (from: number, to: number) => any) {
       const allRows: any[] = []
@@ -146,10 +148,18 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         supabase.from('schedule_blocks').select('*').eq('barbershop_id', shopId).order('date'),
         fetchAllRows((from, to) => supabase.from('orders').select('*').eq('barbershop_id', shopId).order('created_at', { ascending: false }).range(from, to)),
         fetchAllRows((from, to) => supabase.from('order_items').select('*').eq('barbershop_id', shopId).range(from, to)),
-        supabase.from('plans').select('*').eq('barbershop_id', shopId).order('name'),
-        supabase.from('subscriptions').select('*').eq('barbershop_id', shopId).order('due_date'),
-        supabase.from('commissions').select('*').eq('barbershop_id', shopId).order('date', { ascending: false }),
-        fetchAllRows((from, to) => supabase.from('financial_entries').select('*').eq('barbershop_id', shopId).order('date', { ascending: false }).range(from, to)),
+        currentMembership.role === 'reception'
+          ? Promise.resolve({ data: [], error: null })
+          : supabase.from('plans').select('*').eq('barbershop_id', shopId).order('name'),
+        currentMembership.role === 'reception'
+          ? Promise.resolve({ data: [], error: null })
+          : supabase.from('subscriptions').select('*').eq('barbershop_id', shopId).order('due_date'),
+        currentMembership.role === 'reception'
+          ? Promise.resolve({ data: [], error: null })
+          : supabase.from('commissions').select('*').eq('barbershop_id', shopId).order('date', { ascending: false }),
+        currentMembership.role === 'reception'
+          ? Promise.resolve({ data: [], error: null })
+          : fetchAllRows((from, to) => supabase.from('financial_entries').select('*').eq('barbershop_id', shopId).order('date', { ascending: false }).range(from, to)),
         supabase.from('import_records').select('*').eq('barbershop_id', shopId).order('created_at', { ascending: false }),
         supabase.from('customer_reviews').select('*').eq('barbershop_id', shopId).order('created_at', { ascending: false }),
       ]),
@@ -164,7 +174,6 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     const failed = normalizedResults.find((result) => result.error)
     if (failed?.error) { setError(failed.error.message); return }
     const [staffMembers, employees, clients, catalog, appointments, scheduleBlocks, orders, orderItems, plans, subscriptions, commissions, financial, imports, customerReviews] = normalizedResults.map((result) => result.data ?? [])
-    const currentMembership = memberships.find((membership) => membership.barbershop_id === shopId) ?? memberships[0]
     const linkedEmployeeId = currentMembership.employee_id ?? ''
     const visibleEmployees = currentMembership.role === 'barber'
       ? employees.filter((employee: any) => employee.id === linkedEmployeeId)
@@ -209,11 +218,11 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         agendaSettings: normalizeAgendaSettings(shop.agenda_settings),
         publicBookingSettings: { ...defaultPublicBookingSettings, ...(shop.public_booking_settings ?? {}), cashback: { ...defaultPublicBookingSettings.cashback, ...(shop.public_booking_settings?.cashback ?? {}) } },
       },
-      member: { id: currentMembership.id, barbershopId: shopId, employeeId: linkedEmployeeId || undefined, name: currentMembership.name, email: currentMembership.email, phone: currentMembership.phone ?? '', role: currentMembership.role, active: currentMembership.active, permissions:currentMembership.permissions??['dashboard','agenda'] },
-      staffMembers: staffMembers.map((r: any) => ({ id:r.id, barbershopId:r.barbershop_id, employeeId:r.employee_id??undefined, name:r.name, email:r.email, phone:r.phone??'', role:r.role, active:r.active, permissions:r.permissions??['dashboard','agenda'] })),
-      employees: visibleEmployees.map((r: any) => ({ id:r.id, barbershopId:r.barbershop_id, name:r.name, role:r.role, phone:r.phone??'', email:r.email??'', active:r.active, serviceCommission:num(r.service_commission), productCommission:num(r.product_commission), subscriptionCommission:num(r.subscription_commission), avatarColor:r.avatar_color??undefined, avatarUrl:r.avatar_url??undefined })),
+      member: { id: currentMembership.id, barbershopId: shopId, employeeId: linkedEmployeeId || undefined, name: currentMembership.name, email: currentMembership.email, phone: currentMembership.phone ?? '', role: currentMembership.role, active: currentMembership.active, permissions:currentMembership.role === 'reception' ? receptionPermissions : currentMembership.permissions??['dashboard','agenda'] },
+      staffMembers: staffMembers.map((r: any) => ({ id:r.id, barbershopId:r.barbershop_id, employeeId:r.employee_id??undefined, name:r.name, email:r.email, phone:r.phone??'', role:r.role, active:r.active, permissions:r.role === 'reception' ? receptionPermissions : r.permissions??['dashboard','agenda'] })),
+      employees: visibleEmployees.map((r: any) => ({ id:r.id, barbershopId:r.barbershop_id, name:r.name, role:r.role, phone:r.phone??'', email:r.email??'', active:r.active, serviceCommission:currentMembership.role === 'reception' ? 0 : num(r.service_commission), productCommission:currentMembership.role === 'reception' ? 0 : num(r.product_commission), subscriptionCommission:currentMembership.role === 'reception' ? 0 : num(r.subscription_commission), avatarColor:r.avatar_color??undefined, avatarUrl:r.avatar_url??undefined })),
       clients: clients.map((r: any) => ({ id:safeText(r.id), barbershopId:safeText(r.barbershop_id), name:safeText(r.name), phone:safeText(r.phone), email:safeText(r.email), birthDate:safeText(r.birth_date), postalCode:safeText(r.postal_code), address:safeText(r.address), addressNumber:safeText(r.address_number), addressComplement:safeText(r.address_complement), neighborhood:safeText(r.neighborhood), city:safeText(r.city), state:safeText(r.state), preferredDay:safeText(r.preferred_day), notes:safeText(r.notes), tags:safeStringArray(r.tags), totalSpent:num(r.total_spent), visits:num(r.visits), lastVisit:safeText(r.last_visit), favoriteService:safeText(r.favorite_service), preferredBarber:safeText(r.preferred_barber), cashbackBalance:num(r.cashback_balance), createdAt:safeText(r.created_at), lastMessageSentAt:safeText(r.last_message_sent_at) || undefined })),
-      catalog: catalog.map((r: any) => ({ id:safeText(r.id), barbershopId:safeText(r.barbershop_id), type:safeText(r.type), name:safeText(r.name), category:safeText(r.category), price:num(r.price), cost:num(r.cost), durationMin:r.duration_min??undefined, stock:r.stock??undefined, minStock:r.min_stock??undefined, commission:num(r.commission), active:Boolean(r.active), imageUrl:r.image_url??undefined })),
+      catalog: catalog.map((r: any) => ({ id:safeText(r.id), barbershopId:safeText(r.barbershop_id), type:safeText(r.type), name:safeText(r.name), category:safeText(r.category), price:num(r.price), cost:currentMembership.role === 'reception' ? 0 : num(r.cost), durationMin:r.duration_min??undefined, stock:r.stock??undefined, minStock:r.min_stock??undefined, commission:currentMembership.role === 'reception' ? 0 : num(r.commission), active:Boolean(r.active), imageUrl:r.image_url??undefined })),
       appointments: appointments.map((r: any) => ({ id:safeText(r.id), barbershopId:safeText(r.barbershop_id), clientId:safeText(r.client_id), clientName:safeText(r.client_name), employeeId:safeText(r.employee_id), employeeName:safeText(r.employee_name), serviceId:safeText(r.service_id), serviceName:safeText(r.service_name), date:safeText(r.date), start:safeText(r.start).slice(0,5), durationMin:num(r.duration_min), status:safeText(r.status), price:num(r.price), notes:safeText(r.notes), selectedProducts:Array.isArray(r.selected_products) ? r.selected_products.map((item:any)=>({ id:safeText(item.id), name:safeText(item.name), quantity:num(item.quantity)||1, unitPrice:num(item.unitPrice) })) : [], referralName:r.referral_name??undefined, referralPhone:r.referral_phone??undefined, createdAt:safeText(r.created_at) })),
       scheduleBlocks: scheduleBlocks.map((r: any) => ({ id:r.id, barbershopId:r.barbershop_id, employeeId:r.employee_id, date:r.date, startTime:r.start_time ? String(r.start_time).slice(0,5) : null, endTime:r.end_time ? String(r.end_time).slice(0,5) : null, createdAt:r.created_at })),
       orders: orders.map((r: any) => ({ id:safeText(r.id), barbershopId:safeText(r.barbershop_id), appointmentId:r.appointment_id ? safeText(r.appointment_id) : undefined, number:num(r.number), clientId:r.client_id ? safeText(r.client_id) : undefined, clientName:safeText(r.client_name), employeeId:safeText(r.employee_id), employeeName:safeText(r.employee_name), items:orderItems.filter((i:any)=>i.order_id===r.id).map((i:any)=>({ id:safeText(i.id), refId:safeText(i.ref_id), type:safeText(i.type), name:safeText(i.name), quantity:num(i.quantity), unitPrice:num(i.unit_price) })), discount:num(r.discount), surcharge:num(r.surcharge), status:safeText(r.status), method:r.method??undefined, total:num(r.total), cashbackEarned:num(r.cashback_earned), cashbackRedeemed:num(r.cashback_redeemed), cashbackAwarded:Boolean(r.cashback_awarded), createdAt:safeText(r.created_at) })),
@@ -290,6 +299,29 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
           void load()
         },
       )
+      .subscribe()
+
+    return () => {
+      void supabase.removeChannel(channel)
+    }
+  }, [load, value?.barbershop.id])
+
+  React.useEffect(() => {
+    const shopId = value?.barbershop.id
+    if (!shopId) return
+
+    const supabase = createBrowserSupabaseClient()
+    const channel = supabase
+      .channel(`barberhub-orders-${shopId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `barbershop_id=eq.${shopId}` }, () => {
+        void load()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items', filter: `barbershop_id=eq.${shopId}` }, () => {
+        void load()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'financial_entries', filter: `barbershop_id=eq.${shopId}` }, () => {
+        void load()
+      })
       .subscribe()
 
     return () => {

@@ -70,7 +70,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 {(member.role === 'owner' || member.role === 'manager') ? <a className={`${buttonVariants()} mt-5`} href="/configuracoes">Ir para assinatura</a> : null}
               </div>
             </div>
-          ) : member.role === 'barber' && !canAccessPath(pathname, member.permissions) ? (
+          ) : ['barber', 'reception'].includes(member.role) && !canAccessPath(pathname, member.permissions) ? (
             <div className="grid min-h-[60vh] place-items-center text-center">
               <div>
                 <h1 className="text-xl font-semibold text-foreground">Acesso não liberado</h1>

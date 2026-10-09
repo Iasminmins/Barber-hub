@@ -19,6 +19,7 @@ export default function DashboardPage() {
       subscriptions={subscriptions}
       lowStockThreshold={barbershop.agendaSettings.lowStockAlert}
       isBarber={member.role === 'barber'}
+      isReception={member.role === 'reception'}
       memberId={member.id}
       memberPhone={member.phone}
       updateMemberPhone={(phone) => updateRecord('members', member.id, { phone: phone || null })}

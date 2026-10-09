@@ -11,6 +11,8 @@ export const staffPermissionOptions = [
 
 export type StaffPermission = typeof staffPermissionOptions[number]['key']
 
+export const receptionPermissions: StaffPermission[] = ['dashboard', 'agenda', 'comandas', 'clientes']
+
 export function allowedPathsForPermissions(permissions: StaffPermission[]) {
   return staffPermissionOptions
     .filter((item) => permissions.includes(item.key))

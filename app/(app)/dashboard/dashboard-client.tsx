@@ -248,6 +248,7 @@ export function DashboardClient({
   subscriptions,
   lowStockThreshold,
   isBarber = false,
+  isReception = false,
   memberId,
   memberPhone,
   updateMemberPhone,
@@ -264,6 +265,7 @@ export function DashboardClient({
   subscriptions: Subscription[]
   lowStockThreshold: number
   isBarber?: boolean
+  isReception?: boolean
   memberId: string
   memberPhone: string
   updateMemberPhone: (phone: string) => Promise<{ error?: string }>
@@ -377,6 +379,27 @@ export function DashboardClient({
     } finally {
       setIsExportingPdf(false)
     }
+  }
+
+  if (isReception) {
+    return (
+      <div>
+        <PageHeader title="Painel da recepção" description="Acompanhe o movimento e abra o PDV para consultar ou cadastrar comandas." />
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <Card className="p-4"><p className="text-sm text-muted-foreground">Comandas abertas</p><p className="mt-1 text-2xl font-bold">{openOrders}</p></Card>
+          <Card className="p-4"><p className="text-sm text-muted-foreground">Pendentes</p><p className="mt-1 text-2xl font-bold">{pendingOrders}</p></Card>
+          <Card className="p-4"><p className="text-sm text-muted-foreground">Pagas no período</p><p className="mt-1 text-2xl font-bold">{paidOrders.length}</p></Card>
+          <Card className="p-4"><p className="text-sm text-muted-foreground">Próximos agendamentos</p><p className="mt-1 text-2xl font-bold">{upcoming.length}</p></Card>
+        </div>
+        <Card className="mt-4 flex flex-wrap items-center justify-between gap-4 p-5">
+          <div>
+            <h2 className="font-semibold">Histórico completo da barbearia</h2>
+            <p className="mt-1 text-sm text-muted-foreground">As comandas novas aparecem automaticamente para a recepção e para o administrador.</p>
+          </div>
+          <a href="/comandas" className="inline-flex h-10 items-center rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground hover:opacity-90">Abrir Comandas / PDV</a>
+        </Card>
+      </div>
+    )
   }
 
   return (

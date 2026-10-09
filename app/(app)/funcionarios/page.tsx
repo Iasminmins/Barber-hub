@@ -22,11 +22,11 @@ import {
 } from '@/components/ui/table'
 import { useAppData } from '@/components/data/app-data-provider'
 import { formatCurrency, formatPercent } from '@/lib/format'
-import { isBarberRole } from '@/lib/employees'
+import { isBarberRole, isReceptionRole } from '@/lib/employees'
 import { buildEmployeeMonthlyStatement } from '@/lib/employee-monthly-statement'
 import { monthRange } from '@/lib/employee-report-period'
 import type { Employee } from '@/lib/types'
-import { staffPermissionOptions, type StaffPermission } from '@/lib/staff-permissions'
+import { receptionPermissions, staffPermissionOptions, type StaffPermission } from '@/lib/staff-permissions'
 
 function normalizeEmployeeName(value: string) {
   return value
@@ -111,8 +111,7 @@ export default function FuncionariosPage() {
   const [weekOffset, setWeekOffset] = useState(0)
   const [dayOffset, setDayOffset] = useState(0)
   const [monthOffset, setMonthOffset] = useState(0)
-  const [accessForm, setAccessForm] = useState<{ employeeId:string; email:string; password:string; confirmPassword:string; permissions:StaffPermission[] }>({ employeeId:'', email:'', password:'', confirmPassword:'', permissions:['dashboard','agenda'] })
-  const [counterAccessProfile, setCounterAccessProfile] = useState(false)
+  const [accessForm, setAccessForm] = useState<{ employeeId:string; email:string; password:string; confirmPassword:string; role:'barber'|'reception'; permissions:StaffPermission[] }>({ employeeId:'', email:'', password:'', confirmPassword:'', role:'barber', permissions:['dashboard','agenda'] })
   const [newEmployeeStatus, setNewEmployeeStatus] = useState('')
   const [creatingEmployee, setCreatingEmployee] = useState(false)
   const [generatingEmployeeIds, setGeneratingEmployeeIds] = useState<Set<string>>(() => new Set())
@@ -296,8 +295,8 @@ export default function FuncionariosPage() {
         employeeId: accessForm.employeeId,
         email: accessForm.email.trim(),
         password: accessForm.password,
+        role: accessForm.role,
         permissions:accessForm.permissions,
-        sharedCounterAccess:counterAccessProfile,
         enabled: true,
       }),
     })
@@ -310,18 +309,13 @@ export default function FuncionariosPage() {
 
     await appData.refresh()
     setCreatingEmployee(false)
-    setAccessForm({ employeeId:'', email:'', password:'', confirmPassword:'', permissions:['dashboard','agenda'] })
-    setCounterAccessProfile(false)
+    setAccessForm({ employeeId:'', email:'', password:'', confirmPassword:'', role:'barber', permissions:['dashboard','agenda'] })
     setNewEmployeeStatus('Acesso criado com sucesso.')
   }
 
-  function applyCounterAccessProfile() {
-    const permissions = staffPermissionOptions
-      .filter((permission) => permission.key !== 'financeiro' && permission.key !== 'gastos')
-      .map((permission) => permission.key)
-    setAccessForm((current) => ({ ...current, permissions }))
-    setCounterAccessProfile(true)
-    setNewEmployeeStatus('Perfil de balcão aplicado. Financeiro e Gastos ficam sem acesso.')
+  function applyReceptionProfile() {
+    setAccessForm((current) => ({ ...current, role: 'reception', permissions: receptionPermissions }))
+    setNewEmployeeStatus('Perfil de Recepção aplicado. Financeiro, Gastos e relatórios individuais ficam bloqueados; os valores das comandas continuam visíveis no PDV.')
   }
 
   async function deleteEmployee(id: string) {
@@ -429,12 +423,13 @@ export default function FuncionariosPage() {
                 onChange={(event) => {
                   const employee = employees.find((item) => item.id === event.target.value)
                   const member = appData.staffMembers.find((item) => item.employeeId === event.target.value)
-                  setCounterAccessProfile(false)
+                  const role = member?.role === 'reception' || (employee && isReceptionRole(employee.role)) ? 'reception' : 'barber'
                   setAccessForm((current) => ({
                     ...current,
                     employeeId:event.target.value,
                     email:employee?.email ?? '',
-                    permissions:member?.permissions ?? ['dashboard','agenda'],
+                    role,
+                    permissions:role === 'reception' ? receptionPermissions : member?.permissions ?? ['dashboard','agenda'],
                   }))
                   setNewEmployeeStatus('')
                 }}
@@ -445,6 +440,23 @@ export default function FuncionariosPage() {
                 ))}
               </Select>
             </Field>
+            <Field label="Perfil de acesso">
+              <Select
+                value={accessForm.role}
+                onChange={(event) => {
+                  const role = event.target.value as 'barber' | 'reception'
+                  setAccessForm((current) => ({
+                    ...current,
+                    role,
+                    permissions: role === 'reception' ? receptionPermissions : current.permissions,
+                  }))
+                  setNewEmployeeStatus('')
+                }}
+              >
+                <option value="barber">Barbeiro</option>
+                <option value="reception">Recepção</option>
+              </Select>
+            </Field>
             <Field label="E-mail de acesso *"><Input type="email" value={accessForm.email} onChange={(event) => setAccessForm((current) => ({ ...current, email:event.target.value }))} placeholder="email@exemplo.com" /></Field>
             <Field label="Senha de acesso *"><Input type="password" value={accessForm.password} onChange={(event) => setAccessForm((current) => ({ ...current, password:event.target.value }))} minLength={8} autoComplete="new-password" placeholder="Mínimo de 8 caracteres" /></Field>
             <Field label="Confirmar senha *"><Input type="password" value={accessForm.confirmPassword} onChange={(event) => setAccessForm((current) => ({ ...current, confirmPassword:event.target.value }))} minLength={8} autoComplete="new-password" placeholder="Repita a senha" /></Field>
@@ -453,11 +465,11 @@ export default function FuncionariosPage() {
             <Label>O que este funcionário pode visualizar?</Label>
             <div className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 p-3">
               <div>
-                <p className="text-sm font-medium text-foreground">Acesso compartilhado no balcão</p>
-                <p className="text-xs text-muted-foreground">Libera as áreas operacionais e mantém Financeiro e Gastos bloqueados.</p>
+                <p className="text-sm font-medium text-foreground">Perfil de Recepção</p>
+                <p className="text-xs text-muted-foreground">Permite atender e consultar o histórico completo. Financeiro, Gastos e relatórios individuais ficam bloqueados; os valores das comandas continuam visíveis no PDV.</p>
               </div>
-              <Button type="button" variant="outline" size="sm" onClick={applyCounterAccessProfile}>
-                Aplicar perfil de balcão
+              <Button type="button" variant="outline" size="sm" onClick={applyReceptionProfile}>
+                Aplicar perfil de Recepção
               </Button>
             </div>
             <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -470,7 +482,7 @@ export default function FuncionariosPage() {
                     <input
                       type="checkbox"
                       checked={checked}
-                      disabled={required || (counterAccessProfile && (permission.key === 'financeiro' || permission.key === 'gastos'))}
+                      disabled={required || accessForm.role === 'reception'}
                       onChange={(event) => setAccessForm((current) => ({
                         ...current,
                         permissions:event.target.checked
@@ -878,7 +890,7 @@ export default function FuncionariosPage() {
                   <TableCell className="text-right">
                     <div className="inline-flex gap-1">
                       <Button variant="ghost" size="icon-sm" aria-label={`Editar ${employee.name}`} onClick={() => { setEditStatus(''); setEditing({ id:employee.id, name:employee.name, role:employee.role, phone:employee.phone, email:employee.email, active:String(employee.active), service:String(employee.serviceCommission), product:String(employee.productCommission), subscription:String(employee.subscriptionCommission) }) }}><Pencil className="size-4" /></Button>
-                      {appData.member.role === 'owner' && isBarberRole(employee.role) ? <Button variant="ghost" size="icon-sm" aria-label={`Gerenciar acesso de ${employee.name}`} onClick={() => openAccess(employee)}><KeyRound className="size-4" /></Button> : null}
+                      {appData.member.role === 'owner' && (isBarberRole(employee.role) || isReceptionRole(employee.role)) ? <Button variant="ghost" size="icon-sm" aria-label={`Gerenciar acesso de ${employee.name}`} onClick={() => openAccess(employee)}><KeyRound className="size-4" /></Button> : null}
                       <Button variant="ghost" size="icon-sm" aria-label={`Excluir ${employee.name}`} onClick={() => deleteEmployee(employee.id)}><Trash2 className="size-4" /></Button>
                     </div>
                   </TableCell>
