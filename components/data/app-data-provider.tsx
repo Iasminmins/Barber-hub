@@ -34,7 +34,7 @@ type MutationResult = { error?: string; data?: any }
 type AppDataContextValue = AppData & {
   refresh: () => Promise<void>
   setActiveBarbershop: (barbershopId: string) => void
-  insertRecord: (table: string, values: Record<string, unknown>) => Promise<MutationResult>
+  insertRecord: (table: string, values: Record<string, unknown>, options?: { returning?: boolean }) => Promise<MutationResult>
   insertMany: (table: string, values: Record<string, unknown>[]) => Promise<MutationResult>
   updateRecord: (table: string, id: string, values: Record<string, unknown>) => Promise<MutationResult>
   deleteRecord: (table: string, id: string) => Promise<MutationResult>
@@ -141,19 +141,19 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     const results = await withTimeout(
       Promise.all([
         supabase.from('members').select('id, barbershop_id, employee_id, name, email, phone, role, active, permissions').eq('barbershop_id', shopId).order('name'),
-        supabase.from('employees').select('*').eq('barbershop_id', shopId).order('name'),
+        supabase.from('employees').select(currentMembership.role === 'reception'
+          ? 'id, barbershop_id, name, role, phone, email, active, avatar_color, avatar_url'
+          : '*').eq('barbershop_id', shopId).order('name'),
         fetchAllRows((from, to) => supabase.from('clients').select('*').eq('barbershop_id', shopId).order('name').range(from, to)),
-        supabase.from('catalog_items').select('*').eq('barbershop_id', shopId).order('name'),
+        supabase.from('catalog_items').select(currentMembership.role === 'reception'
+          ? 'id, barbershop_id, type, name, category, price, duration_min, stock, min_stock, active, image_url'
+          : '*').eq('barbershop_id', shopId).order('name'),
         supabase.from('appointments').select('*').eq('barbershop_id', shopId).order('date').order('start'),
         supabase.from('schedule_blocks').select('*').eq('barbershop_id', shopId).order('date'),
         fetchAllRows((from, to) => supabase.from('orders').select('*').eq('barbershop_id', shopId).order('created_at', { ascending: false }).range(from, to)),
         fetchAllRows((from, to) => supabase.from('order_items').select('*').eq('barbershop_id', shopId).range(from, to)),
-        currentMembership.role === 'reception'
-          ? Promise.resolve({ data: [], error: null })
-          : supabase.from('plans').select('*').eq('barbershop_id', shopId).order('name'),
-        currentMembership.role === 'reception'
-          ? Promise.resolve({ data: [], error: null })
-          : supabase.from('subscriptions').select('*').eq('barbershop_id', shopId).order('due_date'),
+        supabase.from('plans').select('*').eq('barbershop_id', shopId).order('name'),
+        supabase.from('subscriptions').select('*').eq('barbershop_id', shopId).order('due_date'),
         currentMembership.role === 'reception'
           ? Promise.resolve({ data: [], error: null })
           : supabase.from('commissions').select('*').eq('barbershop_id', shopId).order('date', { ascending: false }),
@@ -241,9 +241,12 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     setRequestedShopId(barbershopId)
   }, [value?.barbershops])
 
-  const insertRecord = React.useCallback(async (table: string, values: Record<string, unknown>) => {
+  const insertRecord = React.useCallback(async (table: string, values: Record<string, unknown>, options?: { returning?: boolean }) => {
     const supabase = createBrowserSupabaseClient()
-    const { data, error: mutationError } = await supabase.from(table).insert(values).select().single()
+    const query = supabase.from(table).insert(values)
+    const { data, error: mutationError } = options?.returning === false
+      ? await query
+      : await query.select().single()
     if (mutationError) return { error: mutationError.message }
     await load()
     return { data }
@@ -313,7 +316,19 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     const supabase = createBrowserSupabaseClient()
     const channel = supabase
       .channel(`barberhub-orders-${shopId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments', filter: `barbershop_id=eq.${shopId}` }, () => {
+        void load()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'catalog_items', filter: `barbershop_id=eq.${shopId}` }, () => {
+        void load()
+      })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `barbershop_id=eq.${shopId}` }, () => {
+        void load()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'plans', filter: `barbershop_id=eq.${shopId}` }, () => {
+        void load()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'subscriptions', filter: `barbershop_id=eq.${shopId}` }, () => {
         void load()
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items', filter: `barbershop_id=eq.${shopId}` }, () => {

@@ -74,7 +74,8 @@ function parseDecimal(value: string) {
 }
 
 export function CatalogoClient({ items }: { items: CatalogItem[] }) {
-  const { barbershop, deleteRecord, updateRecord } = useAppData()
+  const { barbershop, member, deleteRecord, updateRecord } = useAppData()
+  const isReception = member.role === 'reception'
   const [records, setRecords] = useState(items)
   const [tab, setTab] = useState<CatalogType>("servico")
   const [query, setQuery] = useState("")
@@ -158,8 +159,7 @@ export function CatalogoClient({ items }: { items: CatalogItem[] }) {
       name: editing.name.trim(),
       category: editing.category.trim() || null,
       price,
-      cost,
-      commission,
+      ...(!isReception ? { cost, commission } : {}),
       duration_min: editing.type === "servico" ? durationMin : null,
       stock: editing.type === "produto" ? stock : null,
       min_stock: editing.type === "produto" ? minStock : null,
@@ -184,8 +184,8 @@ export function CatalogoClient({ items }: { items: CatalogItem[] }) {
       name: editing.name.trim(),
       category: editing.category.trim(),
       price,
-      cost,
-      commission,
+      cost: isReception ? item.cost : cost,
+      commission: isReception ? item.commission : commission,
       durationMin: editing.type === "servico" ? durationMin : undefined,
       stock: editing.type === "produto" ? stock : undefined,
       minStock: editing.type === "produto" ? minStock : undefined,
@@ -203,18 +203,18 @@ export function CatalogoClient({ items }: { items: CatalogItem[] }) {
 
   return (
     <div>
-      <PageHeader title="Produtos & Serviços" description="Catálogo, preços, comissões e controle de estoque.">
-        <Link href="/importacao" className={buttonVariants({ variant: "outline" })}>
+      <PageHeader title="Produtos & Serviços" description={isReception ? "Catálogo, preços e controle de estoque." : "Catálogo, preços, comissões e controle de estoque."}>
+        {!isReception ? <Link href="/importacao" className={buttonVariants({ variant: "outline" })}>
           <Upload className="size-4" />
           Importar CSV
-        </Link>
+        </Link> : null}
         <Link href="/catalogo/novo" className={buttonVariants({ variant: "gold" })}>
           <Plus className="size-4" />
           {tab === "servico" ? "Novo serviço" : "Novo produto"}
         </Link>
       </PageHeader>
 
-      <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className={`mb-4 grid grid-cols-2 gap-3 ${isReception ? 'lg:grid-cols-2' : 'lg:grid-cols-4'}`}>
         <Card className="p-4">
           <p className="text-sm text-muted-foreground">Serviços ativos</p>
           <p className="mt-1 text-2xl font-bold text-foreground">{services.filter((s) => s.active).length}</p>
@@ -223,10 +223,10 @@ export function CatalogoClient({ items }: { items: CatalogItem[] }) {
           <p className="text-sm text-muted-foreground">Produtos ativos</p>
           <p className="mt-1 text-2xl font-bold text-foreground">{products.filter((p) => p.active).length}</p>
         </Card>
-        <Card className="p-4">
+        {!isReception ? <Card className="p-4">
           <p className="text-sm text-muted-foreground">Valor em estoque</p>
           <p className="mt-1 text-2xl font-bold text-foreground">{formatCurrency(inventoryValue)}</p>
-        </Card>
+        </Card> : null}
         <Card className="p-4">
           <p className="text-sm text-muted-foreground">Estoque baixo</p>
           <p className="mt-1 flex items-center gap-1.5 text-2xl font-bold text-foreground">
@@ -258,10 +258,10 @@ export function CatalogoClient({ items }: { items: CatalogItem[] }) {
               <TableHead>{tab === "servico" ? "Serviço" : "Produto"}</TableHead>
               <TableHead>Categoria</TableHead>
               <TableHead className="text-right">Preço</TableHead>
-              <TableHead className="text-right">Custo</TableHead>
-              <TableHead className="text-right">Margem</TableHead>
+              {!isReception ? <TableHead className="text-right">Custo</TableHead> : null}
+              {!isReception ? <TableHead className="text-right">Margem</TableHead> : null}
               {tab === "servico" ? <TableHead className="text-right">Duração</TableHead> : <TableHead className="text-right">Estoque</TableHead>}
-              <TableHead className="text-right">Comissão</TableHead>
+              {!isReception ? <TableHead className="text-right">Comissão</TableHead> : null}
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
@@ -279,8 +279,8 @@ export function CatalogoClient({ items }: { items: CatalogItem[] }) {
                   </TableCell>
                   <TableCell className="text-muted-foreground">{i.category}</TableCell>
                   <TableCell className="text-right font-medium tabular-nums">{formatCurrency(i.price)}</TableCell>
-                  <TableCell className="text-right tabular-nums text-muted-foreground">{formatCurrency(i.cost)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{formatPercent(margin(i))}</TableCell>
+                  {!isReception ? <TableCell className="text-right tabular-nums text-muted-foreground">{formatCurrency(i.cost)}</TableCell> : null}
+                  {!isReception ? <TableCell className="text-right tabular-nums">{formatPercent(margin(i))}</TableCell> : null}
                   {i.type === "servico" ? (
                     <TableCell className="text-right tabular-nums text-muted-foreground">
                       <span className="inline-flex items-center gap-1"><Clock className="size-3.5" />{i.durationMin} min</span>
@@ -291,7 +291,7 @@ export function CatalogoClient({ items }: { items: CatalogItem[] }) {
                       <span className="text-muted-foreground"> / mín {getLowStockThreshold(i.minStock, barbershop.agendaSettings.lowStockAlert)}</span>
                     </TableCell>
                   )}
-                  <TableCell className="text-right tabular-nums text-muted-foreground">{formatPercent(i.commission)}</TableCell>
+                  {!isReception ? <TableCell className="text-right tabular-nums text-muted-foreground">{formatPercent(i.commission)}</TableCell> : null}
                   <TableCell>{i.active ? <Badge variant="success">Ativo</Badge> : <Badge variant="secondary">Inativo</Badge>}</TableCell>
                   <TableCell className="text-right">
                     <div className="inline-flex items-center gap-1">
@@ -308,7 +308,7 @@ export function CatalogoClient({ items }: { items: CatalogItem[] }) {
             })}
             {filtered.length === 0 && (
               <TableRow>
-                <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">Nenhum item encontrado.</TableCell>
+                <TableCell colSpan={isReception ? 6 : 9} className="py-10 text-center text-muted-foreground">Nenhum item encontrado.</TableCell>
               </TableRow>
             )}
           </TableBody>
@@ -329,8 +329,8 @@ export function CatalogoClient({ items }: { items: CatalogItem[] }) {
               <Field label="Categoria"><Input value={editing.category} onChange={(event) => setDraft("category", event.target.value)} disabled={saving} /></Field>
               <Field label="Nome"><Input value={editing.name} onChange={(event) => setDraft("name", event.target.value)} disabled={saving} autoFocus /></Field>
               <Field label="Preço"><Input inputMode="decimal" value={editing.price} onChange={(event) => setDraft("price", event.target.value)} disabled={saving} /></Field>
-              <Field label="Custo"><Input inputMode="decimal" value={editing.cost} onChange={(event) => setDraft("cost", event.target.value)} disabled={saving} /></Field>
-              <Field label="Comissão (%)"><Input type="number" min="0" max="100" value={editing.commission} onChange={(event) => setDraft("commission", event.target.value)} disabled={saving} /></Field>
+              {!isReception ? <Field label="Custo"><Input inputMode="decimal" value={editing.cost} onChange={(event) => setDraft("cost", event.target.value)} disabled={saving} /></Field> : null}
+              {!isReception ? <Field label="Comissão (%)"><Input type="number" min="0" max="100" value={editing.commission} onChange={(event) => setDraft("commission", event.target.value)} disabled={saving} /></Field> : null}
               {editing.type === "servico" ? (
                 <Field label="Duração (minutos)"><Input type="number" min="1" value={editing.durationMin} onChange={(event) => setDraft("durationMin", event.target.value)} disabled={saving} /></Field>
               ) : (

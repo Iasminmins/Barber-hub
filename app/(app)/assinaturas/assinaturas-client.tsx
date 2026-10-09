@@ -29,8 +29,9 @@ import { useAppData } from '@/components/data/app-data-provider'
 import { isBarberRole } from '@/lib/employees'
 import { renewalMessage, whatsappUrl } from '@/lib/whatsapp'
 import { calculateSubscriptionCashback } from '@/lib/public-booking'
+import { subscriptionViewsForRole, type SubscriptionView } from '@/lib/staff-permissions'
 
-type View = 'assinaturas' | 'planos' | 'financeiro'
+type View = SubscriptionView
 type SubscriptionFilter = 'ativas' | 'vencendo' | 'vencidas' | 'todas'
 type SubscriptionDraft = {
   id: string
@@ -187,7 +188,9 @@ export function AssinaturasClient({
   plans: Plan[]
   subscriptions: Subscription[]
 }) {
-  const { barbershop, clients, employees, orders, deleteRecord, insertRecord, updateRecord } = useAppData()
+  const { barbershop, clients, employees, orders, member, deleteRecord, insertRecord, updateRecord } = useAppData()
+  const isReception = member.role === 'reception'
+  const availableViews = subscriptionViewsForRole(member.role)
   const [view, setView] = React.useState<View>('assinaturas')
   const [plans, setPlans] = React.useState(initialPlans)
   const [subscriptionRecords, setSubscriptionRecords] = React.useState(subscriptions)
@@ -629,7 +632,7 @@ export function AssinaturasClient({
             amount: price,
             method: editingSubscription.paymentMethod,
             date: paymentDate,
-          })
+          }, { returning: !isReception })
 
       if (financialResult.error) {
         await deleteRecord('orders', orderResult.data.id)
@@ -759,7 +762,7 @@ export function AssinaturasClient({
       amount: subscription.price,
       method,
       date: toLocalDateKey(today),
-    })
+    }, { returning: !isReception })
 
     if (financialResult.error) {
       await deleteRecord('orders', orderResult.data.id)
@@ -808,9 +811,10 @@ export function AssinaturasClient({
       <div id="planos" className="mb-4 flex flex-wrap items-center justify-between gap-3 scroll-mt-24">
         <Tabs
           items={[
-            { value: 'assinaturas', label: 'Assinaturas' },
-            { value: 'planos', label: 'Planos' },
-            { value: 'financeiro', label: 'Financeiro' },
+            ...availableViews.map((value) => ({
+              value,
+              label: value === 'assinaturas' ? 'Assinaturas' : value === 'planos' ? 'Planos' : 'Financeiro',
+            })),
           ]}
           value={view}
           onValueChange={(value) => setView(value as View)}
@@ -823,7 +827,7 @@ export function AssinaturasClient({
         )}
       </div>
 
-      <div className="mb-4 grid gap-3 lg:grid-cols-2">
+      <div className={`mb-4 grid gap-3 ${isReception ? 'lg:grid-cols-1' : 'lg:grid-cols-2'}`}>
         <Card className="min-h-40 border-primary/10 bg-primary/5 p-6">
           <div className="flex items-start justify-between gap-3">
             <p className="font-semibold text-foreground">Assinantes Ativos</p>
@@ -832,14 +836,14 @@ export function AssinaturasClient({
           <p className="mt-10 text-3xl font-bold tabular-nums text-foreground">{active.length}</p>
           <p className="text-sm text-muted-foreground">{expiring.length} vencendo · {overdue.length} vencidas</p>
         </Card>
-        <Card className="min-h-40 border-pink-100 bg-pink-50/80 p-6">
+        {!isReception ? <Card className="min-h-40 border-pink-100 bg-pink-50/80 p-6">
           <div className="flex items-start justify-between gap-3">
             <p className="font-semibold text-foreground">Receita Estimada (Ciclo)</p>
             <TrendingUp className="size-5 text-pink-500" />
           </div>
           <p className="mt-10 text-3xl font-bold tabular-nums text-foreground">{formatCurrency(mrr)}</p>
           <p className="text-sm text-muted-foreground">Baseado em assinaturas ativas</p>
-        </Card>
+        </Card> : null}
       </div>
 
       {view === 'assinaturas' ? (
@@ -1209,7 +1213,7 @@ export function AssinaturasClient({
             </div>
           </Card>
         </div>
-      ) : (
+      ) : view === 'financeiro' && !isReception ? (
         <div className="space-y-4">
           <div className="grid gap-4 lg:grid-cols-3">
             <Card className="p-6">
@@ -1318,7 +1322,7 @@ export function AssinaturasClient({
             </Table>
           </Card>
         </div>
-      )}
+      ) : null}
       <Dialog open={Boolean(editingSale)} onClose={() => setEditingSale(null)} className="sm:max-w-xl">
         <DialogHeader
           title="Editar lançamento"
@@ -1554,19 +1558,19 @@ export function AssinaturasClient({
           <Field label="Plano"><Select value={editingSubscription.planId} onChange={e=>setEditingSubscription({...editingSubscription,planId:e.target.value})}>{plans.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field>
           <Field label="Barbeiro"><Select value={editingSubscription.employeeId} onChange={e=>setEditingSubscription({...editingSubscription,employeeId:e.target.value})}><option value="">Selecionar barbeiro</option>{employees.filter(employee=>employee.active&&isBarberRole(employee.role)).map(employee=><option key={employee.id} value={employee.id}>{employee.name}</option>)}</Select></Field>
           <Field label="Início"><Input type="date" value={editingSubscription.startDate} onChange={e=>setEditingSubscription({...editingSubscription,startDate:e.target.value})}/></Field>
-          <Field label="Próximo vencimento"><Input type="date" value={editingSubscription.dueDate} onChange={e=>{const original=subscriptionRecords.find(item=>item.id===editingSubscription.id);setEditingSubscription({...editingSubscription,dueDate:e.target.value,registerPayment:Boolean(original&&e.target.value>original.dueDate)})}}/></Field>
+          <Field label="Próximo vencimento"><Input type="date" value={editingSubscription.dueDate} onChange={e=>{const original=subscriptionRecords.find(item=>item.id===editingSubscription.id);setEditingSubscription({...editingSubscription,dueDate:e.target.value,registerPayment:isReception?false:Boolean(original&&e.target.value>original.dueDate)})}}/></Field>
           <Field label="Valor"><Input inputMode="decimal" value={editingSubscription.price} onChange={e=>setEditingSubscription({...editingSubscription,price:e.target.value})}/></Field>
           <Field label="Status"><Select value={editingSubscription.status} onChange={e=>setEditingSubscription({...editingSubscription,status:e.target.value as SubscriptionStatus})}><option value="ativo">Ativo</option><option value="vencendo">Vencendo</option><option value="vencido">Vencido</option><option value="cancelado">Cancelado</option></Select></Field>
           <Field label="Créditos usados"><Input type="number" min="0" value={editingSubscription.creditsUsed} onChange={e=>setEditingSubscription({...editingSubscription,creditsUsed:e.target.value})}/></Field>
           <Field label="Créditos totais"><Input type="number" min="0" value={editingSubscription.creditsTotal} onChange={e=>setEditingSubscription({...editingSubscription,creditsTotal:e.target.value})}/></Field>
-          <label className="flex items-center gap-3 rounded-md border border-border bg-muted/40 px-3 py-3 text-sm sm:col-span-2">
+          {!isReception ? <label className="flex items-center gap-3 rounded-md border border-border bg-muted/40 px-3 py-3 text-sm sm:col-span-2">
             <input type="checkbox" checked={editingSubscription.registerPayment} onChange={e=>setEditingSubscription({...editingSubscription,registerPayment:e.target.checked})} className="size-4 accent-[var(--primary)]"/>
             <span>
               <span className="block font-medium text-foreground">Lançar este valor na receita de hoje</span>
               <span className="block text-xs text-muted-foreground">Marque também para registrar uma renovação que já teve as datas alteradas.</span>
             </span>
-          </label>
-          {editingSubscription.registerPayment ? <div className="sm:col-span-2"><Field label="Forma de pagamento"><Select value={editingSubscription.paymentMethod} onChange={e=>setEditingSubscription({...editingSubscription,paymentMethod:e.target.value as PaymentMethod})}>{Object.entries(PAYMENT_METHOD_LABEL).map(([value,label])=><option key={value} value={value}>{label}</option>)}</Select></Field></div> : null}
+          </label> : null}
+          {!isReception && editingSubscription.registerPayment ? <div className="sm:col-span-2"><Field label="Forma de pagamento"><Select value={editingSubscription.paymentMethod} onChange={e=>setEditingSubscription({...editingSubscription,paymentMethod:e.target.value as PaymentMethod})}>{Object.entries(PAYMENT_METHOD_LABEL).map(([value,label])=><option key={value} value={value}>{label}</option>)}</Select></Field></div> : null}
         </div>{subscriptionStatus?<p className="mt-4 text-sm text-destructive">{subscriptionStatus}</p>:null}<div className="mt-5 flex justify-end gap-2"><Button variant="outline" onClick={()=>setEditingSubscription(null)}>Cancelar</Button><Button variant="gold" onClick={saveSubscription}><Save className="size-4"/>Salvar alterações</Button></div></>:null}
       </Dialog>
       <Dialog open={Boolean(renewalDraft)} onClose={()=>setRenewalDraft(null)} className="sm:max-w-md">

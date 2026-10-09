@@ -11,7 +11,17 @@ export const staffPermissionOptions = [
 
 export type StaffPermission = typeof staffPermissionOptions[number]['key']
 
-export const receptionPermissions: StaffPermission[] = ['dashboard', 'agenda', 'comandas', 'clientes']
+export const receptionPermissions: StaffPermission[] = staffPermissionOptions
+  .filter((item) => item.key !== 'financeiro' && item.key !== 'gastos')
+  .map((item) => item.key)
+
+export type SubscriptionView = 'assinaturas' | 'planos' | 'financeiro'
+
+export function subscriptionViewsForRole(role: string): SubscriptionView[] {
+  return role === 'owner' || role === 'manager'
+    ? ['assinaturas', 'planos', 'financeiro']
+    : ['assinaturas', 'planos']
+}
 
 export function allowedPathsForPermissions(permissions: StaffPermission[]) {
   return staffPermissionOptions
