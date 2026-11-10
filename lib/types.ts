@@ -220,6 +220,7 @@ export interface Subscription {
   startDate: string
   dueDate: string
   status: SubscriptionStatus
+  renewalNoticeSentFor?: string
   creditsUsed?: number
   creditsTotal?: number
 }

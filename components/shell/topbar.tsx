@@ -50,6 +50,9 @@ interface NotificationItem {
   phone?: string
   planName?: string
   dueInDays?: number
+  subscriptionId?: string
+  dueDate?: string
+  renewalNoticeSentFor?: string
   appointmentId?: string
   appointmentDate?: string
   catalogItemId?: string
@@ -117,7 +120,9 @@ function buildNotifications(
     : []
   const expiringSubscriptions = subscriptions
     .map((subscription) => ({ subscription, due: daysUntil(subscription.dueDate) }))
-    .filter(({ due }) => due >= -30 && due <= 7)
+    .filter(({ subscription, due }) =>
+      due >= -30 && due <= 7 && subscription.renewalNoticeSentFor !== subscription.dueDate,
+    )
     .sort((a, b) => {
       const aExpired = a.due < 0
       const bExpired = b.due < 0
@@ -185,6 +190,9 @@ function buildNotifications(
         phone: client?.phone ?? '',
         planName: subscription.planName,
         dueInDays: due,
+        subscriptionId: subscription.id,
+        dueDate: subscription.dueDate,
+        renewalNoticeSentFor: subscription.renewalNoticeSentFor,
       }
     }),
   }
@@ -344,9 +352,22 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
     const url = whatsappUrl(renewalEditor.phone, renewalText.trim())
     if (!url) return
     const timestamp = new Date().toISOString()
-    const result = await updateRecord('clients', renewalEditor.clientId, { last_message_sent_at: timestamp })
-    if (result.error) {
-      window.alert(`Não foi possível registrar a mensagem: ${result.error}`)
+    if (!renewalEditor.subscriptionId || !renewalEditor.dueDate) return
+    const subscriptionResult = await updateRecord('subscriptions', renewalEditor.subscriptionId, {
+      renewal_notice_sent_for: renewalEditor.dueDate,
+    })
+    if (subscriptionResult.error) {
+      window.alert(`Não foi possível registrar a cobrança: ${subscriptionResult.error}`)
+      return
+    }
+    const clientResult = await updateRecord('clients', renewalEditor.clientId, { last_message_sent_at: timestamp })
+    if (clientResult.error) {
+      const rollbackResult = await updateRecord('subscriptions', renewalEditor.subscriptionId, {
+        renewal_notice_sent_for: renewalEditor.renewalNoticeSentFor ?? null,
+      })
+      window.alert(rollbackResult.error
+        ? `Não foi possível registrar a mensagem: ${clientResult.error}. Também não foi possível restaurar o aviso: ${rollbackResult.error}`
+        : `Não foi possível registrar a mensagem: ${clientResult.error}`)
       return
     }
     window.open(url, '_blank', 'noopener,noreferrer')
