@@ -86,8 +86,13 @@ function localDateKey(value: string) {
 function orderItemCommissionRate(
   item: ReturnType<typeof useAppData>['orders'][number]['items'][number],
   employee: Employee,
+  catalog: ReturnType<typeof useAppData>['catalog'],
 ) {
   if (item.name.startsWith('[Assinatura]')) return employee.subscriptionCommission
+  if (item.type === 'produto') {
+    const product = catalog.find((catalogItem) => catalogItem.id === item.refId && catalogItem.type === 'produto')
+    if (product) return product.commission
+  }
   return item.type === 'servico' ? employee.serviceCommission : employee.productCommission
 }
 
@@ -123,11 +128,12 @@ export default function FuncionariosPage() {
       employeeId: employee.id,
       employees,
       barbershop: appData.barbershop,
+      catalog: appData.catalog,
       competence: currentMonth,
       orders: appData.orders,
       commissions,
     }),
-  ])), [appData.barbershop, appData.orders, commissions, currentMonth, employees])
+  ])), [appData.barbershop, appData.catalog, appData.orders, commissions, currentMonth, employees])
   const ranking = employees.map((employee) => ({
     id: employee.id,
     name: employee.name,
@@ -202,7 +208,7 @@ export default function FuncionariosPage() {
       .reduce((sum, item) => sum + item.value, 0)
     const salesCommission = orders.reduce((sum, item) => item.value <= 0 ? sum : sum + item.order.items.reduce(
       (itemSum, orderItem) => itemSum + orderItem.quantity * orderItem.unitPrice
-        * orderItemCommissionRate(orderItem, employee) / 100,
+        * orderItemCommissionRate(orderItem, employee, appData.catalog) / 100,
       0,
     ), 0)
     const subscriptionCommission = commissions
@@ -215,7 +221,7 @@ export default function FuncionariosPage() {
     const orderDetails = orders.map(({ order, value }) => {
       const items = order.items.map((orderItem) => {
         const base = orderItem.quantity * orderItem.unitPrice
-        const rate = orderItemCommissionRate(orderItem, employee)
+        const rate = orderItemCommissionRate(orderItem, employee, appData.catalog)
         return {
           id: orderItem.id,
           name: orderItem.name,
@@ -246,7 +252,7 @@ export default function FuncionariosPage() {
       subscriptionCommission,
       orderDetails,
     }]
-  })), [commissions, employees, reportPaidOrders, reportRange])
+  })), [appData.catalog, commissions, employees, reportPaidOrders, reportRange])
   const reportRevenue = [...reportValues.values()].reduce((sum, item) => sum + item.revenue, 0)
   const reportGenerated = [...reportValues.values()].reduce((sum, item) => sum + item.generated, 0)
   const reportPaid = [...reportValues.values()].reduce((sum, item) => sum + item.paid, 0)

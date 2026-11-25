@@ -1,9 +1,10 @@
-import type { Barbershop, Commission, Employee, Order, OrderItem } from './types'
+import type { Barbershop, CatalogItem, Commission, Employee, Order, OrderItem } from './types'
 
 export interface EmployeeMonthlyStatementInput {
   employeeId: string
   employees: Employee[]
   barbershop: Barbershop
+  catalog?: CatalogItem[]
   competence: string
   orders: Order[]
   commissions: Commission[]
@@ -88,8 +89,12 @@ function receivedOrderValue(order: Order) {
   )
 }
 
-function commissionRate(item: OrderItem, employee: Employee) {
+function commissionRate(item: OrderItem, employee: Employee, catalog: CatalogItem[]) {
   if (item.name.startsWith('[Assinatura]')) return employee.subscriptionCommission
+  if (item.type === 'produto') {
+    const product = catalog.find((catalogItem) => catalogItem.id === item.refId && catalogItem.type === 'produto')
+    if (product) return product.commission
+  }
   return item.type === 'servico' ? employee.serviceCommission : employee.productCommission
 }
 
@@ -109,7 +114,7 @@ export function buildEmployeeMonthlyStatement(input: EmployeeMonthlyStatementInp
       const received = receivedOrderValue(order)
       const items = order.items.map((item) => {
         const base = item.quantity * item.unitPrice
-        const rate = commissionRate(item, employee)
+        const rate = commissionRate(item, employee, input.catalog ?? [])
         return {
           id: item.id,
           name: item.name,
